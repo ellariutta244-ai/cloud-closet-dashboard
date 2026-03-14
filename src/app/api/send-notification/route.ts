@@ -11,12 +11,8 @@ function getAdminApp() {
   const rawKey = process.env.FIREBASE_PRIVATE_KEY;
   if (!clientEmail || !rawKey) throw new Error('FIREBASE_CLIENT_EMAIL or FIREBASE_PRIVATE_KEY not configured');
 
-  // Reconstruct clean PEM regardless of how Vercel stored it
-  const base64Only = rawKey
-    .replace(/\\n/g, '')
-    .replace(/\s/g, '')
-    .replace(/-+BEGINPRIVATEKEY-+/g, '')
-    .replace(/-+ENDPRIVATEKEY-+/g, '');
+  // rawKey is pure base64 (no PEM headers, no newlines) — rebuild proper PEM
+  const base64Only = rawKey.replace(/\s/g, '');
   const lines = base64Only.match(/.{1,64}/g) || [];
   const privateKey = `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----\n`;
 
