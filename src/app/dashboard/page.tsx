@@ -403,7 +403,7 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
     if (!form.title.trim()) return;
     const {data,error}=await sb.from("tasks").insert({...form,due_date:dateTbd?null:(form.due_date||null),created_at:new Date().toISOString()}).select().single();
     if (error){console.error("[tasks insert]", error.message, error.code, error.details, error.hint);return;}
-    setTasks([data,...tasks]);setModal(false);setDateTbd(false);
+    setTasks(prev => [data, ...prev.filter(t => t.id !== data.id)]);setModal(false);setDateTbd(false);
     setForm({title:"",description:"",assigned_to:"",category:"brand_outreach",priority:"medium",status:"not_started",due_date:""});
   }
   async function updateStatus(task:Task,status:string) {
@@ -605,7 +605,7 @@ function QPg({ profile, interns, questions, setQuestions, sb, addActivity }: { p
     if (!form.title.trim()) return;
     const {data,error}=await sb.from("questions").insert({...form,author_id:profile.id,status:"open",created_at:new Date().toISOString()}).select().single();
     if(error){console.error(error);return;}
-    setQuestions([{...data,question_replies:[]},...questions]);
+    setQuestions(prev => [{...data,question_replies:[]}, ...prev.filter(q => q.id !== data.id)]);
     addActivity({user_id:profile.id,user_name:profile.full_name,activity:"question_posted",metadata:{title:form.title}});
     setModal(false);setForm({title:"",category:"outreach",description:""});
   }
@@ -1210,7 +1210,7 @@ function InternRequests({ requests, setRequests, profile, sb, settings }: { requ
     }).select().single();
     setSending(false);
     if (error) { console.error("[requests insert]", error.message, error.code, error.details); return; }
-    setRequests([data as Request, ...myRequests]);
+    setRequests(prev => [data as Request, ...prev.filter(r => r.id !== (data as Request).id)]);
     // Auto-email Caroline
     if (isCaroline && settings.caroline_email) {
       const subject = encodeURIComponent(`Meeting Request from ${profile.full_name}`);
