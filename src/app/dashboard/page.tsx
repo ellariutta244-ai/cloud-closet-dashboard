@@ -11,6 +11,7 @@ import {
   Loader2, Menu, CalendarDays, Inbox, Code2, Video,
   CalendarClock, ShoppingBag, Coffee, HelpCircle, MapPin,
   Play, Trophy, ExternalLink, ArrowUpRight, MessageSquare, TrendingUp,
+  Settings as SettingsIcon,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -31,6 +32,7 @@ type EventMaterial = { item: string; qty: string; fulfilled?: boolean };
 type CCEvent = { id: string; title: string; description?: string; date?: string; time?: string; location?: string; status: string; intern_id?: string; team_members?: string[]; materials?: EventMaterial[]; created_at: string };
 type TechProject = { id: string; title: string; description?: string; status: string; priority?: string; owner_id?: string; contributors?: string[]; tech_stack?: string; github_url?: string; progress: number; created_at: string; updated_at?: string };
 type ContentVideo = { id: string; creator_id?: string; title: string; tiktok_url?: string; views?: number; likes?: number; comments?: number; date_posted?: string; status: string; created_at: string };
+type AppSettings = Record<string, string>;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TEAM_COLORS: Record<string, { bg: string; text: string }> = {
@@ -155,12 +157,12 @@ function AdminDash({ interns, tasks, outreach, questions, activity, announcement
     if (!aForm.title.trim()) return;
     setASaving(true);
     const { data, error } = await sb.from("announcements").insert({
-      title: aForm.title, body: aForm.body || null, pinned: aForm.pinned,
+      title: aForm.title, body: aForm.body || "", pinned: aForm.pinned,
       target_teams: aForm.target_teams.length > 0 ? aForm.target_teams : null,
       created_at: new Date().toISOString(),
     }).select().single();
     setASaving(false);
-    if (error) { console.error(error); return; }
+    if (error) { console.error("[announcements insert]", error.message, error.code, error.details, error.hint); return; }
     setAnnouncements([data as Announcement, ...announcements]);
     setAModal(false); setAForm({ title:"", body:"", pinned:false, target_teams:[] });
   }
@@ -232,7 +234,7 @@ function AdminDash({ interns, tasks, outreach, questions, activity, announcement
                     <p className="text-xs font-medium text-stone-700 mt-1">{a.title}</p>
                     {a.body && <p className="text-xs text-stone-500 mt-0.5">{a.body}</p>}
                   </div>
-                  <button onClick={()=>deleteAnnouncement(a.id)} className="p-1 rounded opacity-0 group-hover:opacity-100 text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all shrink-0"><Trash2 size={11}/></button>
+                  <button onClick={()=>{ if(window.confirm("Delete this announcement?")) deleteAnnouncement(a.id); }} className="p-1 rounded opacity-0 group-hover:opacity-100 text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all shrink-0"><Trash2 size={11}/></button>
                 </div>
               ))}
             </div>
@@ -367,6 +369,7 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
   const [modal,setModal]=useState(false);
   const [detail,setDetail]=useState<Task|null>(null);
   const [form,setForm]=useState({ title:"", description:"", assigned_to:"", category:"brand_outreach", priority:"medium", status:"not_started", due_date:"" });
+  const [dateTbd,setDateTbd]=useState(false);
   const isAdmin=profile.role==="admin";
   const visible=isAdmin ? tasks : tasks.filter(t=>t.assigned_to===profile.id);
   const filtered=filter==="all" ? visible : visible.filter(t=>t.status===filter);
@@ -376,9 +379,9 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
 
   async function create() {
     if (!form.title.trim()) return;
-    const {data,error}=await sb.from("tasks").insert({...form,created_at:new Date().toISOString()}).select().single();
-    if (error){console.error(error);return;}
-    setTasks([data,...tasks]);setModal(false);
+    const {data,error}=await sb.from("tasks").insert({...form,due_date:dateTbd?null:(form.due_date||null),created_at:new Date().toISOString()}).select().single();
+    if (error){console.error("[tasks insert]", error.message, error.code, error.details, error.hint);return;}
+    setTasks([data,...tasks]);setModal(false);setDateTbd(false);
     setForm({title:"",description:"",assigned_to:"",category:"brand_outreach",priority:"medium",status:"not_started",due_date:""});
   }
   async function updateStatus(task:Task,status:string) {
@@ -424,16 +427,22 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
           ))}
         </div>
       )}
-      <Md open={modal} onClose={()=>setModal(false)} title="New Task">
+      <Md open={modal} onClose={()=>{setModal(false);setDateTbd(false);}} title="New Task">
         <div className="flex flex-col gap-3">
           <TI label="Title" value={form.title} onChange={v=>setForm({...form,title:v})} required/>
           <TA label="Description" value={form.description} onChange={v=>setForm({...form,description:v})}/>
           <Sel label="Assign To" value={form.assigned_to} onChange={v=>setForm({...form,assigned_to:v})} options={[{value:"",label:"— Select intern —"},...interns.filter(i=>i.active!==false).map(i=>({value:i.id,label:i.full_name}))]}/>
           <Sel label="Category" value={form.category} onChange={v=>setForm({...form,category:v})} options={CATS}/>
           <Sel label="Priority" value={form.priority} onChange={v=>setForm({...form,priority:v})} options={["low","medium","high","urgent"].map(p=>({value:p,label:p.charAt(0).toUpperCase()+p.slice(1)}))}/>
-          <TI label="Due Date" value={form.due_date} onChange={v=>setForm({...form,due_date:v})} type="date"/>
+          <div>
+            <label className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">Due Date</label>
+            <div className="flex items-center gap-3">
+              <input type="date" value={dateTbd?"":form.due_date} disabled={dateTbd} onChange={e=>setForm({...form,due_date:e.target.value})} className={`flex-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm text-stone-700 focus:outline-none focus:border-stone-400 ${dateTbd?"opacity-40 cursor-not-allowed":""}`}/>
+              <label className="flex items-center gap-1.5 text-xs text-stone-500 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={dateTbd} onChange={e=>setDateTbd(e.target.checked)} className="rounded"/>TBD</label>
+            </div>
+          </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Btn variant="secondary" onClick={()=>setModal(false)}>Cancel</Btn>
+            <Btn variant="secondary" onClick={()=>{setModal(false);setDateTbd(false);}}>Cancel</Btn>
             <Btn onClick={create} disabled={!form.title.trim()}>Create Task</Btn>
           </div>
         </div>
@@ -585,6 +594,11 @@ function QPg({ profile, interns, questions, setQuestions, sb, addActivity }: { p
     setQuestions(questions.map(q=>q.id===id?{...q,status:"resolved"}:q));
     if (detail?.id===id) setDetail({...detail,status:"resolved"});
   }
+  async function deleteQuestion(id:string) {
+    await sb.from("questions").delete().eq("id",id);
+    setQuestions(questions.filter(q=>q.id!==id));
+    setDetail(null);
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -664,6 +678,11 @@ function QPg({ profile, interns, questions, setQuestions, sb, addActivity }: { p
                 </div>
               </div>
             )}
+            {isAdmin&&(
+              <div className="pt-2 border-t border-stone-100 flex justify-end">
+                <Btn variant="danger" size="sm" onClick={()=>{ if(window.confirm("Delete this question and all its replies?")) deleteQuestion(detail.id); }}><Trash2 size={12}/>Delete</Btn>
+              </div>
+            )}
           </div>
         )}
       </Md>
@@ -691,6 +710,10 @@ function RPg({ profile, interns, reports, setReports, sb, addActivity }: { profi
     await sb.from("weekly_reports").update({reviewed:true}).eq("id",id);
     setReports(reports.map(r=>r.id===id?{...r,reviewed:true}:r));
   }
+  async function deleteReport(id:string) {
+    await sb.from("weekly_reports").delete().eq("id",id);
+    setReports(reports.filter(r=>r.id!==id));
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -710,7 +733,10 @@ function RPg({ profile, interns, reports, setReports, sb, addActivity }: { profi
                   </div>
                   {isAdmin&&<p className="text-xs text-stone-400 mt-0.5">{iName(r.intern_id)}</p>}
                 </div>
-                {isAdmin&&!r.reviewed&&<Btn size="sm" variant="secondary" onClick={()=>markReviewed(r.id)}><CheckCircle2 size={12}/>Mark Reviewed</Btn>}
+                <div className="flex items-center gap-2">
+                  {isAdmin&&!r.reviewed&&<Btn size="sm" variant="secondary" onClick={()=>markReviewed(r.id)}><CheckCircle2 size={12}/>Mark Reviewed</Btn>}
+                  {isAdmin&&<button onClick={()=>{ if(window.confirm("Delete this report?")) deleteReport(r.id); }} className="p-1.5 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={13}/></button>}
+                </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
                 {r.tasks_completed&&<div><p className="text-stone-400 uppercase tracking-widest mb-0.5">Tasks Completed</p><p className="text-stone-600">{r.tasks_completed}</p></div>}
@@ -908,7 +934,7 @@ function IntMgmt({ interns, setInterns, sb }: { interns:Profile[]; setInterns:(i
 }
 
 // ── Analytics Page ─────────────────────────────────────────────────────────────
-function AnPg({ interns, tasks, outreach }: { interns:Profile[]; tasks:Task[]; outreach:Outreach[] }) {
+function AnPg({ interns, tasks, outreach, content, requests, questions, techProjects }: { interns:Profile[]; tasks:Task[]; outreach:Outreach[]; content:ContentVideo[]; requests:Request[]; questions:Question[]; techProjects:TechProject[] }) {
   const active=interns.filter(i=>i.active!==false);
   const completed=tasks.filter(t=>t.status==="completed").length;
   const responded=outreach.filter(o=>["responded","interested"].includes(o.status)).length;
@@ -922,6 +948,18 @@ function AnPg({ interns, tasks, outreach }: { interns:Profile[]; tasks:Task[]; o
   const maxI=byIntern[0]?.count||1;
 
   const taskRows=useMemo(()=>active.map(i=>{ const mt=tasks.filter(t=>t.assigned_to===i.id); return{intern:i,total:mt.length,ns:mt.filter(t=>t.status==="not_started").length,ip:mt.filter(t=>t.status==="in_progress").length,sub:mt.filter(t=>t.status==="submitted").length,done:mt.filter(t=>t.status==="completed").length}; }).filter(r=>r.total>0),[active,tasks]);
+
+  const contentByCreator=useMemo(()=>{ const m:Record<string,number>={}; content.forEach(c=>{if(c.creator_id)m[c.creator_id]=(m[c.creator_id]||0)+1;}); return Object.entries(m).map(([id,count])=>({intern:interns.find(i=>i.id===id),count})).filter(x=>x.intern).sort((a,b)=>b.count-a.count).slice(0,6); },[content,interns]);
+  const maxC=contentByCreator[0]?.count||1;
+  const published=content.filter(c=>c.status==="published").length;
+  const totalViews=content.reduce((s,c)=>s+(c.views||0),0);
+
+  const openReqs=requests.filter(r=>r.status!=="resolved");
+  const reqByType=useMemo(()=>{ const m:Record<string,number>={}; openReqs.forEach(r=>{const t=r.type_name||"Other";m[t]=(m[t]||0)+1;}); return Object.entries(m).sort((a,b)=>b[1]-a[1]); },[openReqs]);
+  const answeredQ=questions.filter(q=>q.status!=="open").length;
+
+  const activeProjects=techProjects.filter(p=>p.status!=="completed");
+  const SV_TP: Record<string,BV>={planning:"warning",in_progress:"info",completed:"success"};
 
   return (
     <div className="flex flex-col gap-6">
@@ -990,6 +1028,81 @@ function AnPg({ interns, tasks, outreach }: { interns:Profile[]; tasks:Task[]; o
           </table>
         </div>
       )}
+
+      {/* Content Analytics */}
+      <div className="bg-white border border-stone-200/60 rounded-xl p-4">
+        <p className="text-sm font-semibold text-stone-700 mb-4 flex items-center gap-2"><Video size={14} className="text-stone-400"/>Content Analytics</p>
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <SC label="Total Videos" value={content.length}/>
+          <SC label="Published" value={published}/>
+          <SC label="Total Views" value={totalViews.toLocaleString()}/>
+        </div>
+        {contentByCreator.length===0 ? <ES message="No content yet"/> : (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-stone-400 uppercase tracking-widest">Top Contributors</p>
+            {contentByCreator.map(({intern,count})=>(
+              <div key={intern!.id} className="flex items-center gap-3">
+                <Av name={intern!.full_name} size={24}/>
+                <span className="text-xs text-stone-600 w-24 truncate">{intern!.full_name.split(" ")[0]}</span>
+                <div className="flex-1 bg-stone-100 rounded-full h-2"><div className="bg-violet-400 h-2 rounded-full" style={{width:`${(count/maxC)*100}%`}}/></div>
+                <span className="text-xs text-stone-500 w-6 text-right">{count}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Requests & Questions Overview */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white border border-stone-200/60 rounded-xl p-4">
+          <p className="text-sm font-semibold text-stone-700 mb-4 flex items-center gap-2"><Inbox size={14} className="text-stone-400"/>Open Requests <span className="text-xs font-normal text-stone-400 ml-1">({openReqs.length})</span></p>
+          {reqByType.length===0 ? <ES message="No open requests"/> : (
+            <div className="flex flex-col gap-2">
+              {reqByType.map(([type,count])=>(
+                <div key={type} className="flex items-center justify-between">
+                  <span className="text-xs text-stone-600">{type}</span>
+                  <Bg v="warning">{count}</Bg>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="bg-white border border-stone-200/60 rounded-xl p-4">
+          <p className="text-sm font-semibold text-stone-700 mb-4 flex items-center gap-2"><MessageCircle size={14} className="text-stone-400"/>Questions</p>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between"><span className="text-xs text-stone-600">Total asked</span><span className="text-sm font-semibold text-stone-700">{questions.length}</span></div>
+            <div className="flex items-center justify-between"><span className="text-xs text-stone-600">Answered / Resolved</span><span className="text-sm font-semibold text-emerald-600">{answeredQ}</span></div>
+            <div className="flex items-center justify-between"><span className="text-xs text-stone-600">Still open</span><span className="text-sm font-semibold text-amber-600">{questions.length-answeredQ}</span></div>
+            {questions.length>0 && (
+              <div className="mt-1">
+                <div className="h-2 bg-stone-100 rounded-full overflow-hidden"><div className="h-2 bg-emerald-400 rounded-full transition-all" style={{width:`${Math.round((answeredQ/questions.length)*100)}%`}}/></div>
+                <p className="text-xs text-stone-400 mt-1">{Math.round((answeredQ/questions.length)*100)}% answered</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Active Tech Projects */}
+      {activeProjects.length>0 && (
+        <div className="bg-white border border-stone-200/60 rounded-xl p-4">
+          <p className="text-sm font-semibold text-stone-700 mb-4 flex items-center gap-2"><Code2 size={14} className="text-stone-400"/>Active Tech Projects</p>
+          <div className="flex flex-col gap-3">
+            {activeProjects.map(p=>(
+              <div key={p.id} className="flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-medium text-stone-700 truncate">{p.title}</span>
+                    <Bg v={SV_TP[p.status]||"default"}>{p.status==="in_progress"?"In Progress":p.status.charAt(0).toUpperCase()+p.status.slice(1)}</Bg>
+                  </div>
+                  <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden"><div className="h-1.5 bg-stone-600 rounded-full transition-all" style={{width:`${p.progress}%`}}/></div>
+                </div>
+                <span className="text-xs text-stone-400 shrink-0">{p.progress}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -997,99 +1110,174 @@ function AnPg({ interns, tasks, outreach }: { interns:Profile[]; tasks:Task[]; o
 // ── Intern Requests ───────────────────────────────────────────────────────────
 const REQUEST_ICONS: Record<string, React.ElementType> = { calendar:CalendarClock, shopping:ShoppingBag, coffee:Coffee, help:HelpCircle };
 
-function InternRequests({ requestTypes, requests, setRequests, profile }: { requestTypes:RequestType[]; requests:Request[]; setRequests:(r:Request[])=>void; profile:Profile }) {
-  const [selType, setSelType] = useState<RequestType|null>(null);
+const REQ_OPTIONS = [
+  { value:"ella_meeting",    label:"Schedule meeting with Ella",       kind:"calendar", person:"ella"      },
+  { value:"noel_meeting",    label:"Schedule meeting with Noel",       kind:"calendar", person:"noel"      },
+  { value:"caroline_meeting",label:"Request meeting with Caroline",    kind:"form",     person:null        },
+  { value:"merch_order",     label:"Request merch order",              kind:"form",     person:null        },
+  { value:"other",           label:"Other request",                    kind:"form",     person:null        },
+] as const;
+type ReqOption = typeof REQ_OPTIONS[number];
+
+const REQ_ICONS: Record<string, React.ElementType> = {
+  ella_meeting: CalendarClock, noel_meeting: CalendarClock, caroline_meeting: Coffee,
+  merch_order: ShoppingBag, other: HelpCircle,
+};
+
+function InternRequests({ requests, setRequests, profile, sb, settings }: { requests:Request[]; setRequests:(r:Request[])=>void; profile:Profile; sb:any; settings:Record<string,string> }) {
+  const [selOpt, setSelOpt] = useState<ReqOption|null>(null);
   const [msg, setMsg] = useState("");
-  const myRequests = requests.filter(r=>r.intern_id===profile.id);
-  const unread = myRequests.filter(r=>r.replies.length>0 && r.status!=="resolved");
+  const [availability, setAvailability] = useState("");
+  const [reason, setReason] = useState("");
+  const [sending, setSending] = useState(false);
+  const myRequests = requests || [];
+  const unread = myRequests.filter(r => (r.replies||[]).length > 0 && r.status !== "resolved");
   const SV: Record<string,BV> = {new:"warning",in_progress:"info",resolved:"success"};
   const SL: Record<string,string> = {new:"New",in_progress:"In Progress",resolved:"Resolved"};
+  const isCaroline = selOpt?.value === "caroline_meeting";
 
-  async function submit(sb: any) {
-    if (!msg.trim()||!selType) return;
-    const {data,error} = await sb.from("requests").insert({ intern_id:profile.id, type_id:selType.id, type_name:selType.name, message:msg, status:"new", replies:[], created_at:new Date().toISOString() }).select().single();
-    if (error){console.error(error);return;}
-    setRequests([data,...requests]);
-    setMsg(""); setSelType(null);
+  function openOpt(opt: ReqOption) { setSelOpt(opt); setMsg(""); setAvailability(""); setReason(""); }
+  function closeModal() { setSelOpt(null); setMsg(""); setAvailability(""); setReason(""); }
+
+  async function submit() {
+    if (!selOpt) return;
+    const isForm = selOpt.kind === "form";
+    if (isCaroline && (!reason.trim() || !availability.trim())) return;
+    if (!isCaroline && isForm && !msg.trim()) return;
+    setSending(true);
+    const message = isCaroline
+      ? `Reason: ${reason.trim()}\n\nAvailability: ${availability.trim()}`
+      : msg.trim() || selOpt.label;
+    const { data, error } = await sb.from("requests").insert({
+      intern_id: profile.id,
+      type_name: selOpt.label,
+      message,
+      status: "new",
+      replies: [],
+      created_at: new Date().toISOString(),
+    }).select().single();
+    setSending(false);
+    if (error) { console.error("[requests insert]", error.message, error.code, error.details); return; }
+    setRequests([data as Request, ...myRequests]);
+    // Auto-email Caroline
+    if (isCaroline && settings.caroline_email) {
+      const subject = encodeURIComponent(`Meeting Request from ${profile.full_name}`);
+      const body = encodeURIComponent(`Hi Caroline,\n\n${profile.full_name} would like to meet with you.\n\nReason: ${reason.trim()}\n\nAvailability: ${availability.trim()}\n\nThis request was submitted via Cloud Closet Ops.`);
+      window.open(`mailto:${settings.caroline_email}?subject=${subject}&body=${body}`, "_blank");
+    }
+    closeModal();
   }
+
+  const calendlyUrl = selOpt?.person === "ella" ? settings.calendly_ella
+    : selOpt?.person === "noel" ? settings.calendly_noel
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
-      <div><h1 className="text-xl font-bold text-stone-800">Requests</h1><p className="text-sm text-stone-400 mt-0.5">Submit requests to Ella &amp; Noel.</p></div>
-      {unread.length>0 && (
+      <div>
+        <h1 className="text-xl font-bold text-stone-800">Requests</h1>
+        <p className="text-sm text-stone-400 mt-0.5">What can we help you with?</p>
+      </div>
+
+      {/* Messages from admins */}
+      {unread.length > 0 && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2"><MessageSquare size={14} className="text-emerald-600"/><span className="text-xs font-semibold text-emerald-700 uppercase tracking-widest">Messages from Ella &amp; Noel</span></div>
-          {unread.map(r=>{
-            const last=r.replies[r.replies.length-1];
+          {unread.map(r => {
+            const last = (r.replies||[])[r.replies.length-1];
             return (
               <div key={r.id} className="bg-white border-2 border-emerald-300 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-1"><span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"/><span className="text-xs text-stone-400 uppercase tracking-widest">{r.type_name}</span></div>
                 <p className="text-xs text-stone-400 mb-2">You: {r.message}</p>
-                <div className="bg-sky-50 border border-sky-100 rounded-lg p-3 flex items-start gap-2">
+                {last && <div className="bg-sky-50 border border-sky-100 rounded-lg p-3 flex items-start gap-2">
                   <Av name={last.author_name||"Admin"} size={24}/><div><p className="text-xs font-medium text-sky-700">{last.author_name}</p><p className="text-sm text-stone-700">{last.body}</p></div>
-                </div>
+                </div>}
               </div>
             );
           })}
         </div>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {requestTypes.filter(t=>t.active!==false).map(type=>{
-          const Icon = REQUEST_ICONS[type.icon||"help"]||HelpCircle;
-          const accent = type.kind==="calendar" ? "#8B5CF6" : "#3B82F6";
-          return (
-            <div key={type.id} onClick={()=>setSelType(type)} className="bg-white border border-stone-200/60 rounded-xl p-5 hover:border-stone-300 transition-all cursor-pointer group">
-              <div className="flex items-start gap-4">
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{background:accent+"18"}}><Icon size={20} style={{color:accent}}/></div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-stone-800 mb-1">{type.name}</p>
-                  <p className="text-xs text-stone-400 leading-relaxed">{type.description}</p>
-                  {type.kind==="calendar" && (type.calendly_ella||type.calendly_noel) && (
-                    <div className="flex gap-2 mt-3 flex-wrap">
-                      {type.calendly_ella && <a href={type.calendly_ella} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-violet-50 text-violet-700 rounded-lg hover:bg-violet-100 transition-colors"><CalendarClock size={12}/>Book with Ella</a>}
-                      {type.calendly_noel && <a href={type.calendly_noel} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-violet-50 text-violet-700 rounded-lg hover:bg-violet-100 transition-colors"><CalendarClock size={12}/>Book with {type.id==="00000000-0000-0000-0000-000000000003"?"Caroline":"Noel"}</a>}
-                    </div>
-                  )}
+
+      {/* Request type cards — always visible */}
+      <div>
+        <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Select a request type</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {REQ_OPTIONS.map(opt => {
+            const Icon = REQ_ICONS[opt.value] || HelpCircle;
+            const isCalendar = opt.kind === "calendar";
+            return (
+              <button key={opt.value} onClick={() => openOpt(opt)}
+                className="bg-white border border-stone-200/60 rounded-xl p-4 text-left hover:border-stone-400 hover:shadow-sm transition-all flex items-center gap-4 group">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isCalendar ? "bg-violet-50" : "bg-stone-100"}`}>
+                  <Icon size={18} className={isCalendar ? "text-violet-600" : "text-stone-500"}/>
                 </div>
-              </div>
-            </div>
-          );
-        })}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-stone-800">{opt.label}</p>
+                  <p className="text-xs text-stone-400 mt-0.5">
+                    {opt.value === "caroline_meeting" ? "Share availability & reason" : isCalendar ? "Opens booking link" : "Send a message"}
+                  </p>
+                </div>
+                <ChevronRight size={14} className="text-stone-300 group-hover:text-stone-500 shrink-0"/>
+              </button>
+            );
+          })}
+        </div>
       </div>
-      {myRequests.length>0 && (
+
+      {/* Past requests */}
+      {myRequests.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-stone-700 mb-3">Your Requests</h2>
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Your Past Requests</p>
           <div className="flex flex-col gap-2">
-            {myRequests.slice(0,5).map(r=>(
+            {myRequests.slice(0,5).map(r => (
               <div key={r.id} className="bg-white border border-stone-200/60 rounded-xl p-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><span className="text-xs text-stone-400 uppercase tracking-widest">{r.type_name}</span><span className="text-xs text-stone-400">{fmt(r.created_at)}</span></div>
+                  <div className="flex items-center gap-2"><span className="text-xs text-stone-600 font-medium">{r.type_name}</span><span className="text-xs text-stone-400">{fmt(r.created_at)}</span></div>
                   <Bg v={SV[r.status]||"default"}>{SL[r.status]||r.status}</Bg>
                 </div>
-                <p className="text-xs text-stone-600 mt-1 line-clamp-1">{r.message}</p>
+                <p className="text-xs text-stone-500 mt-1 line-clamp-1">{r.message}</p>
               </div>
             ))}
           </div>
         </div>
       )}
-      <Md open={!!selType} onClose={()=>{setSelType(null);setMsg("");}} title={`Submit: ${selType?.name||""}`}>
-        {selType && (
+
+      {/* Modal */}
+      <Md open={!!selOpt} onClose={closeModal} title={selOpt?.label||"Request"}>
+        {selOpt && (
           <div className="flex flex-col gap-4">
-            <p className="text-xs text-stone-400">{selType.description}</p>
-            {selType.kind==="calendar" && (selType.calendly_ella||selType.calendly_noel) && (
-              <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
-                <p className="text-xs font-medium text-violet-700 mb-2">Book directly:</p>
-                <div className="flex gap-2 flex-wrap">
-                  {selType.calendly_ella && <a href={selType.calendly_ella} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"><CalendarClock size={14}/>Book with Ella<ArrowUpRight size={12}/></a>}
-                  {selType.calendly_noel && <a href={selType.calendly_noel} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"><CalendarClock size={14}/>Book<ArrowUpRight size={12}/></a>}
+            {isCaroline ? (
+              <>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 flex items-start gap-2">
+                  <Mail size={13} className="mt-0.5 shrink-0"/>
+                  <span>After submitting, a meeting request email will be sent directly to Caroline.</span>
                 </div>
-                <p className="text-xs text-violet-500 mt-2">Or send a message below if you need flexibility.</p>
-              </div>
+                <TA label="Reason for meeting" placeholder="What would you like to discuss?" value={reason} onChange={v=>setReason(v)}/>
+                <TA label="Your availability" placeholder="e.g. Mon/Wed afternoons, anytime after 2pm this week..." value={availability} onChange={v=>setAvailability(v)}/>
+              </>
+            ) : selOpt.kind === "calendar" ? (
+              <>
+                <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
+                  <p className="text-xs font-medium text-violet-700 mb-3 flex items-center gap-1.5"><CalendarClock size={13}/>Book directly:</p>
+                  {calendlyUrl
+                    ? <a href={calendlyUrl} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium bg-violet-600 text-white rounded-xl hover:bg-violet-700 transition-colors">
+                        <CalendarClock size={14}/>Open Calendly<ArrowUpRight size={13}/>
+                      </a>
+                    : <p className="text-xs text-violet-500 italic">Calendly link not set yet — send a message and we&apos;ll follow up.</p>
+                  }
+                  <p className="text-xs text-violet-400 mt-3">Or leave a note below if you need a specific time.</p>
+                </div>
+                <TA label="Note (optional)" placeholder="Any notes on timing or agenda..." value={msg} onChange={v=>setMsg(v)}/>
+              </>
+            ) : (
+              <TA label="Message" placeholder="Describe your request..." value={msg} onChange={v=>setMsg(v)}/>
             )}
-            <TA label="Message" placeholder="Describe your request..." value={msg} onChange={v=>setMsg(v)}/>
-            <div className="flex justify-end gap-2 pt-3 border-t border-stone-100">
-              <Btn variant="secondary" onClick={()=>{setSelType(null);setMsg("");}}>Cancel</Btn>
-              <Btn onClick={()=>submit(null)} disabled={!msg.trim()}><Send size={14}/>Send Request</Btn>
+            <div className="flex justify-end gap-2 pt-2 border-t border-stone-100">
+              <Btn variant="secondary" onClick={closeModal}>Cancel</Btn>
+              <Btn onClick={submit} disabled={sending || (isCaroline ? (!reason.trim()||!availability.trim()) : (selOpt.kind==="form"&&!msg.trim()))}>
+                <Send size={14}/>{sending ? "Sending..." : isCaroline ? "Send Meeting Request" : "Send Request"}
+              </Btn>
             </div>
           </div>
         )}
@@ -1099,7 +1287,7 @@ function InternRequests({ requestTypes, requests, setRequests, profile }: { requ
 }
 
 // ── Admin Request Inbox ────────────────────────────────────────────────────────
-function AdminRequestInbox({ requests, setRequests, requestTypes, setRequestTypes, interns, sb }: { requests:Request[]; setRequests:(r:Request[])=>void; requestTypes:RequestType[]; setRequestTypes:(t:RequestType[])=>void; interns:Profile[]; sb:any }) {
+function AdminRequestInbox({ requests, setRequests, requestTypes, setRequestTypes, interns, sb, settings }: { requests:Request[]; setRequests:(r:Request[])=>void; requestTypes:RequestType[]; setRequestTypes:(t:RequestType[])=>void; interns:Profile[]; sb:any; settings:AppSettings }) {
   const [tab, setTab] = useState("inbox");
   const [replyText, setReplyText] = useState<Record<string,string>>({});
   const [showAddType, setShowAddType] = useState(false);
@@ -1144,6 +1332,10 @@ function AdminRequestInbox({ requests, setRequests, requestTypes, setRequestType
     await sb.from("request_types").update({active}).eq("id",id);
     setRequestTypes(requestTypes.map(t=>t.id===id?{...t,active}:t));
   }
+  async function deleteRequest(id:string) {
+    await sb.from("requests").delete().eq("id",id);
+    setRequests(requests.filter(r=>r.id!==id));
+  }
 
   function renderRequest(req:Request) {
     return (
@@ -1159,6 +1351,7 @@ function AdminRequestInbox({ requests, setRequests, requestTypes, setRequestType
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-stone-100 text-stone-500">{req.type_name}</span>
             <Bg v={SV[req.status]||"default"}>{SL[req.status]||req.status}</Bg>
+            <button onClick={()=>{ if(window.confirm("Delete this request?")) deleteRequest(req.id); }} className="p-1 rounded text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={12}/></button>
           </div>
         </div>
         <p className="text-sm text-stone-700 mb-3 leading-relaxed">{req.message}</p>
@@ -1198,9 +1391,30 @@ function AdminRequestInbox({ requests, setRequests, requestTypes, setRequestType
       {tab==="resolved" && (resolved.length===0 ? <ES message="No resolved requests"/> : <div className="flex flex-col gap-3">{resolved.map(renderRequest)}</div>)}
       {tab==="settings" && (
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between"><p className="text-sm font-semibold text-stone-700">Request Types</p><Btn size="sm" onClick={()=>setShowAddType(true)}><Plus size={14}/>Add Type</Btn></div>
+          {/* Fixed request options interns see */}
+          <div>
+            <p className="text-sm font-semibold text-stone-700 mb-1">Intern Request Options</p>
+            <p className="text-xs text-stone-400 mb-3">These 5 options always appear on the intern requests page.</p>
+            <div className="flex flex-col gap-2">
+              {REQ_OPTIONS.map(opt=>{
+                const calendlyUrl = opt.person==="ella" ? settings.calendly_ella : opt.person==="noel" ? settings.calendly_noel : null;
+                return (
+                  <div key={opt.value} className="bg-stone-50 border border-stone-100 rounded-xl p-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-medium text-stone-700">{opt.label}</p>
+                      <p className="text-xs text-stone-400">{opt.kind==="calendar" ? (calendlyUrl ? `Calendly: ${calendlyUrl}` : "⚠️ No Calendly link set — update in Settings") : opt.value==="caroline_meeting" ? "Email form (set Caroline's email in Settings)" : "Message form"}</p>
+                    </div>
+                    <Bg v={opt.kind==="calendar" ? (calendlyUrl?"success":"warning") : "default"}>{opt.kind==="calendar"?"Calendly":"Form"}</Bg>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="border-t border-stone-100 pt-4">
+            <div className="flex items-center justify-between mb-3"><p className="text-sm font-semibold text-stone-700">DB Request Types</p><Btn size="sm" onClick={()=>setShowAddType(true)}><Plus size={14}/>Add Type</Btn></div>
+          </div>
           <div className="flex flex-col gap-2">
-            {requestTypes.map(t=>(
+            {requestTypes.length===0 ? <p className="text-xs text-stone-400 italic">No DB request types. Add one above or run the migration SQL.</p> : requestTypes.map(t=>(
               <div key={t.id} className={`bg-white border border-stone-200/60 rounded-xl p-4 flex items-center gap-3 ${t.active===false?"opacity-50":""}`}>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-stone-800">{t.name}</p>
@@ -1253,6 +1467,7 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
   const [filter, setFilter] = useState("all");
   const [calMonth, setCalMonth] = useState(new Date());
   const [ne, setNe] = useState({title:"",description:"",date:"",time:"",location:"",materials:[{item:"",qty:""}] as EventMaterial[]});
+  const [dateTbd, setDateTbd] = useState(false);
   const gn=(id?:string)=>interns.find(i=>i.id===id)?.full_name||"?";
   const fd=filter==="all"?events:events.filter(e=>e.status===filter);
   const sorted=[...fd].sort((a,b)=>new Date(a.date||"9999").getTime()-new Date(b.date||"9999").getTime());
@@ -1260,9 +1475,9 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
 
   async function create() {
     const mats=ne.materials.filter(m=>m.item.trim());
-    const {data,error}=await sb.from("events").insert({...ne,materials:mats,intern_id:profile.id,team_members:[],status:"planning",created_at:new Date().toISOString()}).select().single();
+    const {data,error}=await sb.from("events").insert({...ne,date:dateTbd?null:(ne.date||null),materials:mats,intern_id:profile.id,team_members:[],status:"planning",created_at:new Date().toISOString()}).select().single();
     if(error){console.error(error);return;}
-    setEvents([data,...events]);setShowC(false);
+    setEvents([data,...events]);setShowC(false);setDateTbd(false);
     setNe({title:"",description:"",date:"",time:"",location:"",materials:[{item:"",qty:""}]});
   }
   async function updateStatus(id:string,status:string) {
@@ -1277,6 +1492,11 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
     await sb.from("events").update({materials:mats}).eq("id",eventId);
     setEvents(events.map(e=>e.id===eventId?{...e,materials:mats}:e));
     if(sel?.id===eventId) setSel({...sel,materials:mats});
+  }
+  async function deleteEvent(id:string) {
+    await sb.from("events").delete().eq("id",id);
+    setEvents(events.filter(e=>e.id!==id));
+    setSel(null);
   }
 
   // Mini calendar
@@ -1352,12 +1572,18 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
         </div>
       )}
       {/* Create modal */}
-      <Md open={showC} onClose={()=>setShowC(false)} title="Add Event">
+      <Md open={showC} onClose={()=>{setShowC(false);setDateTbd(false);}} title="Add Event">
         <div className="flex flex-col gap-3">
           <TI label="Title" value={ne.title} onChange={v=>setNe({...ne,title:v})} required/>
           <TA label="Description" value={ne.description} onChange={v=>setNe({...ne,description:v})}/>
           <div className="grid grid-cols-2 gap-3">
-            <TI label="Date" value={ne.date} onChange={v=>setNe({...ne,date:v})} type="date"/>
+            <div>
+              <label className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">Date</label>
+              <div className="flex items-center gap-3">
+                <input type="date" value={dateTbd?"":ne.date} disabled={dateTbd} onChange={e=>setNe({...ne,date:e.target.value})} className={`flex-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm text-stone-700 focus:outline-none focus:border-stone-400 ${dateTbd?"opacity-40 cursor-not-allowed":""}`}/>
+                <label className="flex items-center gap-1.5 text-xs text-stone-500 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={dateTbd} onChange={e=>setDateTbd(e.target.checked)} className="rounded"/>TBD</label>
+              </div>
+            </div>
             <TI label="Time" value={ne.time} onChange={v=>setNe({...ne,time:v})} placeholder="e.g. 2:00 PM"/>
           </div>
           <TI label="Location" value={ne.location} onChange={v=>setNe({...ne,location:v})}/>
@@ -1410,6 +1636,11 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
                 {["planning","upcoming","completed","cancelled"].map(s=><button key={s} onClick={()=>updateStatus(sel.id,s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${sel.status===s?"bg-stone-800 text-white":"bg-stone-100 text-stone-600 hover:bg-stone-200"}`}>{s.charAt(0).toUpperCase()+s.slice(1)}</button>)}
               </div>
             </div>
+            {profile.role==="admin" && (
+              <div className="pt-2 border-t border-stone-100 flex justify-end">
+                <Btn variant="danger" size="sm" onClick={()=>{ if(window.confirm("Delete this event?")) deleteEvent(sel.id); }}><Trash2 size={12}/>Delete Event</Btn>
+              </div>
+            )}
           </div>
         )}
       </Md>
@@ -1635,6 +1866,38 @@ function ContentPage({ profile, interns, content, setContent, sb }: { profile:Pr
   );
 }
 
+// ── Settings Page ──────────────────────────────────────────────────────────────
+function SettingsPg({ settings, setSettings, sb }: { settings:AppSettings; setSettings:(s:AppSettings)=>void; sb:any }) {
+  const [form, setForm] = useState({ calendly_ella:settings.calendly_ella||"", calendly_noel:settings.calendly_noel||"", caroline_email:settings.caroline_email||"" });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    await Promise.all(
+      Object.entries(form).map(([key,value])=>sb.from("settings").upsert({key,value},{onConflict:"key"}))
+    );
+    setSettings({...settings,...form});
+    setSaving(false); setSaved(true); setTimeout(()=>setSaved(false),2000);
+  }
+  return (
+    <div className="flex flex-col gap-5">
+      <div><h1 className="text-xl font-bold text-stone-800">Settings</h1><p className="text-sm text-stone-400 mt-0.5">Admin configuration</p></div>
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+        <p className="text-sm font-semibold text-stone-700 flex items-center gap-2"><CalendarClock size={15} className="text-violet-500"/>Calendly Links</p>
+        <p className="text-xs text-stone-400">These URLs appear as booking buttons when interns select scheduling request types.</p>
+        <TI label="Ella's Calendly URL" value={form.calendly_ella} onChange={v=>setForm({...form,calendly_ella:v})} placeholder="https://calendly.com/ella/..."/>
+        <TI label="Noel's Calendly URL" value={form.calendly_noel} onChange={v=>setForm({...form,calendly_noel:v})} placeholder="https://calendly.com/noel/..."/>
+        <TI label="Caroline's Email" value={form.caroline_email} onChange={v=>setForm({...form,caroline_email:v})} placeholder="caroline@example.com"/>
+        <div className="flex items-center justify-end gap-3">
+          {saved && <span className="text-xs text-emerald-600 font-medium">Saved!</span>}
+          <Btn onClick={save} disabled={saving}>{saving?"Saving...":"Save Settings"}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const router = useRouter();
@@ -1656,6 +1919,7 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<CCEvent[]>([]);
   const [techProjects, setTechProjects] = useState<TechProject[]>([]);
   const [content, setContent] = useState<ContentVideo[]>([]);
+  const [settings, setSettings] = useState<AppSettings>({});
 
   useEffect(() => {
     async function init() {
@@ -1668,6 +1932,7 @@ export default function DashboardPage() {
         { data: iD }, { data: tD }, { data: oD }, { data: qD },
         { data: rD }, { data: resD }, { data: aD }, { data: actD },
         { data: rtD }, { data: reqD }, { data: evD }, { data: tpD }, { data: ctD },
+        { data: stD },
       ] = await Promise.all([
         supabase.from("profiles").select("*").eq("role", "intern").order("full_name"),
         supabase.from("tasks").select("*").order("created_at", { ascending: false }),
@@ -1682,6 +1947,7 @@ export default function DashboardPage() {
         supabase.from("events").select("*").order("date"),
         supabase.from("tech_projects").select("*").order("created_at", { ascending: false }),
         supabase.from("content_videos").select("*").order("created_at", { ascending: false }),
+        supabase.from("settings").select("*"),
       ]);
       setInterns((iD || []) as Profile[]);
       setTasks((tD || []) as Task[]);
@@ -1696,9 +1962,10 @@ export default function DashboardPage() {
       setEvents((evD || []) as CCEvent[]);
       setTechProjects((tpD || []) as TechProject[]);
       setContent((ctD || []) as ContentVideo[]);
+      try { setSettings(((stD||[]) as any[]).reduce((acc:AppSettings,s:any)=>({...acc,[s.key]:s.value}),{})); } catch(_) {}
       setLoading(false);
     }
-    init();
+    init().catch(err => { console.error("[dashboard init]", err); setLoading(false); });
   }, [supabase, router]);
 
   // Realtime subscriptions
@@ -1756,8 +2023,9 @@ export default function DashboardPage() {
     ...((isAdmin || isCreator) ? [{ id: "content", icon: <Video size={16}/>, label: "Content" }] : []),
   ];
   const ADMIN_NAV = [
-    { id: "interns",   icon: <Users size={16}/>,    label: "Intern Mgmt" },
-    { id: "analytics", icon: <BarChart3 size={16}/>, label: "Analytics" },
+    { id: "interns",   icon: <Users size={16}/>,        label: "Intern Mgmt" },
+    { id: "analytics", icon: <BarChart3 size={16}/>,    label: "Analytics" },
+    { id: "settings",  icon: <SettingsIcon size={16}/>, label: "Settings" },
   ];
 
   function NavItem({ item }: { item: { id: string; icon: React.ReactNode; label: string; badge?: number | null } }) {
@@ -1804,8 +2072,8 @@ export default function DashboardPage() {
       case "tasks":     return <TasksPg {...common} tasks={tasks} setTasks={setTasks}/>;
       case "outreach":  return <OutPg {...common} outreach={outreach} setOutreach={setOutreach}/>;
       case "requests":  return isAdmin
-        ? <AdminRequestInbox requests={requests} setRequests={setRequests} requestTypes={requestTypes} setRequestTypes={setRequestTypes} interns={interns} sb={supabase}/>
-        : <InternRequests profile={p} requestTypes={requestTypes} requests={requests.filter(r => r.intern_id === p.id)} setRequests={setRequests}/>;
+        ? <AdminRequestInbox requests={requests} setRequests={setRequests} requestTypes={requestTypes} setRequestTypes={setRequestTypes} interns={interns} sb={supabase} settings={settings}/>
+        : <InternRequests profile={p} requests={requests.filter(r => r.intern_id === p.id)} setRequests={setRequests} sb={supabase} settings={settings}/>;
       case "events":    return <EventsPage profile={p} interns={interns} events={events} setEvents={setEvents} sb={supabase}/>;
       case "tech":      return (isAdmin || isTech) ? <TechProjectsPage profile={p} interns={interns} projects={techProjects} setProjects={setTechProjects} sb={supabase}/> : null;
       case "content":   return (isAdmin || isCreator) ? <ContentPage profile={p} interns={interns} content={content} setContent={setContent} sb={supabase}/> : null;
@@ -1813,7 +2081,8 @@ export default function DashboardPage() {
       case "reports":   return <RPg {...common} reports={reports} setReports={setReports}/>;
       case "resources": return <ResPg profile={p} resources={resources} setResources={setResources} sb={supabase}/>;
       case "interns":   return isAdmin ? <IntMgmt interns={interns} setInterns={setInterns} sb={supabase}/> : null;
-      case "analytics": return isAdmin ? <AnPg interns={interns} tasks={tasks} outreach={outreach}/> : null;
+      case "analytics": return isAdmin ? <AnPg interns={interns} tasks={tasks} outreach={outreach} content={content} requests={requests} questions={questions} techProjects={techProjects}/> : null;
+      case "settings":  return isAdmin ? <SettingsPg settings={settings} setSettings={setSettings} sb={supabase}/> : null;
       default:          return null;
     }
   }

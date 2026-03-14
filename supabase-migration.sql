@@ -144,8 +144,57 @@ alter table public.resources
 -- Or via SQL (requires pg_storage extension to be enabled):
 -- insert into storage.buckets (id, name, public) values ('resources', 'resources', true) on conflict do nothing;
 
+-- ─── RLS policies: announcements ────────────────────────────
+-- announcements table must have RLS enabled (Supabase default).
+-- Allow any authenticated user to read announcements.
+-- Only admins can insert/update/delete.
+create policy "Auth users view announcements"
+  on public.announcements for select
+  using (auth.uid() is not null);
+
+create policy "Admins manage announcements"
+  on public.announcements for all
+  using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+
+-- ─── RLS policies: tasks ─────────────────────────────────────
+-- tasks table must have RLS enabled (Supabase default).
+-- All authenticated users can read tasks (admins see all, filtering done in app).
+-- Only admins can create tasks; owners/admins can update; admins can delete.
+create policy "Auth users view tasks"
+  on public.tasks for select
+  using (auth.uid() is not null);
+
+create policy "Admins insert tasks"
+  on public.tasks for insert
+  with check (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+
+create policy "Owner or admin update tasks"
+  on public.tasks for update
+  using (assigned_to = auth.uid()
+    or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+
+create policy "Admins delete tasks"
+  on public.tasks for delete
+  using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+
 -- ─── Enable realtime ────────────────────────────────────────
 alter publication supabase_realtime add table public.tasks;
 alter publication supabase_realtime add table public.requests;
 alter publication supabase_realtime add table public.questions;
 alter publication supabase_realtime add table public.question_replies;
+
+-- ─── Settings table ──────────────────────────────────────────
+create table if not exists public.settings (
+  key   text primary key,
+  value text not null default ''
+);
+alter table public.settings enable row level security;
+create policy "Auth users view settings"
+  on public.settings for select using (auth.uid() is not null);
+create policy "Admins manage settings"
+  on public.settings for all
+  using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+
+-- ─── Events: ensure intern insert policy exists ──────────────
+-- (run only if "Auth users create events" policy does not exist yet)
+-- create policy "Auth users create events" on public.events for insert with check (auth.uid() is not null);

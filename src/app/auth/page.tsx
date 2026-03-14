@@ -39,7 +39,7 @@ export default function AuthPage() {
           supabaseClient={supabase}
           appearance={{ theme: ThemeSupa }}
           providers={[]}
-          redirectTo="http://localhost:3000/auth/callback"
+          redirectTo="https://cloud-closet-dashboard.vercel.app/auth/callback"
         />
       </div>
     </div>
