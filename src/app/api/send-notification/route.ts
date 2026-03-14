@@ -53,10 +53,10 @@ export async function POST(req: NextRequest) {
   if (team) query = (query as any).eq('profiles.team', team);
 
   const { data: rows, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: error.message, stage: 'supabase_query' }, { status: 500 });
 
   const tokens: string[] = (rows || []).map((r: any) => r.token).filter(Boolean);
-  if (tokens.length === 0) return NextResponse.json({ ok: true, sent: 0 });
+  if (tokens.length === 0) return NextResponse.json({ ok: true, sent: 0, debug: { rowCount: rows?.length ?? 0, rows } });
 
   let accessToken: string;
   try {
