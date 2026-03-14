@@ -1,42 +1,25 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
+import { SignJWT, importPKCS8 } from 'jose';
 
 async function getAccessToken(): Promise<string> {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON not configured');
   const sa = JSON.parse(raw);
 
+  const privateKey = await importPKCS8(sa.private_key, 'RS256');
   const now = Math.floor(Date.now() / 1000);
-  const header = { alg: 'RS256', typ: 'JWT' };
-  const payload = {
-    iss: sa.client_email,
+
+  const jwt = await new SignJWT({
     scope: 'https://www.googleapis.com/auth/firebase.messaging',
-    aud: 'https://oauth2.googleapis.com/token',
-    iat: now,
-    exp: now + 3600,
-  };
-
-  const encode = (obj: object) =>
-    Buffer.from(JSON.stringify(obj)).toString('base64url');
-
-  const unsigned = `${encode(header)}.${encode(payload)}`;
-
-  // Import the private key and sign
-  const keyData = sa.private_key.replace(/\\n/g, '\n');
-  const cryptoKey = await crypto.subtle.importKey(
-    'pkcs8',
-    Buffer.from(keyData.replace(/-----[^-]+-----/g, '').replace(/\s/g, ''), 'base64'),
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const sig = await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5',
-    cryptoKey,
-    Buffer.from(unsigned)
-  );
-  const jwt = `${unsigned}.${Buffer.from(sig).toString('base64url')}`;
+  })
+    .setProtectedHeader({ alg: 'RS256' })
+    .setIssuer(sa.client_email)
+    .setAudience('https://oauth2.googleapis.com/token')
+    .setIssuedAt(now)
+    .setExpirationTime(now + 3600)
+    .sign(privateKey);
 
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
