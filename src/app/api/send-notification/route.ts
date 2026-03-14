@@ -48,8 +48,7 @@ export async function POST(req: NextRequest) {
 
   let query = supabase
     .from('fcm_tokens')
-    .select('token, profiles!inner(role, team)')
-    .eq('profiles.role', 'intern');
+    .select('token, profiles!inner(role, team)');
 
   if (team) query = (query as any).eq('profiles.team', team);
 
