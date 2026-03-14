@@ -7,22 +7,11 @@ import { getMessaging } from 'firebase-admin/messaging';
 function getAdminApp() {
   if (getApps().length > 0) return getApps()[0];
 
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const rawKey = process.env.FIREBASE_PRIVATE_KEY;
-  if (!clientEmail || !rawKey) throw new Error('FIREBASE_CLIENT_EMAIL or FIREBASE_PRIVATE_KEY not configured');
+  const b64 = process.env.FIREBASE_SA_BASE64;
+  if (!b64) throw new Error('FIREBASE_SA_BASE64 not configured');
+  const sa = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
 
-  // rawKey is pure base64 (no PEM headers, no newlines) — rebuild proper PEM
-  const base64Only = rawKey.replace(/\s/g, '');
-  const lines = base64Only.match(/.{1,64}/g) || [];
-  const privateKey = `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----\n`;
-
-  return initializeApp({
-    credential: cert({
-      projectId: 'cloud-closet-dashboard',
-      clientEmail,
-      privateKey,
-    }),
-  });
+  return initializeApp({ credential: cert(sa) });
 }
 
 export async function POST(req: NextRequest) {
