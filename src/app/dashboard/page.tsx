@@ -2099,20 +2099,20 @@ export default function DashboardPage() {
   useEffect(() => {
     if (loading) return;
     const tasksCh = supabase.channel("tasks-rt")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "tasks" }, p => setTasks(prev => [p.new as Task, ...prev]))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "tasks" }, p => setTasks(prev => prev.some(t => t.id === p.new.id) ? prev : [p.new as Task, ...prev]))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tasks" }, p => setTasks(prev => prev.map(t => t.id === p.new.id ? p.new as Task : t)))
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "tasks" }, p => setTasks(prev => prev.filter(t => t.id !== (p.old as any).id)))
       .subscribe();
     const qCh = supabase.channel("questions-rt")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "questions" }, p => setQuestions(prev => [{ ...(p.new as unknown as Question), question_replies: [] }, ...prev]))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "questions" }, p => setQuestions(prev => prev.some(q => q.id === p.new.id) ? prev : [{ ...(p.new as unknown as Question), question_replies: [] }, ...prev]))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "questions" }, p => setQuestions(prev => prev.map(q => q.id === p.new.id ? { ...q, ...p.new } : q)))
       .subscribe();
     const rCh = supabase.channel("replies-rt")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "question_replies" }, p =>
-        setQuestions(prev => prev.map(q => q.id === p.new.question_id ? { ...q, question_replies: [...(q.question_replies || []), p.new as Reply] } : q))
+        setQuestions(prev => prev.map(q => q.id === p.new.question_id ? { ...q, question_replies: (q.question_replies||[]).some(r => r.id === p.new.id) ? q.question_replies! : [...(q.question_replies || []), p.new as Reply] } : q))
       ).subscribe();
     const reqCh = supabase.channel("requests-rt")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "requests" }, p => setRequests(prev => [{ ...(p.new as any), replies: (p.new as any).replies || [] } as Request, ...prev]))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "requests" }, p => setRequests(prev => prev.some(r => r.id === p.new.id) ? prev : [{ ...(p.new as any), replies: (p.new as any).replies || [] } as Request, ...prev]))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "requests" }, p => setRequests(prev => prev.map(r => r.id === p.new.id ? { ...(p.new as any), replies: (p.new as any).replies || [] } as Request : r)))
       .subscribe();
     return () => { supabase.removeChannel(tasksCh); supabase.removeChannel(qCh); supabase.removeChannel(rCh); supabase.removeChannel(reqCh); };
