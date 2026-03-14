@@ -21,7 +21,7 @@ type Task = { id: string; title: string; description?: string; assigned_to?: str
 type Outreach = { id: string; intern_id?: string; brand_or_creator: string; platform?: string; contact_name?: string; date_contacted?: string; status: string; notes?: string; created_at: string };
 type Reply = { id: string; question_id: string; author_id?: string; body: string; created_at: string };
 type Question = { id: string; author_id?: string; title: string; category?: string; description?: string; status: string; created_at: string; question_replies?: Reply[] };
-type Report = { id: string; intern_id?: string; week_of?: string; tasks_completed?: string; outreach_sent?: string; responses_received?: string; wins?: string; challenges?: string; ideas?: string; reviewed: boolean; created_at: string };
+type Report = { id: string; intern_id?: string; week_of?: string; tasks_completed?: string; outreach_sent?: string; responses_received?: string; wins?: string; challenges?: string; ideas?: string; reviewed: boolean; created_at: string; file_url?: string; custom_data?: Record<string,any> };
 type Resource = { id: string; title: string; description?: string; category?: string; file_url?: string; created_at: string };
 type Announcement = { id: string; title: string; body?: string; pinned?: boolean; target_teams?: string[] | null; created_at: string };
 type Activity = { id: string; user_id?: string; user_name?: string; activity?: string; metadata?: any; created_at: string };
@@ -29,10 +29,12 @@ type RequestType = { id: string; name: string; description?: string; icon?: stri
 type Request = { id: string; intern_id?: string; type_id?: string; type_name?: string; message: string; status: string; replies: RequestReply[]; created_at: string };
 type RequestReply = { author: string; author_name: string; body: string; created_at: string };
 type EventMaterial = { item: string; qty: string; fulfilled?: boolean };
-type CCEvent = { id: string; title: string; description?: string; date?: string; time?: string; location?: string; status: string; intern_id?: string; team_members?: string[]; materials?: EventMaterial[]; created_at: string };
+type CCEvent = { id: string; title: string; description?: string; date?: string; time?: string; location?: string; status: string; intern_id?: string; team_members?: string[]; materials?: EventMaterial[]; created_at: string; file_url?: string };
 type TechProject = { id: string; title: string; description?: string; status: string; priority?: string; owner_id?: string; contributors?: string[]; tech_stack?: string; github_url?: string; progress: number; created_at: string; updated_at?: string };
 type ContentVideo = { id: string; creator_id?: string; title: string; tiktok_url?: string; views?: number; likes?: number; comments?: number; date_posted?: string; status: string; created_at: string };
 type AppSettings = Record<string, string>;
+type ReportFieldConfig = { tasks_completed:boolean; outreach_sent:boolean; responses_received:boolean; wins:boolean; challenges:boolean; ideas:boolean; custom_fields:{key:string;label:string;type:"checkbox"|"text"}[] };
+type ReportConfig = Record<string, ReportFieldConfig>;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TEAM_COLORS: Record<string, { bg: string; text: string }> = {
@@ -49,6 +51,8 @@ const PRI_COLORS: Record<string, { bg: string; text: string }> = {
   low: { bg:"#F3F4F6", text:"#6B7280" }, medium: { bg:"#FEF3C7", text:"#92400E" },
   high: { bg:"#FEE2E2", text:"#991B1B" }, urgent: { bg:"#EDE9FE", text:"#5B21B6" },
 };
+
+const DEFAULT_REPORT_FIELDS: ReportFieldConfig = { tasks_completed:true, outreach_sent:true, responses_received:true, wins:true, challenges:true, ideas:true, custom_fields:[] };
 
 function avColor(name: string) { let h=0; for (let i=0;i<name.length;i++) h=(h*31+name.charCodeAt(i))&0xffff; return AV_COLORS[h%AV_COLORS.length]; }
 function initials(name: string) { return name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(); }
@@ -138,6 +142,24 @@ function Md({ open, onClose, title, children }: { open: boolean; onClose:()=>voi
         <div className="p-5">{children}</div>
       </div>
     </div>
+  );
+}
+
+function FileDropZone({ file, setFile }: { file:File|null; setFile:(f:File|null)=>void }) {
+  const [drag, setDrag] = useState(false);
+  return (
+    <label
+      onDragOver={e=>{e.preventDefault();setDrag(true);}}
+      onDragLeave={()=>setDrag(false)}
+      onDrop={e=>{e.preventDefault();setDrag(false);const f=e.dataTransfer.files[0];if(f)setFile(f);}}
+      className={`flex flex-col items-center justify-center gap-2 w-full py-8 border-2 border-dashed rounded-xl cursor-pointer transition-all select-none ${drag?"border-stone-500 bg-stone-50":"border-stone-200 hover:border-stone-400 hover:bg-stone-50"}`}>
+      <Upload size={18} className={drag?"text-stone-600":"text-stone-400"}/>
+      {file
+        ? <div className="text-center"><p className="text-sm font-medium text-stone-700">{file.name}</p><p className="text-xs text-stone-400">{(file.size/1024).toFixed(0)} KB · <span className="text-red-400" onClick={e=>{e.preventDefault();setFile(null);}}>Remove</span></p></div>
+        : <div className="text-center"><p className="text-sm text-stone-500">Drag &amp; drop or <span className="text-stone-700 font-medium underline">browse</span></p><p className="text-xs text-stone-400 mt-0.5">Any file type</p></div>
+      }
+      <input type="file" className="hidden" onChange={e=>setFile(e.target.files?.[0]||null)}/>
+    </label>
   );
 }
 
@@ -691,20 +713,30 @@ function QPg({ profile, interns, questions, setQuestions, sb, addActivity }: { p
 }
 
 // ── Reports Page ───────────────────────────────────────────────────────────────
-function RPg({ profile, interns, reports, setReports, sb, addActivity }: { profile:Profile; interns:Profile[]; reports:Report[]; setReports:(r:Report[])=>void; sb:any; addActivity:(a:any)=>void }) {
+function RPg({ profile, interns, reports, setReports, sb, addActivity, settings }: { profile:Profile; interns:Profile[]; reports:Report[]; setReports:(r:Report[])=>void; sb:any; addActivity:(a:any)=>void; settings:AppSettings }) {
   const [modal,setModal]=useState(false);
   const [form,setForm]=useState({week_of:"",tasks_completed:"",outreach_sent:"",responses_received:"",wins:"",challenges:"",ideas:""});
   const isAdmin=profile.role==="admin";
   const visible=isAdmin ? reports : reports.filter(r=>r.intern_id===profile.id);
   const iName=(id?:string)=>interns.find(i=>i.id===id)?.full_name||"—";
+  const reportCfg: ReportFieldConfig = useMemo(()=>{ try { const cfg: ReportConfig = JSON.parse(settings.report_config||"{}"); return cfg[profile.team||""]||cfg["default"]||DEFAULT_REPORT_FIELDS; } catch { return DEFAULT_REPORT_FIELDS; } },[settings,profile.team]);
+  const [customData, setCustomData] = useState<Record<string,any>>({});
+  const [reportFile, setReportFile] = useState<File|null>(null);
 
   async function submit() {
     if (!form.week_of) return;
-    const {data,error}=await sb.from("weekly_reports").insert({...form,intern_id:profile.id,reviewed:false,created_at:new Date().toISOString()}).select().single();
+    let file_url: string|null = null;
+    if (reportFile) {
+      const path = `${Date.now()}-${reportFile.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
+      const { error: upErr } = await sb.storage.from("reports").upload(path, reportFile, { upsert: false });
+      if (!upErr) { const { data: ud } = sb.storage.from("reports").getPublicUrl(path); file_url = ud.publicUrl; }
+    }
+    const {data,error}=await sb.from("weekly_reports").insert({...form,intern_id:profile.id,reviewed:false,file_url,custom_data:customData,created_at:new Date().toISOString()}).select().single();
     if(error){console.error(error);return;}
     setReports([data,...reports]);
     addActivity({user_id:profile.id,user_name:profile.full_name,activity:"report_submitted",metadata:{week:form.week_of}});
-    setModal(false);setForm({week_of:"",tasks_completed:"",outreach_sent:"",responses_received:"",wins:"",challenges:"",ideas:""});
+    setModal(false);setReportFile(null);setCustomData({});
+    setForm({week_of:"",tasks_completed:"",outreach_sent:"",responses_received:"",wins:"",challenges:"",ideas:""});
   }
   async function markReviewed(id:string) {
     await sb.from("weekly_reports").update({reviewed:true}).eq("id",id);
@@ -744,24 +776,42 @@ function RPg({ profile, interns, reports, setReports, sb, addActivity }: { profi
                 {r.wins&&<div><p className="text-stone-400 uppercase tracking-widest mb-0.5">Wins</p><p className="text-stone-600">{r.wins}</p></div>}
                 {r.challenges&&<div><p className="text-stone-400 uppercase tracking-widest mb-0.5">Challenges</p><p className="text-stone-600">{r.challenges}</p></div>}
                 {r.ideas&&<div className="col-span-2"><p className="text-stone-400 uppercase tracking-widest mb-0.5">Ideas</p><p className="text-stone-600">{r.ideas}</p></div>}
+                {r.custom_data&&Object.entries(r.custom_data).filter(([,v])=>v!==false&&v!=="").map(([k,v])=>(
+                  <div key={k}><p className="text-stone-400 uppercase tracking-widest mb-0.5">{k.replace(/_\d+$/,"").replace(/_/g," ")}</p><p className="text-stone-600">{typeof v==="boolean"?"Yes":String(v)}</p></div>
+                ))}
               </div>
+              {r.file_url && <div className="mt-2"><a href={r.file_url} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-600 hover:text-sky-700 flex items-center gap-1 font-medium"><ExternalLink size={11}/>View attachment</a></div>}
             </div>
           ))}
         </div>
       )}
-      <Md open={modal} onClose={()=>setModal(false)} title="Submit Weekly Update">
+      <Md open={modal} onClose={()=>{setModal(false);setReportFile(null);setCustomData({});}} title="Submit Weekly Update">
         <div className="flex flex-col gap-3">
           <TI label="Week of" value={form.week_of} onChange={v=>setForm({...form,week_of:v})} type="date" required/>
-          <TA label="Tasks Completed" value={form.tasks_completed} onChange={v=>setForm({...form,tasks_completed:v})}/>
-          <div className="grid grid-cols-2 gap-3">
-            <TI label="Outreach Sent" value={form.outreach_sent} onChange={v=>setForm({...form,outreach_sent:v})}/>
-            <TI label="Responses Received" value={form.responses_received} onChange={v=>setForm({...form,responses_received:v})}/>
+          {reportCfg.tasks_completed && <TA label="Tasks Completed" value={form.tasks_completed} onChange={v=>setForm({...form,tasks_completed:v})}/>}
+          {(reportCfg.outreach_sent||reportCfg.responses_received) && (
+            <div className="grid grid-cols-2 gap-3">
+              {reportCfg.outreach_sent && <TI label="Outreach Sent" value={form.outreach_sent} onChange={v=>setForm({...form,outreach_sent:v})}/>}
+              {reportCfg.responses_received && <TI label="Responses Received" value={form.responses_received} onChange={v=>setForm({...form,responses_received:v})}/>}
+            </div>
+          )}
+          {reportCfg.wins && <TA label="Wins" value={form.wins} onChange={v=>setForm({...form,wins:v})} placeholder="What went well?"/>}
+          {reportCfg.challenges && <TA label="Challenges" value={form.challenges} onChange={v=>setForm({...form,challenges:v})} placeholder="Any blockers?"/>}
+          {reportCfg.ideas && <TA label="Ideas" value={form.ideas} onChange={v=>setForm({...form,ideas:v})} placeholder="Suggestions for the team"/>}
+          {(reportCfg.custom_fields||[]).map(cf=>(
+            <div key={cf.key} className="flex flex-col gap-1">
+              {cf.type==="checkbox"
+                ? <label className="flex items-center gap-2 cursor-pointer text-sm text-stone-700 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5"><input type="checkbox" checked={!!customData[cf.key]} onChange={e=>setCustomData(p=>({...p,[cf.key]:e.target.checked}))} className="rounded accent-stone-700"/>{cf.label}</label>
+                : <TA label={cf.label} value={customData[cf.key]||""} onChange={v=>setCustomData(p=>({...p,[cf.key]:v}))}/>
+              }
+            </div>
+          ))}
+          <div>
+            <p className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">Attach file <span className="text-stone-400 font-normal capitalize">(optional)</span></p>
+            <FileDropZone file={reportFile} setFile={setReportFile}/>
           </div>
-          <TA label="Wins" value={form.wins} onChange={v=>setForm({...form,wins:v})} placeholder="What went well?"/>
-          <TA label="Challenges" value={form.challenges} onChange={v=>setForm({...form,challenges:v})} placeholder="Any blockers?"/>
-          <TA label="Ideas" value={form.ideas} onChange={v=>setForm({...form,ideas:v})} placeholder="Suggestions for the team"/>
           <div className="flex justify-end gap-2 pt-2">
-            <Btn variant="secondary" onClick={()=>setModal(false)}>Cancel</Btn>
+            <Btn variant="secondary" onClick={()=>{setModal(false);setReportFile(null);setCustomData({});}}>Cancel</Btn>
             <Btn onClick={submit} disabled={!form.week_of}>Submit</Btn>
           </div>
         </div>
@@ -849,12 +899,7 @@ function ResPg({ profile, resources, setResources, sb }: { profile:Profile; reso
           <Sel label="Category" value={form.category} onChange={v=>setForm({...form,category:v})} options={CATS}/>
           <div>
             <p className="text-xs font-medium text-stone-600 mb-1.5">Attach file <span className="text-stone-400 font-normal">(optional)</span></p>
-            <label className="flex items-center justify-center gap-2 w-full py-6 border-2 border-dashed border-stone-200 rounded-xl cursor-pointer hover:border-stone-400 hover:bg-stone-50 transition-all group">
-              <Upload size={16} className="text-stone-400 group-hover:text-stone-600"/>
-              <span className="text-sm text-stone-400 group-hover:text-stone-600">{file ? file.name : "Click to choose a file"}</span>
-              <input type="file" className="hidden" onChange={e=>setFile(e.target.files?.[0]||null)}/>
-            </label>
-            {file && <p className="text-xs text-stone-400 mt-1">{(file.size/1024).toFixed(0)} KB</p>}
+            <FileDropZone file={file} setFile={setFile}/>
           </div>
           {uploadErr && <p className="text-xs text-red-500">{uploadErr}</p>}
           <div className="flex justify-end gap-2 pt-2">
@@ -1468,6 +1513,7 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
   const [calMonth, setCalMonth] = useState(new Date());
   const [ne, setNe] = useState({title:"",description:"",date:"",time:"",location:"",materials:[{item:"",qty:""}] as EventMaterial[]});
   const [dateTbd, setDateTbd] = useState(false);
+  const [eventFile, setEventFile] = useState<File|null>(null);
   const gn=(id?:string)=>interns.find(i=>i.id===id)?.full_name||"?";
   const fd=filter==="all"?events:events.filter(e=>e.status===filter);
   const sorted=[...fd].sort((a,b)=>new Date(a.date||"9999").getTime()-new Date(b.date||"9999").getTime());
@@ -1475,9 +1521,15 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
 
   async function create() {
     const mats=ne.materials.filter(m=>m.item.trim());
-    const {data,error}=await sb.from("events").insert({...ne,date:dateTbd?null:(ne.date||null),materials:mats,intern_id:profile.id,team_members:[],status:"planning",created_at:new Date().toISOString()}).select().single();
+    let file_url: string|null = null;
+    if (eventFile) {
+      const path = `${Date.now()}-${eventFile.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
+      const { error: upErr } = await sb.storage.from("events").upload(path, eventFile, { upsert: false });
+      if (!upErr) { const { data: ud } = sb.storage.from("events").getPublicUrl(path); file_url = ud.publicUrl; }
+    }
+    const {data,error}=await sb.from("events").insert({...ne,date:dateTbd?null:(ne.date||null),materials:mats,intern_id:profile.id,team_members:[],status:"planning",file_url,created_at:new Date().toISOString()}).select().single();
     if(error){console.error(error);return;}
-    setEvents([data,...events]);setShowC(false);setDateTbd(false);
+    setEvents([data,...events]);setShowC(false);setDateTbd(false);setEventFile(null);
     setNe({title:"",description:"",date:"",time:"",location:"",materials:[{item:"",qty:""}]});
   }
   async function updateStatus(id:string,status:string) {
@@ -1598,7 +1650,11 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
             ))}
             <button onClick={()=>setNe({...ne,materials:[...ne.materials,{item:"",qty:""}]})} className="text-xs text-stone-400 hover:text-stone-600 flex items-center gap-1"><Plus size={12}/>Add item</button>
           </div>
-          <div className="flex justify-end gap-2 pt-2"><Btn variant="secondary" onClick={()=>setShowC(false)}>Cancel</Btn><Btn onClick={create} disabled={!ne.title.trim()}>Create Event</Btn></div>
+          <div>
+            <p className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">Attach file <span className="text-stone-400 font-normal capitalize">(optional)</span></p>
+            <FileDropZone file={eventFile} setFile={setEventFile}/>
+          </div>
+          <div className="flex justify-end gap-2 pt-2"><Btn variant="secondary" onClick={()=>{setShowC(false);setEventFile(null);}}>Cancel</Btn><Btn onClick={create} disabled={!ne.title.trim()}>Create Event</Btn></div>
         </div>
       </Md>
       {/* Detail modal */}
@@ -1614,6 +1670,7 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
                 {sel.time && <span>{sel.time}</span>}
                 {sel.location && <span className="flex items-center gap-1"><MapPin size={10}/>{sel.location}</span>}
                 <span>Led by {gn(sel.intern_id)}</span>
+                {sel.file_url && <a href={sel.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sky-600 hover:text-sky-700 font-medium"><ExternalLink size={10}/>Attachment</a>}
               </div>
             </div>
             {(sel.materials||[]).length>0 && (
@@ -1868,30 +1925,100 @@ function ContentPage({ profile, interns, content, setContent, sb }: { profile:Pr
 
 // ── Settings Page ──────────────────────────────────────────────────────────────
 function SettingsPg({ settings, setSettings, sb }: { settings:AppSettings; setSettings:(s:AppSettings)=>void; sb:any }) {
+  const TEAMS = ["Tech/AI","Strategy","Events/Outreach","Design","Curation Team","Content Creation"];
+  const STD_FIELDS: {key:keyof Omit<ReportFieldConfig,"custom_fields">;label:string}[] = [
+    {key:"tasks_completed",label:"Tasks Completed"},
+    {key:"outreach_sent",label:"Outreach Sent"},
+    {key:"responses_received",label:"Responses Received"},
+    {key:"wins",label:"Wins"},
+    {key:"challenges",label:"Challenges"},
+    {key:"ideas",label:"Ideas / Suggestions"},
+  ];
   const [form, setForm] = useState({ calendly_ella:settings.calendly_ella||"", calendly_noel:settings.calendly_noel||"", caroline_email:settings.caroline_email||"" });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [rcTeam, setRcTeam] = useState("Tech/AI");
+  const [reportConfig, setReportConfig] = useState<ReportConfig>(()=>{ try { return JSON.parse(settings.report_config||"{}"); } catch { return {}; } });
+  const [newField, setNewField] = useState({label:"",type:"checkbox" as "checkbox"|"text"});
+  const [rcSaving, setRcSaving] = useState(false);
+  const [rcSaved, setRcSaved] = useState(false);
+
+  const teamCfg: ReportFieldConfig = reportConfig[rcTeam] || {...DEFAULT_REPORT_FIELDS};
+
+  function setTeamCfg(cfg: ReportFieldConfig) { setReportConfig(p=>({...p,[rcTeam]:cfg})); }
+  function toggleField(field: keyof Omit<ReportFieldConfig,"custom_fields">) { setTeamCfg({...teamCfg,[field]:!teamCfg[field]}); }
+  function addCustomField() {
+    if(!newField.label.trim()) return;
+    const key=newField.label.toLowerCase().replace(/[^a-z0-9]/g,"_")+"_"+Date.now();
+    setTeamCfg({...teamCfg,custom_fields:[...(teamCfg.custom_fields||[]),{key,label:newField.label,type:newField.type}]});
+    setNewField({label:"",type:"checkbox"});
+  }
+  function removeCustomField(key:string) { setTeamCfg({...teamCfg,custom_fields:(teamCfg.custom_fields||[]).filter(f=>f.key!==key)}); }
 
   async function save() {
     setSaving(true);
-    await Promise.all(
-      Object.entries(form).map(([key,value])=>sb.from("settings").upsert({key,value},{onConflict:"key"}))
-    );
+    await Promise.all(Object.entries(form).map(([key,value])=>sb.from("settings").upsert({key,value},{onConflict:"key"})));
     setSettings({...settings,...form});
     setSaving(false); setSaved(true); setTimeout(()=>setSaved(false),2000);
   }
+  async function saveReportConfig() {
+    setRcSaving(true);
+    const value=JSON.stringify(reportConfig);
+    await sb.from("settings").upsert({key:"report_config",value},{onConflict:"key"});
+    setSettings({...settings,report_config:value});
+    setRcSaving(false); setRcSaved(true); setTimeout(()=>setRcSaved(false),2000);
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <div><h1 className="text-xl font-bold text-stone-800">Settings</h1><p className="text-sm text-stone-400 mt-0.5">Admin configuration</p></div>
       <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
-        <p className="text-sm font-semibold text-stone-700 flex items-center gap-2"><CalendarClock size={15} className="text-violet-500"/>Calendly Links</p>
-        <p className="text-xs text-stone-400">These URLs appear as booking buttons when interns select scheduling request types.</p>
+        <p className="text-sm font-semibold text-stone-700 flex items-center gap-2"><CalendarClock size={15} className="text-violet-500"/>Calendly &amp; Contact</p>
         <TI label="Ella's Calendly URL" value={form.calendly_ella} onChange={v=>setForm({...form,calendly_ella:v})} placeholder="https://calendly.com/ella/..."/>
         <TI label="Noel's Calendly URL" value={form.calendly_noel} onChange={v=>setForm({...form,calendly_noel:v})} placeholder="https://calendly.com/noel/..."/>
         <TI label="Caroline's Email" value={form.caroline_email} onChange={v=>setForm({...form,caroline_email:v})} placeholder="caroline@example.com"/>
         <div className="flex items-center justify-end gap-3">
           {saved && <span className="text-xs text-emerald-600 font-medium">Saved!</span>}
-          <Btn onClick={save} disabled={saving}>{saving?"Saving...":"Save Settings"}</Btn>
+          <Btn onClick={save} disabled={saving}>{saving?"Saving...":"Save"}</Btn>
+        </div>
+      </div>
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+        <div><p className="text-sm font-semibold text-stone-700 flex items-center gap-2"><FileText size={15} className="text-stone-400"/>Weekly Report Fields by Team</p><p className="text-xs text-stone-400 mt-1">Choose which fields each team sees when submitting their weekly report. Add custom fields (checkboxes or text).</p></div>
+        <div className="flex flex-wrap gap-1">
+          {TEAMS.map(t=><button key={t} onClick={()=>setRcTeam(t)} className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${rcTeam===t?"bg-stone-800 text-white":"bg-stone-100 text-stone-500 hover:bg-stone-200"}`}>{t}</button>)}
+        </div>
+        <div className="border border-stone-100 rounded-xl p-4 flex flex-col gap-3">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Standard Fields — {rcTeam}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {STD_FIELDS.map(f=>(
+              <label key={f.key} className="flex items-center gap-2 cursor-pointer text-sm text-stone-700 bg-stone-50 border border-stone-100 rounded-lg px-3 py-2">
+                <input type="checkbox" checked={!!teamCfg[f.key]} onChange={()=>toggleField(f.key)} className="rounded accent-stone-700"/>
+                {f.label}
+              </label>
+            ))}
+          </div>
+          <div className="border-t border-stone-100 pt-3">
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">Custom Fields</p>
+            {(teamCfg.custom_fields||[]).length===0 && <p className="text-xs text-stone-400 italic mb-2">No custom fields for {rcTeam} yet.</p>}
+            {(teamCfg.custom_fields||[]).map(cf=>(
+              <div key={cf.key} className="flex items-center gap-2 mb-2">
+                <span className="flex-1 text-xs text-stone-700 bg-stone-50 border border-stone-100 rounded-lg px-3 py-2">{cf.label} <span className="text-stone-400">({cf.type})</span></span>
+                <button onClick={()=>removeCustomField(cf.key)} className="p-1.5 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={12}/></button>
+              </div>
+            ))}
+            <div className="flex gap-2 mt-2">
+              <input value={newField.label} onChange={e=>setNewField(p=>({...p,label:e.target.value}))} placeholder="Field label..." className="flex-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-800 focus:outline-none focus:border-stone-400"/>
+              <select value={newField.type} onChange={e=>setNewField(p=>({...p,type:e.target.value as "checkbox"|"text"}))} className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-700 focus:outline-none">
+                <option value="checkbox">Checkbox</option>
+                <option value="text">Text</option>
+              </select>
+              <Btn size="sm" onClick={addCustomField} disabled={!newField.label.trim()}><Plus size={13}/>Add</Btn>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-3">
+          {rcSaved && <span className="text-xs text-emerald-600 font-medium">Saved!</span>}
+          <Btn onClick={saveReportConfig} disabled={rcSaving}>{rcSaving?"Saving...":"Save Report Config"}</Btn>
         </div>
       </div>
     </div>
@@ -2078,7 +2205,7 @@ export default function DashboardPage() {
       case "tech":      return (isAdmin || isTech) ? <TechProjectsPage profile={p} interns={interns} projects={techProjects} setProjects={setTechProjects} sb={supabase}/> : null;
       case "content":   return (isAdmin || isCreator) ? <ContentPage profile={p} interns={interns} content={content} setContent={setContent} sb={supabase}/> : null;
       case "questions": return <QPg {...common} questions={questions} setQuestions={setQuestions}/>;
-      case "reports":   return <RPg {...common} reports={reports} setReports={setReports}/>;
+      case "reports":   return <RPg {...common} reports={reports} setReports={setReports} settings={settings}/>;
       case "resources": return <ResPg profile={p} resources={resources} setResources={setResources} sb={supabase}/>;
       case "interns":   return isAdmin ? <IntMgmt interns={interns} setInterns={setInterns} sb={supabase}/> : null;
       case "analytics": return isAdmin ? <AnPg interns={interns} tasks={tasks} outreach={outreach} content={content} requests={requests} questions={questions} techProjects={techProjects}/> : null;
