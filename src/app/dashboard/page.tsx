@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { PwaSetup } from "@/components/PwaSetup";
 import {
   LayoutDashboard, CheckSquare, Mail, MessageCircle, FileText,
   FolderOpen, Users, BarChart3, Plus, Search, Bell,
@@ -1930,6 +1931,64 @@ function ContentPage({ profile, interns, content, setContent, sb }: { profile:Pr
   );
 }
 
+// ── Push Notifications Page ────────────────────────────────────────────────────
+function NotificationPg({ interns }: { interns: Profile[] }) {
+  const TEAMS = ["All Interns","Tech/AI","Strategy","Events/Outreach","Design","Curation Team","Content Creation"];
+  const [form, setForm] = useState({ title:"", body:"", team:"All Interns" });
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{ok:boolean;sent?:number;error?:string}|null>(null);
+
+  async function send() {
+    if (!form.title.trim() || !form.body.trim()) return;
+    setSending(true); setResult(null);
+    try {
+      const res = await fetch("/api/send-notification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: form.title, body: form.body, team: form.team === "All Interns" ? undefined : form.team }),
+      });
+      const json = await res.json();
+      setResult(json);
+    } catch (e: any) {
+      setResult({ ok: false, error: e.message });
+    }
+    setSending(false);
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div><h1 className="text-xl font-bold text-stone-800">Push Notifications</h1><p className="text-sm text-stone-400 mt-0.5">Send a push notification to interns who have enabled alerts.</p></div>
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+        <TI label="Title" value={form.title} onChange={v=>setForm({...form,title:v})} placeholder="e.g. New task assigned" required/>
+        <TA label="Message" value={form.body} onChange={v=>setForm({...form,body:v})} placeholder="Notification body text..." rows={3}/>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">Send to</label>
+          <div className="flex flex-wrap gap-2">
+            {TEAMS.map(t=>(
+              <button key={t} onClick={()=>setForm({...form,team:t})} className={`text-xs px-3 py-1.5 rounded-full border transition-all ${form.team===t?"bg-stone-800 text-white border-stone-800":"border-stone-200 text-stone-500 hover:border-stone-400"}`}>{t}</button>
+            ))}
+          </div>
+        </div>
+        {result && (
+          <div className={`text-sm px-3 py-2 rounded-lg ${result.ok?"bg-emerald-50 text-emerald-700":"bg-red-50 text-red-600"}`}>
+            {result.ok ? `Sent to ${result.sent} device${result.sent!==1?"s":""}` : `Error: ${result.error}`}
+          </div>
+        )}
+        <div className="flex justify-end">
+          <Btn onClick={send} disabled={sending||!form.title.trim()||!form.body.trim()}>
+            <Send size={14}/>{sending?"Sending...":"Send Notification"}
+          </Btn>
+        </div>
+      </div>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 flex flex-col gap-1">
+        <p className="font-semibold">Interns must allow notifications</p>
+        <p>When an intern first opens the dashboard, their browser will ask for permission. Only interns who approved will receive push notifications.</p>
+        <p className="mt-1 font-medium">{interns.length} total interns registered.</p>
+      </div>
+    </div>
+  );
+}
+
 // ── Settings Page ──────────────────────────────────────────────────────────────
 function SettingsPg({ settings, setSettings, sb }: { settings:AppSettings; setSettings:(s:AppSettings)=>void; sb:any }) {
   const TEAMS = ["Tech/AI","Strategy","Events/Outreach","Design","Curation Team","Content Creation"];
@@ -2157,9 +2216,10 @@ export default function DashboardPage() {
     ...((isAdmin || isCreator) ? [{ id: "content", icon: <Video size={16}/>, label: "Content" }] : []),
   ];
   const ADMIN_NAV = [
-    { id: "interns",   icon: <Users size={16}/>,        label: "Intern Mgmt" },
-    { id: "analytics", icon: <BarChart3 size={16}/>,    label: "Analytics" },
-    { id: "settings",  icon: <SettingsIcon size={16}/>, label: "Settings" },
+    { id: "interns",       icon: <Users size={16}/>,        label: "Intern Mgmt" },
+    { id: "analytics",     icon: <BarChart3 size={16}/>,    label: "Analytics" },
+    { id: "notifications", icon: <Bell size={16}/>,         label: "Push Notifications" },
+    { id: "settings",      icon: <SettingsIcon size={16}/>, label: "Settings" },
   ];
 
   function NavItem({ item }: { item: { id: string; icon: React.ReactNode; label: string; badge?: number | null } }) {
@@ -2216,6 +2276,7 @@ export default function DashboardPage() {
       case "resources": return <ResPg profile={p} resources={resources} setResources={setResources} sb={supabase}/>;
       case "interns":   return isAdmin ? <IntMgmt interns={interns} setInterns={setInterns} sb={supabase}/> : null;
       case "analytics": return isAdmin ? <AnPg interns={interns} tasks={tasks} outreach={outreach} content={content} requests={requests} questions={questions} techProjects={techProjects}/> : null;
+      case "notifications": return isAdmin ? <NotificationPg interns={interns}/> : null;
       case "settings":  return isAdmin ? <SettingsPg settings={settings} setSettings={setSettings} sb={supabase}/> : null;
       default:          return null;
     }
@@ -2223,6 +2284,7 @@ export default function DashboardPage() {
 
   return (
     <div className="flex h-screen bg-stone-50 overflow-hidden">
+      <PwaSetup userId={profile?.id}/>
       {/* Mobile overlay sidebar */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
