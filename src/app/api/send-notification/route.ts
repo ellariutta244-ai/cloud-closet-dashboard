@@ -1,104 +1,76 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { SignJWT, importPKCS8 } from 'jose';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
 
-async function getAccessToken(): Promise<string> {
+function getAdminApp() {
+  if (getApps().length > 0) return getApps()[0];
+
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const rawKey = process.env.FIREBASE_PRIVATE_KEY;
   if (!clientEmail || !rawKey) throw new Error('FIREBASE_CLIENT_EMAIL or FIREBASE_PRIVATE_KEY not configured');
-  // Vercel may store \n as literal two chars — normalize to real newlines
-  // Strip everything to raw base64, then reconstruct clean PEM
+
+  // Reconstruct clean PEM regardless of how Vercel stored it
   const base64Only = rawKey
     .replace(/\\n/g, '')
     .replace(/\s/g, '')
     .replace(/-+BEGINPRIVATEKEY-+/g, '')
     .replace(/-+ENDPRIVATEKEY-+/g, '');
   const lines = base64Only.match(/.{1,64}/g) || [];
-  const pemKey = `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----\n`;
+  const privateKey = `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----\n`;
 
-  const privateKey = await importPKCS8(pemKey, 'RS256');
-  const now = Math.floor(Date.now() / 1000);
-
-  const jwt = await new SignJWT({
-    scope: 'https://www.googleapis.com/auth/firebase.messaging',
-  })
-    .setProtectedHeader({ alg: 'RS256' })
-    .setIssuer(clientEmail)
-    .setAudience('https://oauth2.googleapis.com/token')
-    .setIssuedAt(now)
-    .setExpirationTime(now + 3600)
-    .sign(privateKey);
-
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: jwt,
+  return initializeApp({
+    credential: cert({
+      projectId: 'cloud-closet-dashboard',
+      clientEmail,
+      privateKey,
     }),
   });
-  const data = await res.json();
-  if (!data.access_token) throw new Error(`OAuth error: ${JSON.stringify(data)}`);
-  return data.access_token;
 }
 
 export async function POST(req: NextRequest) {
   try {
-  const { title, body, team } = await req.json();
-  if (!title || !body) return NextResponse.json({ error: 'Missing title or body' }, { status: 400 });
+    const { title, body, team } = await req.json();
+    if (!title || !body) return NextResponse.json({ error: 'Missing title or body' }, { status: 400 });
 
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    "https://gfdurfdqrhjzxjperknw.supabase.co",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmZHVyZmRxcmhqenhqcGVya253Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNjI3MDIsImV4cCI6MjA4ODkzODcwMn0.ciR7C4VK4vKvgqPHriiw7DmednNBBq7x_2zI1l-oAAY",
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: (cs) => cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } }
-  );
-
-  let query = supabase
-    .from('fcm_tokens')
-    .select('token, profiles!inner(role, team)');
-
-  if (team) query = (query as any).eq('profiles.team', team);
-
-  const { data: rows, error } = await query;
-  if (error) return NextResponse.json({ error: error.message, stage: 'supabase_query' }, { status: 500 });
-
-  const tokens: string[] = (rows || []).map((r: any) => r.token).filter(Boolean);
-  if (tokens.length === 0) return NextResponse.json({ ok: true, sent: 0, debug: { rowCount: rows?.length ?? 0, rows } });
-
-  let accessToken: string;
-  try {
-    accessToken = await getAccessToken();
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
-  }
-
-  const projectId = 'cloud-closet-dashboard';
-  let sent = 0;
-
-  for (const token of tokens) {
-    const res = await fetch(
-      `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: {
-            token,
-            notification: { title, body },
-            webpush: { notification: { icon: '/icon-192.png' } },
-          },
-        }),
-      }
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      "https://gfdurfdqrhjzxjperknw.supabase.co",
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmZHVyZmRxcmhqenhqcGVya253Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNjI3MDIsImV4cCI6MjA4ODkzODcwMn0.ciR7C4VK4vKvgqPHriiw7DmednNBBq7x_2zI1l-oAAY",
+      { cookies: { getAll: () => cookieStore.getAll(), setAll: (cs) => cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } }
     );
-    if (res.ok) sent++;
-  }
 
-  return NextResponse.json({ ok: true, sent });
+    let query = supabase
+      .from('fcm_tokens')
+      .select('token, profiles!inner(role, team)');
+
+    if (team) query = (query as any).eq('profiles.team', team);
+
+    const { data: rows, error } = await query;
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const tokens: string[] = (rows || []).map((r: any) => r.token).filter(Boolean);
+    if (tokens.length === 0) return NextResponse.json({ ok: true, sent: 0 });
+
+    const app = getAdminApp();
+    const messaging = getMessaging(app);
+
+    let sent = 0;
+    for (const token of tokens) {
+      try {
+        await messaging.send({
+          token,
+          notification: { title, body },
+          webpush: { notification: { icon: '/icon-192.png' } },
+        });
+        sent++;
+      } catch {
+        // individual token may be stale, continue
+      }
+    }
+
+    return NextResponse.json({ ok: true, sent });
   } catch (e: any) {
     return NextResponse.json({ error: e.message ?? String(e) }, { status: 500 });
   }
