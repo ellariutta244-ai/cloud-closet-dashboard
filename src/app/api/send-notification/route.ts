@@ -9,8 +9,9 @@ async function getAccessToken(): Promise<string> {
   if (!clientEmail || !rawKey) throw new Error('FIREBASE_CLIENT_EMAIL or FIREBASE_PRIVATE_KEY not configured');
   // Vercel may store \n as literal two chars — normalize to real newlines
   const pemKey = rawKey.replace(/\\n/g, '\n');
+  const keyDebug = { first30: pemKey.slice(0, 30), last30: pemKey.slice(-30), length: pemKey.length, hasBegin: pemKey.includes('-----BEGIN PRIVATE KEY-----'), hasEnd: pemKey.includes('-----END PRIVATE KEY-----') };
 
-  const privateKey = await importPKCS8(pemKey, 'RS256');
+  const privateKey = await importPKCS8(pemKey, 'RS256').catch((e) => { throw new Error(`importPKCS8 failed: ${e.message} | keyDebug: ${JSON.stringify(keyDebug)}`); });
   const now = Math.floor(Date.now() / 1000);
 
   const jwt = await new SignJWT({
