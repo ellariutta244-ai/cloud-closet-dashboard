@@ -6,7 +6,10 @@ import { SignJWT, importPKCS8 } from 'jose';
 async function getAccessToken(): Promise<string> {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON not configured');
-  const sa = JSON.parse(raw);
+  // Vercel may convert \n in the private key to real newlines, breaking JSON.parse
+  const sanitized = raw.replace(/\n/g, '\\n');
+  const sa = JSON.parse(sanitized);
+  sa.private_key = sa.private_key.replace(/\\n/g, '\n');
 
   const privateKey = await importPKCS8(sa.private_key, 'RS256');
   const now = Math.floor(Date.now() / 1000);
