@@ -46,8 +46,14 @@ export async function POST(req: NextRequest) {
       try {
         await messaging.send({
           token,
-          notification: { title, body },
-          webpush: { notification: { icon: '/icon-192.png' } },
+          webpush: {
+            notification: {
+              title,
+              body,
+              icon: '/icon-192.png',
+            },
+            headers: { Urgency: 'high' },
+          },
         });
         sent++;
       } catch {
