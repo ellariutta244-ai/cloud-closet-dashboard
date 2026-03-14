@@ -35,6 +35,7 @@ async function getAccessToken(): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  try {
   const { title, body, team } = await req.json();
   if (!title || !body) return NextResponse.json({ error: 'Missing title or body' }, { status: 400 });
 
@@ -90,4 +91,7 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, sent });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message ?? String(e) }, { status: 500 });
+  }
 }
