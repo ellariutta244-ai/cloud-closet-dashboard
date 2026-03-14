@@ -524,6 +524,10 @@ function OutPg({ profile, interns, outreach, setOutreach, sb, addActivity }: { p
     await sb.from("outreach_logs").update({status}).eq("id",id);
     setOutreach(outreach.map(o=>o.id===id?{...o,status}:o));
   }
+  async function deleteLog(id:string) {
+    await sb.from("outreach_logs").delete().eq("id",id);
+    setOutreach(outreach.filter(o=>o.id!==id));
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -557,9 +561,12 @@ function OutPg({ profile, interns, outreach, setOutreach, sb, addActivity }: { p
                 </div>
                 {o.notes&&<p className="text-xs text-stone-500 mt-1 italic">{o.notes}</p>}
               </div>
-              <select value={o.status} onChange={e=>updateSt(o.id,e.target.value)} onClick={e=>e.stopPropagation()} className="text-xs bg-stone-50 border border-stone-200 rounded-lg px-2 py-1 text-stone-600">
-                {STATS.map(s=><option key={s} value={s}>{SL[s]}</option>)}
-              </select>
+              <div className="flex items-center gap-1 shrink-0">
+                <select value={o.status} onChange={e=>updateSt(o.id,e.target.value)} onClick={e=>e.stopPropagation()} className="text-xs bg-stone-50 border border-stone-200 rounded-lg px-2 py-1 text-stone-600">
+                  {STATS.map(s=><option key={s} value={s}>{SL[s]}</option>)}
+                </select>
+                {isAdmin&&<button onClick={()=>{ if(window.confirm("Delete this outreach entry?")) deleteLog(o.id); }} className="p-1.5 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={13}/></button>}
+              </div>
             </div>
           ))}
         </div>
