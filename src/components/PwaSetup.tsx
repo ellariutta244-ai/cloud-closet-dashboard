@@ -3,7 +3,8 @@
 import { useEffect } from "react";
 import { getFirebaseMessaging, getToken, onMessage } from "@/lib/firebase";
 
-const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+// Get this from Firebase Console → Project Settings → Cloud Messaging → Web Push certificates
+const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || "REPLACE_WITH_VAPID_KEY";
 
 export function PwaSetup({ userId }: { userId?: string }) {
   // Register service worker
@@ -17,7 +18,7 @@ export function PwaSetup({ userId }: { userId?: string }) {
 
   // Request notification permission + save FCM token
   useEffect(() => {
-    if (!userId || !VAPID_KEY) return;
+    if (!userId || VAPID_KEY === "REPLACE_WITH_VAPID_KEY") return;
 
     async function initPush() {
       const permission = await Notification.requestPermission();
