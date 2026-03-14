@@ -4,21 +4,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SignJWT, importPKCS8 } from 'jose';
 
 async function getAccessToken(): Promise<string> {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON not configured');
-  // Vercel may convert \n in the private key to real newlines, breaking JSON.parse
-  const sanitized = raw.replace(/\n/g, '\\n');
-  const sa = JSON.parse(sanitized);
-  sa.private_key = sa.private_key.replace(/\\n/g, '\n');
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const rawKey = process.env.FIREBASE_PRIVATE_KEY;
+  if (!clientEmail || !rawKey) throw new Error('FIREBASE_CLIENT_EMAIL or FIREBASE_PRIVATE_KEY not configured');
+  // Vercel may store \n as literal two chars — normalize to real newlines
+  const pemKey = rawKey.replace(/\\n/g, '\n');
 
-  const privateKey = await importPKCS8(sa.private_key, 'RS256');
+  const privateKey = await importPKCS8(pemKey, 'RS256');
   const now = Math.floor(Date.now() / 1000);
 
   const jwt = await new SignJWT({
     scope: 'https://www.googleapis.com/auth/firebase.messaging',
   })
     .setProtectedHeader({ alg: 'RS256' })
-    .setIssuer(sa.client_email)
+    .setIssuer(clientEmail)
     .setAudience('https://oauth2.googleapis.com/token')
     .setIssuedAt(now)
     .setExpirationTime(now + 3600)
