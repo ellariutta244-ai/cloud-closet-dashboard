@@ -8,10 +8,16 @@ async function getAccessToken(): Promise<string> {
   const rawKey = process.env.FIREBASE_PRIVATE_KEY;
   if (!clientEmail || !rawKey) throw new Error('FIREBASE_CLIENT_EMAIL or FIREBASE_PRIVATE_KEY not configured');
   // Vercel may store \n as literal two chars — normalize to real newlines
-  const pemKey = rawKey.replace(/\\n/g, '\n');
-  const keyDebug = { first30: pemKey.slice(0, 30), last30: pemKey.slice(-30), length: pemKey.length, hasBegin: pemKey.includes('-----BEGIN PRIVATE KEY-----'), hasEnd: pemKey.includes('-----END PRIVATE KEY-----') };
+  // Strip everything to raw base64, then reconstruct clean PEM
+  const base64Only = rawKey
+    .replace(/\\n/g, '')
+    .replace(/\s/g, '')
+    .replace(/-+BEGINPRIVATEKEY-+/g, '')
+    .replace(/-+ENDPRIVATEKEY-+/g, '');
+  const lines = base64Only.match(/.{1,64}/g) || [];
+  const pemKey = `-----BEGIN PRIVATE KEY-----\n${lines.join('\n')}\n-----END PRIVATE KEY-----\n`;
 
-  const privateKey = await importPKCS8(pemKey, 'RS256').catch((e) => { throw new Error(`importPKCS8 failed: ${e.message} | keyDebug: ${JSON.stringify(keyDebug)}`); });
+  const privateKey = await importPKCS8(pemKey, 'RS256');
   const now = Math.floor(Date.now() / 1000);
 
   const jwt = await new SignJWT({
