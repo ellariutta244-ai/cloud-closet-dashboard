@@ -1966,6 +1966,7 @@ function NotificationPg({ interns, ugcCreators }: { interns: Profile[]; ugcCreat
     { label: "Curation Team", team: "Curation Team", role: undefined },
     { label: "Content Creation", team: "Content Creation", role: undefined },
     { label: "UGC Creators", team: undefined, role: "ugc_creator" },
+    { label: "Caroline", team: undefined, role: "director" },
   ];
   const [form, setForm] = useState({ title: "", body: "", targetLabel: "All Interns" });
   const [sending, setSending] = useState(false);
