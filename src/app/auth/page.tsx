@@ -95,9 +95,9 @@ export default function AuthPage() {
         .cc-bg {
           background: linear-gradient(
             -45deg,
-            #f0e4d8, #e8d0c4, #dfc8bc,
-            #eeddd4, #f5e8e0, #e5cfc8,
-            #d8bdb4, #ece0d8, #f0e4d8
+            #f5f2ee, #ede8e0, #e8e2d8,
+            #f2efe8, #faf8f4, #ece7de,
+            #e4dfd6, #f0ece4, #f5f2ee
           );
           background-size: 500% 500%;
           animation: gradientDrift 18s ease infinite;
@@ -112,22 +112,22 @@ export default function AuthPage() {
         .cc-overlay {
           position: absolute;
           inset: 0;
-          background: rgba(28, 16, 10, 0.16);
+          background: rgba(10, 8, 6, 0.12);
         }
 
         .cc-card {
           position: relative;
           width: 100%;
           max-width: 360px;
-          background: rgba(255, 252, 249, 0.88);
+          background: rgba(255, 255, 253, 0.92);
           backdrop-filter: blur(24px);
           -webkit-backdrop-filter: blur(24px);
-          border: 1px solid rgba(255, 248, 243, 0.95);
+          border: 1px solid rgba(240, 236, 228, 0.98);
           border-radius: 22px;
           padding: 44px 38px 40px;
           box-shadow:
-            0 12px 56px rgba(80, 45, 28, 0.13),
-            0 2px 14px rgba(80, 45, 28, 0.07);
+            0 12px 56px rgba(0, 0, 0, 0.1),
+            0 2px 14px rgba(0, 0, 0, 0.06);
           animation: fadeSlideUp 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
         }
 
@@ -143,16 +143,14 @@ export default function AuthPage() {
           width: 72px;
           height: auto;
           margin-bottom: 14px;
-          /* Tint the black logo to match brand color */
-          filter: invert(30%) sepia(20%) saturate(600%) hue-rotate(340deg) brightness(70%);
-          opacity: 0.88;
+          opacity: 0.9;
         }
 
         .cc-brand-label {
           font-size: 11px;
           letter-spacing: 0.28em;
           text-transform: uppercase;
-          color: #9a7260;
+          color: #555048;
           font-weight: 500;
         }
 
@@ -165,7 +163,7 @@ export default function AuthPage() {
 
         .cc-tagline {
           font-size: 13px;
-          color: #987060;
+          color: #807870;
           font-style: italic;
           font-weight: 300;
           letter-spacing: 0.04em;
@@ -175,7 +173,7 @@ export default function AuthPage() {
           display: inline-block;
           width: 1.5px;
           height: 12px;
-          background: #c4a080;
+          background: #aaa49c;
           margin-left: 2px;
           vertical-align: middle;
           border-radius: 1px;
@@ -200,7 +198,7 @@ export default function AuthPage() {
           font-weight: 600;
           letter-spacing: 0.2em;
           text-transform: uppercase;
-          color: #a07862;
+          color: #706860;
         }
 
         .cc-input {
@@ -209,25 +207,25 @@ export default function AuthPage() {
           font-size: 16px;
           font-family: 'Jost', 'Arial', sans-serif;
           font-weight: 400;
-          border: 1.5px solid #ead8cc;
-          background: rgba(255, 251, 248, 0.75);
-          color: #3a2418;
+          border: 1.5px solid #ddd8d0;
+          background: rgba(252, 251, 248, 0.8);
+          color: #1a1814;
           width: 100%;
           box-sizing: border-box;
           transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
-        .cc-input::placeholder { color: #c4ada0; }
+        .cc-input::placeholder { color: #b8b2aa; }
         .cc-input:focus {
           outline: none;
-          border-color: #c09878;
-          box-shadow: 0 0 0 3px rgba(192, 152, 120, 0.18);
+          border-color: #888078;
+          box-shadow: 0 0 0 3px rgba(100, 96, 88, 0.12);
         }
 
         .cc-error {
           font-size: 12px;
-          color: #b04a3a;
-          background: #fff0ed;
-          border: 1px solid #f0cfc8;
+          color: #5a3030;
+          background: #f8f0f0;
+          border: 1px solid #e0d0d0;
           border-radius: 9px;
           padding: 9px 13px;
           letter-spacing: 0.01em;
@@ -242,25 +240,25 @@ export default function AuthPage() {
           font-weight: 600;
           letter-spacing: 0.22em;
           text-transform: uppercase;
-          background: #7a5244;
-          color: #fff;
+          background: #1a1814;
+          color: #faf8f4;
           border: none;
           width: 100%;
           cursor: pointer;
           transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
-          box-shadow: 0 3px 14px rgba(122, 82, 68, 0.28);
+          box-shadow: 0 3px 14px rgba(0, 0, 0, 0.22);
         }
         .cc-btn:hover:not(:disabled) {
-          background: #63402f;
+          background: #2e2a24;
           transform: translateY(-1.5px);
-          box-shadow: 0 6px 22px rgba(99, 64, 47, 0.36);
+          box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
         }
         .cc-btn:active:not(:disabled) {
           transform: translateY(0);
-          box-shadow: 0 2px 8px rgba(99, 64, 47, 0.22);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
         }
         .cc-btn:disabled {
-          background: #c4a090;
+          background: #aaa49c;
           cursor: not-allowed;
           box-shadow: none;
         }
