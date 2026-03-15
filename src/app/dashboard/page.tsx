@@ -2699,81 +2699,107 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
 function PivotContent({ text }: { text: string }) {
   const sectionStyles: Record<string, { border: string; bg: string }> = {
     "Performance Analysis": { border: "#bae6fd", bg: "#f0f9ff" },
-    "What's Working":       { border: "#a7f3d0", bg: "#f0fdf4" },
-    "What to Change":       { border: "#fde68a", bg: "#fffbeb" },
-    "Hook Suggestions":     { border: "#ddd6fe", bg: "#f5f3ff" },
-    "Format Recommendations": { border: "#fecdd3", bg: "#fff1f2" },
-    "Hook Variations":      { border: "#ddd6fe", bg: "#f5f3ff" },
+    "Working":              { border: "#a7f3d0", bg: "#f0fdf4" },
+    "Change":               { border: "#fde68a", bg: "#fffbeb" },
+    "Hook":                 { border: "#ddd6fe", bg: "#f5f3ff" },
+    "Format":               { border: "#fecdd3", bg: "#fff1f2" },
+    "Variation":            { border: "#ddd6fe", bg: "#f5f3ff" },
   };
   const sectionIcons: Record<string, string> = {
-    "Performance Analysis": "📊", "What's Working": "✅",
-    "What to Change": "🔄", "Hook Suggestions": "🎣",
-    "Format Recommendations": "🎬", "Hook Variations": "🔁",
+    "Performance Analysis": "📊", "Working": "✅",
+    "Change": "🔄", "Hook": "🎣",
+    "Format": "🎬", "Variation": "🔁",
   };
 
-  // Split into sections on numbered bold headers like "1. **Section Title**"
-  const sectionRegex = /(?=\d+\.\s\*\*)/;
-  const rawSections = text.split(sectionRegex).filter(Boolean);
-
-  if (rawSections.length < 2) {
-    // Fallback: just render with basic formatting
+  // Detect a section header line (handles many Gemini output formats)
+  function isHeader(line: string): boolean {
+    const t = line.trim();
     return (
-      <div className="text-sm text-stone-700 leading-relaxed">
-        {text.split('\n').map((line, i) => {
-          if (!line.trim()) return <div key={i} className="h-2" />;
-          const bold = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-          if (line.trim().startsWith('-') || line.trim().startsWith('•')) {
-            return <div key={i} className="flex gap-2 ml-2 mb-1"><span className="text-stone-400 mt-0.5">•</span><span dangerouslySetInnerHTML={{ __html: bold.replace(/^[-•]\s*/, '') }} /></div>;
-          }
-          return <p key={i} className="mb-1" dangerouslySetInnerHTML={{ __html: bold }} />;
-        })}
-      </div>
+      /^\d+\.\s*\*\*.+/.test(t) ||       // "1. **Title**" or "1. **Title"
+      /^\*\*\d+\..+\*\*/.test(t) ||       // "**1. Title**"
+      /^\*\*[A-Z].{3,}\*\*\s*$/.test(t) || // "**Title**" alone on a line
+      /^#{1,3}\s+.+/.test(t)              // "## Title" or "### Title"
     );
   }
 
-  function renderBody(body: string) {
-    const lines = body.trim().split('\n');
+  function cleanTitle(line: string): string {
+    return line.trim()
+      .replace(/^#{1,3}\s+/, '')
+      .replace(/^\*\*(\d+\.\s*)/, '')
+      .replace(/^\d+\.\s*\*\*/, '')
+      .replace(/\*\*/g, '')
+      .replace(/\*$/, '')
+      .split(/\s*[—–:]\s*/)[0]
+      .trim();
+  }
+
+  function renderLines(lines: string[]) {
     return lines.map((line, i) => {
       if (!line.trim()) return <div key={i} className="h-1.5" />;
-      const html = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>');
+      const html = line
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>');
       if (/^\s*[-•*]\s/.test(line)) {
         return (
           <div key={i} className="flex gap-2 mb-1.5">
             <span className="text-stone-400 shrink-0 mt-0.5">•</span>
-            <span className="text-sm text-stone-700 leading-snug" dangerouslySetInnerHTML={{ __html: html.replace(/^\s*[-•*]\s/, '') }} />
+            <span className="text-sm text-stone-700 leading-snug" dangerouslySetInnerHTML={{ __html: html.replace(/^\s*[-•*]\s*/, '') }} />
           </div>
         );
       }
-      if (/^\d+\.\s/.test(line) && !line.includes('**')) {
-        const num = line.match(/^(\d+)\.\s/)?.[1];
-        return (
-          <div key={i} className="flex gap-2 mb-2">
-            <span className="text-xs font-bold text-stone-400 shrink-0 mt-0.5 w-4">{num}.</span>
-            <span className="text-sm text-stone-700 leading-snug" dangerouslySetInnerHTML={{ __html: html.replace(/^\d+\.\s/, '') }} />
-          </div>
-        );
-      }
-      return <p key={i} className="text-sm text-stone-700 leading-relaxed mb-1.5" dangerouslySetInnerHTML={{ __html: html }} />;
+      return <p key={i} className="text-sm text-stone-700 leading-relaxed mb-1" dangerouslySetInnerHTML={{ __html: html }} />;
     });
   }
 
+  // Parse line-by-line into sections
+  const allLines = text.split('\n');
+  const sections: { title: string; lines: string[] }[] = [];
+  let preambleLines: string[] = [];
+  let current: { title: string; lines: string[] } | null = null;
+
+  for (const line of allLines) {
+    if (isHeader(line)) {
+      if (current) sections.push(current);
+      current = { title: cleanTitle(line), lines: [] };
+    } else if (current) {
+      current.lines.push(line);
+    } else {
+      preambleLines.push(line);
+    }
+  }
+  if (current) sections.push(current);
+
+  // No sections found — plain fallback
+  if (sections.length === 0) {
+    return (
+      <div className="text-sm text-stone-700 leading-relaxed">
+        {renderLines(allLines)}
+      </div>
+    );
+  }
+
+  const getStyle = (title: string) =>
+    Object.entries(sectionStyles).find(([k]) => title.includes(k))?.[1] ?? { border: "#e7e5e4", bg: "#fafaf9" };
+  const getIcon = (title: string) =>
+    Object.entries(sectionIcons).find(([k]) => title.includes(k))?.[1] ?? "💡";
+
   return (
     <div className="flex flex-col gap-3">
-      {rawSections.map((section, idx) => {
-        const headerMatch = section.match(/^\d+\.\s\*\*(.*?)\*\*[\s—–-]*(.*?)$/m);
-        const title = headerMatch?.[1]?.trim() ?? `Section ${idx + 1}`;
-        const subtitle = headerMatch?.[2]?.trim() ?? '';
-        const body = section.replace(/^\d+\.\s\*\*.*?\*\*.*?\n/, '').replace(/^\d+\.\s\*\*.*?\*\*/, '');
-        const style = Object.entries(sectionStyles).find(([k]) => title.includes(k))?.[1] ?? { border: "#e7e5e4", bg: "#fafaf9" };
-        const icon = Object.entries(sectionIcons).find(([k]) => title.includes(k))?.[1] ?? "💡";
+      {preambleLines.some(l => l.trim()) && (
+        <div className="text-sm text-stone-500 leading-relaxed">
+          {renderLines(preambleLines)}
+        </div>
+      )}
+      {sections.map((section, idx) => {
+        const style = getStyle(section.title);
+        const icon = getIcon(section.title);
         return (
           <div key={idx} className="border rounded-xl p-4" style={{ borderColor: style.border, backgroundColor: style.bg }}>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-base">{icon}</span>
-              <p className="text-sm font-bold text-stone-800">{title}</p>
-              {subtitle && <p className="text-xs text-stone-500 hidden sm:block">— {subtitle}</p>}
+              <p className="text-sm font-bold text-stone-800">{section.title}</p>
             </div>
-            <div>{renderBody(body)}</div>
+            <div>{renderLines(section.lines)}</div>
           </div>
         );
       })}
