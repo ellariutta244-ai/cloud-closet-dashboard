@@ -4367,13 +4367,22 @@ function UGCAnnouncementsPage({ profile, announcements, setAnnouncements, sb }: 
 }
 
 // ── UGC Submission History ─────────────────────────────────────────────────────
-function UGCSubmissionHistoryPage({ profile, submissions, ugcCreators }: {
-  profile: UGCCreatorProfile; submissions: UGCSubmission[]; ugcCreators: UGCCreatorProfile[];
+function UGCSubmissionHistoryPage({ profile, submissions, setSubmissions, ugcCreators, sb }: {
+  profile: UGCCreatorProfile; submissions: UGCSubmission[]; setSubmissions?: (s: UGCSubmission[]) => void; ugcCreators: UGCCreatorProfile[]; sb?: any;
 }) {
   const isAdmin = profile.role === "admin";
   const mySubmissions = isAdmin ? submissions : submissions.filter(s => s.creator_id === profile.id);
   const sorted = [...mySubmissions].sort((a, b) => b.week_date.localeCompare(a.week_date));
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [confirmDeleteSub, setConfirmDeleteSub] = useState<string | null>(null);
+
+  async function deleteSub(id: string) {
+    if (!sb || !setSubmissions) return;
+    await sb.from("ugc_submissions").delete().eq("id", id);
+    setSubmissions(submissions.filter(s => s.id !== id));
+    setConfirmDeleteSub(null);
+    if (expanded === id) setExpanded(null);
+  }
 
   const creatorName = (id: string) => ugcCreators.find(c => c.id === id)?.full_name ?? "Unknown";
 
@@ -4415,6 +4424,14 @@ function UGCSubmissionHistoryPage({ profile, submissions, ugcCreators }: {
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${tierColor(s.benchmark_tier)}`}>
                   {s.benchmark_tier?.replace("_", " ") ?? "—"}
                 </span>
+                {isAdmin && confirmDeleteSub === s.id ? (
+                  <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => setConfirmDeleteSub(null)} className="text-xs px-2 py-1 rounded-lg border border-stone-200 text-stone-400 hover:bg-stone-50">Cancel</button>
+                    <button onClick={() => deleteSub(s.id)} className="text-xs px-2 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600">Delete</button>
+                  </div>
+                ) : isAdmin ? (
+                  <button onClick={e => { e.stopPropagation(); setConfirmDeleteSub(s.id); }} className="p-1 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={13}/></button>
+                ) : null}
                 <ChevronRight size={14} className={`text-stone-400 transition-transform ${expanded === s.id ? "rotate-90" : ""}`} />
               </div>
             </button>
@@ -4908,6 +4925,18 @@ function UGCPivotHistoryPage({ profile, pivots, setPivots, ugcCreators, sb }: {
 }) {
   const [edits, setEdits] = useState<Record<string, Partial<UGCPivot>>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
+  const [collapsedCreators, setCollapsedCreators] = useState<Record<string, boolean>>({});
+  const [confirmDeletePivot, setConfirmDeletePivot] = useState<string | null>(null);
+
+  function toggleCreator(id: string) {
+    setCollapsedCreators(prev => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  async function deletePivot(id: string) {
+    await sb.from("ugc_pivots").delete().eq("id", id);
+    setPivots(pivots.filter(p => p.id !== id));
+    setConfirmDeletePivot(null);
+  }
 
   const cName = (id?: string) => ugcCreators.find(c => c.id === id)?.full_name || "Unknown";
 
@@ -4957,33 +4986,52 @@ function UGCPivotHistoryPage({ profile, pivots, setPivots, ugcCreators, sb }: {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-bold text-stone-800">Pivot History</h1>
-      {Object.entries(byCreator).map(([creatorId, cPivots]) => (
-        <div key={creatorId} className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
-          <div className="px-5 py-3 bg-stone-50 border-b border-stone-100 flex items-center gap-3">
-            <Av name={cName(creatorId)} size={28} />
-            <div>
-              <p className="text-sm font-semibold text-stone-800">{cName(creatorId)}</p>
-              {(() => { const c = ugcCreators.find(x => x.id === creatorId); return c ? <TikTokLink creator={c} /> : null; })()}
-            </div>
-            <span className="text-xs text-stone-400 ml-auto">{cPivots.length} pivots</span>
-          </div>
-          <div className="divide-y divide-stone-50">
-            {[...cPivots].sort((a, b) => b.week_date.localeCompare(a.week_date)).map(p => (
-              <div key={p.id} className="p-5 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-stone-500">Week {p.week_date}</span>
-                  <Btn size="sm" onClick={() => savePivot(p)} disabled={saving[p.id] || !edits[p.id]}>
-                    {saving[p.id] ? "Saving..." : "Save"}
-                  </Btn>
-                </div>
-                <TA label="AI Pivot" value={getVal(p, "ai_pivot")} onChange={v => setVal(p.id, "ai_pivot", v)} rows={5} />
-                <TA label="Admin Notes" value={getVal(p, "admin_notes")} onChange={v => setVal(p.id, "admin_notes", v)} rows={2} />
-                <TI label="Example Video Link" value={getVal(p, "example_video_link")} onChange={v => setVal(p.id, "example_video_link", v)} placeholder="https://tiktok.com/..." />
+      {Object.entries(byCreator).map(([creatorId, cPivots]) => {
+        const collapsed = !!collapsedCreators[creatorId];
+        return (
+          <div key={creatorId} className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
+            <div
+              className="px-5 py-3 bg-stone-50 border-b border-stone-100 flex items-center gap-3 cursor-pointer hover:bg-stone-100 transition-colors"
+              onClick={() => toggleCreator(creatorId)}
+            >
+              <Av name={cName(creatorId)} size={28} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-stone-800">{cName(creatorId)}</p>
+                {(() => { const c = ugcCreators.find(x => x.id === creatorId); return c ? <TikTokLink creator={c} /> : null; })()}
               </div>
-            ))}
+              <span className="text-xs text-stone-400">{cPivots.length} pivot{cPivots.length !== 1 ? "s" : ""}</span>
+              <ChevronDown size={14} className={`text-stone-400 transition-transform flex-shrink-0 ${collapsed ? "-rotate-90" : ""}`} />
+            </div>
+            {!collapsed && (
+              <div className="divide-y divide-stone-50">
+                {[...cPivots].sort((a, b) => b.week_date.localeCompare(a.week_date)).map(p => (
+                  <div key={p.id} className="p-5 flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-stone-500">Week {p.week_date}</span>
+                      <div className="flex items-center gap-2">
+                        {confirmDeletePivot === p.id ? (
+                          <>
+                            <button onClick={() => setConfirmDeletePivot(null)} className="text-xs px-2 py-1 rounded-lg border border-stone-200 text-stone-400 hover:bg-stone-50">Cancel</button>
+                            <button onClick={() => deletePivot(p.id)} className="text-xs px-2 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600">Delete</button>
+                          </>
+                        ) : (
+                          <button onClick={() => setConfirmDeletePivot(p.id)} className="p-1 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={13}/></button>
+                        )}
+                        <Btn size="sm" onClick={() => savePivot(p)} disabled={saving[p.id] || !edits[p.id]}>
+                          {saving[p.id] ? "Saving..." : "Save"}
+                        </Btn>
+                      </div>
+                    </div>
+                    <TA label="AI Pivot" value={getVal(p, "ai_pivot")} onChange={v => setVal(p.id, "ai_pivot", v)} rows={5} />
+                    <TA label="Admin Notes" value={getVal(p, "admin_notes")} onChange={v => setVal(p.id, "admin_notes", v)} rows={2} />
+                    <TI label="Example Video Link" value={getVal(p, "example_video_link")} onChange={v => setVal(p.id, "example_video_link", v)} placeholder="https://tiktok.com/..." />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -7084,7 +7132,7 @@ export default function DashboardPage() {
       case "ugc_pivots_hub":            return isAdmin ? <UGCPivotsHubPage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_briefs_announcements":  return isAdmin ? <UGCBriefsAnnouncementsPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_weekly_brief":          return isUGC ? <CreatorWeeklyBriefPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} sb={supabase}/> : null;
-      case "ugc_history":       return (isAdmin || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
+      case "ugc_history":       return (isAdmin || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_resources":     return (isAdmin || isUGC) ? <UGCResourcesPage profile={p as UGCCreatorProfile} resources={ugcResources} setResources={setUGCResources} sb={supabase}/> : null;
       // Admin-only UGC pages
       case "ugc_creators":      return isAdmin ? <UGCCreatorMgmtPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} smartAlerts={smartAlerts} sb={supabase}/> : null;
