@@ -72,22 +72,27 @@ function parseAIOutput(raw: string): {
   abTest: string;
   weeklyReminder: string;
 } {
-  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  // Strip markdown bold/italic that Gemini sometimes adds despite instructions
+  const lines = raw.split('\n')
+    .map(l => l.trim().replace(/\*\*/g, '').replace(/\*/g, ''))
+    .filter(Boolean);
   const result: any = { weekGoal: '', days: {}, abTest: '', weeklyReminder: '' };
 
   const dayNames = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 
   for (const line of lines) {
-    if (line.startsWith('WEEK GOAL:')) {
-      result.weekGoal = line.replace('WEEK GOAL:', '').trim();
-    } else if (line.startsWith('A/B TEST:')) {
-      result.abTest = line.replace('A/B TEST:', '').trim();
-    } else if (line.startsWith('WEEKLY REMINDER:')) {
-      result.weeklyReminder = line.replace('WEEKLY REMINDER:', '').trim();
+    // Normalise: uppercase and strip leading punctuation so "- MONDAY:" and "MONDAY:" both match
+    const upper = line.toUpperCase().replace(/^[-•\s]+/, '');
+    if (upper.startsWith('WEEK GOAL:')) {
+      result.weekGoal = line.replace(/^.*?WEEK GOAL:\s*/i, '').trim();
+    } else if (upper.startsWith('A/B TEST:')) {
+      result.abTest = line.replace(/^.*?A\/B TEST:\s*/i, '').trim();
+    } else if (upper.startsWith('WEEKLY REMINDER:')) {
+      result.weeklyReminder = line.replace(/^.*?WEEKLY REMINDER:\s*/i, '').trim();
     } else {
       for (const day of dayNames) {
-        if (line.startsWith(`${day}:`)) {
-          const content = line.replace(`${day}:`, '').trim();
+        if (upper.startsWith(`${day}:`)) {
+          const content = line.replace(new RegExp(`^.*?${day}:\\s*`, 'i'), '').trim();
           const parts = content.split('|').map((p: string) => p.trim());
           result.days[day.toLowerCase()] = {
             hook: parts[0] ?? '',
@@ -181,7 +186,7 @@ export async function POST(req: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.85, maxOutputTokens: 1200 },
+          generationConfig: { temperature: 0.85, maxOutputTokens: 2048 },
         }),
       }
     );
