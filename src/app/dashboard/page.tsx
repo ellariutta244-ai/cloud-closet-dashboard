@@ -3217,12 +3217,19 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
   const currentWeek = getMondayOfWeek(new Date());
   const emptyForm = {
     week_date: currentWeek, creator_id: isAdmin ? "" : profile.id,
-    // Video metadata
-    hook_text: "", format_type: "talking_head", video_length_seconds: "",
+    // Video metadata — best performing video
+    hook_text: "", format_type: "talking_head",
     niche: "", trending_sound: false, has_cta: false,
-    // View data
-    total_views: "", avg_watch_time_seconds: "", watch_completion_rate: "",
-    profile_visits: "", traffic_fyp_pct: "", traffic_following_pct: "", traffic_search_pct: "",
+    // Best performing video metrics
+    video_length_seconds: "", best_video_views: "",
+    avg_watch_time_seconds: "", watch_completion_rate: "",
+    // Week totals
+    total_views: "", worst_video_views: "",
+    most_active_time: "", profile_visits: "",
+    traffic_fyp_pct: "", traffic_search_pct: "", traffic_profile_pct: "",
+    traffic_following_pct: "", traffic_sound_pct: "",
+    // Top search queries
+    top_search_query_1: "", top_search_query_2: "", top_search_query_3: "",
     // Engagement
     likes: "", comments: "", shares: "", saves: "", comment_sentiment: "neutral",
     // Account health
@@ -3237,7 +3244,9 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
 
   const selectedCreator = isAdmin ? ugcCreators.find(c => c.id === form.creator_id) || null : (profile as UGCCreatorProfile);
 
-  const trafficSum = (parseFloat(form.traffic_fyp_pct) || 0) + (parseFloat(form.traffic_following_pct) || 0) + (parseFloat(form.traffic_search_pct) || 0);
+  const trafficSum = (parseFloat(form.traffic_fyp_pct) || 0) + (parseFloat(form.traffic_search_pct) || 0)
+    + (parseFloat(form.traffic_profile_pct) || 0) + (parseFloat(form.traffic_following_pct) || 0)
+    + (parseFloat(form.traffic_sound_pct) || 0);
   const trafficValid = trafficSum === 0 || Math.abs(trafficSum - 100) < 0.1;
 
   async function submit() {
@@ -3260,12 +3269,20 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
       niche: form.niche || null,
       trending_sound: form.trending_sound,
       has_cta: form.has_cta,
+      best_video_views: parseInt(form.best_video_views) || null,
+      worst_video_views: parseInt(form.worst_video_views) || null,
       avg_watch_time_seconds: parseFloat(form.avg_watch_time_seconds) || null,
       watch_completion_rate: parseFloat(form.watch_completion_rate) || null,
+      most_active_time: form.most_active_time || null,
       profile_visits: parseInt(form.profile_visits) || 0,
       traffic_fyp_pct: parseFloat(form.traffic_fyp_pct) || 0,
       traffic_following_pct: parseFloat(form.traffic_following_pct) || 0,
       traffic_search_pct: parseFloat(form.traffic_search_pct) || 0,
+      traffic_profile_pct: parseFloat(form.traffic_profile_pct) || 0,
+      traffic_sound_pct: parseFloat(form.traffic_sound_pct) || 0,
+      top_search_query_1: form.top_search_query_1 || null,
+      top_search_query_2: form.top_search_query_2 || null,
+      top_search_query_3: form.top_search_query_3 || null,
       likes: parseInt(form.likes) || 0,
       comments: parseInt(form.comments) || 0,
       shares: parseInt(form.shares) || 0,
@@ -3360,16 +3377,22 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
         {isAdmin && <Sel label="Creator" value={form.creator_id} onChange={v => setForm({ ...form, creator_id: v })}
           options={[{ value: "", label: "— Select creator —" }, ...ugcCreators.filter(c => c.ugc_status !== "archived").map(c => ({ value: c.id, label: `${c.full_name}${c.tiktok_handle ? ` (@${c.tiktok_handle})` : ""}` }))]} />}
 
-        {/* Video Metadata */}
+        {/* Video Metadata — best performing video */}
         <div className="flex flex-col gap-3">
-          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Video Metadata</p>
-          <TI label="Hook Text (first 3 seconds)" value={form.hook_text} onChange={v => setForm({ ...form, hook_text: v })} placeholder="What did your video open with?" />
-          <Sel label="Format Type" value={form.format_type} onChange={v => setForm({ ...form, format_type: v })}
-            options={[{ value: "talking_head", label: "Talking Head" }, { value: "voiceover", label: "Voiceover" }, { value: "pov", label: "POV" }, { value: "transition", label: "Transition" }, { value: "other", label: "Other" }]} />
-          <div className="grid grid-cols-2 gap-3">
-            {ni("video_length_seconds", "Video Length (seconds)")}
-            <TI label="Niche / Topic" value={form.niche} onChange={v => setForm({ ...form, niche: v })} placeholder="e.g. fashion, styling tips" />
-          </div>
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Video Metadata — Best Performing Video</p>
+          <TI label="Hook Text (best performing video)" value={form.hook_text} onChange={v => setForm({ ...form, hook_text: v })} placeholder="What did your best video open with?" />
+          <Sel label="Format Type (best performing video)" value={form.format_type} onChange={v => setForm({ ...form, format_type: v })}
+            options={[
+              { value: "talking_head",     label: "Talking Head" },
+              { value: "outfit_montage",   label: "Outfit Montage" },
+              { value: "grwm",             label: "GRWM" },
+              { value: "voiceover",        label: "Voiceover" },
+              { value: "tutorial",         label: "Tutorial" },
+              { value: "trend",            label: "Trend" },
+              { value: "street_interview", label: "Street Interview" },
+              { value: "other",            label: "Other" },
+            ]} />
+          <TI label="Niche / Topic (best performing video)" value={form.niche} onChange={v => setForm({ ...form, niche: v })} placeholder="e.g. fashion, styling tips" />
           {tog("trending_sound", "Used a trending sound?")}
           {tog("has_cta", "Included a CTA?")}
         </div>
@@ -3379,21 +3402,40 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
           <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">View Data</p>
           <div className="grid grid-cols-2 gap-3">
             {ni("total_views", "Total Views")}
-            {ni("avg_watch_time_seconds", "Avg Watch Time (sec)", true)}
-            {ni("watch_completion_rate", "Watch Completion Rate (%)", true)}
             {ni("profile_visits", "Profile Visits")}
+            {ni("best_video_views", "Best Video Views")}
+            {ni("worst_video_views", "Worst Video Views")}
           </div>
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Traffic Source (must total 100%)</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {ni("traffic_fyp_pct", "For You Page %", true)}
-            {ni("traffic_following_pct", "Following %", true)}
-            {ni("traffic_search_pct", "Search %", true)}
+
+          <p className="text-xs font-medium text-stone-400 uppercase tracking-wide pt-1">Best Performing Video</p>
+          <div className="grid grid-cols-2 gap-3">
+            {ni("video_length_seconds", "Video Length (sec)")}
+            {ni("avg_watch_time_seconds", "Avg Watch Time (sec)", true)}
+            {ni("watch_completion_rate", "Completion Rate (%)", true)}
           </div>
-          {(form.traffic_fyp_pct || form.traffic_following_pct || form.traffic_search_pct) && (
+
+          <TI label="Most Active Viewer Time (e.g. 6:00–7:00pm)" value={form.most_active_time} onChange={v => setForm({ ...form, most_active_time: v })} placeholder="e.g. 6:00–7:00pm" />
+
+          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide pt-1">Traffic Source (must total 100%)</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {ni("traffic_fyp_pct",       "For You Page %",  true)}
+            {ni("traffic_search_pct",    "Search %",        true)}
+            {ni("traffic_profile_pct",   "Profile %",       true)}
+            {ni("traffic_following_pct", "Following %",     true)}
+            {ni("traffic_sound_pct",     "Sound %",         true)}
+          </div>
+          {(form.traffic_fyp_pct || form.traffic_search_pct || form.traffic_profile_pct || form.traffic_following_pct || form.traffic_sound_pct) && (
             <div className={`text-xs px-3 py-2 rounded-lg ${trafficValid ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
               Total: {trafficSum.toFixed(1)}% {trafficValid ? "✓" : "— must equal 100%"}
             </div>
           )}
+
+          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide pt-1">Top Search Queries (if any)</p>
+          <div className="flex flex-col gap-2">
+            <TI label="Query 1" value={form.top_search_query_1} onChange={v => setForm({ ...form, top_search_query_1: v })} placeholder="e.g. cloud closet app" />
+            <TI label="Query 2" value={form.top_search_query_2} onChange={v => setForm({ ...form, top_search_query_2: v })} placeholder="optional" />
+            <TI label="Query 3" value={form.top_search_query_3} onChange={v => setForm({ ...form, top_search_query_3: v })} placeholder="optional" />
+          </div>
         </div>
 
         {/* Engagement */}
