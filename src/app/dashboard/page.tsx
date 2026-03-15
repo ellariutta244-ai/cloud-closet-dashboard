@@ -1958,7 +1958,7 @@ function ContentPage({ profile, interns, content, setContent, ugcHooks, setUGCHo
 // ── Push Notifications Page ────────────────────────────────────────────────────
 function NotificationPg({ interns, ugcCreators }: { interns: Profile[]; ugcCreators: UGCCreatorProfile[] }) {
   const TARGETS = [
-    { label: "All Interns", team: undefined, role: undefined },
+    { label: "All Interns", team: undefined, role: "intern" },
     { label: "Tech/AI", team: "Tech/AI", role: undefined },
     { label: "Strategy", team: "Strategy", role: undefined },
     { label: "Events/Outreach", team: "Events/Outreach", role: undefined },

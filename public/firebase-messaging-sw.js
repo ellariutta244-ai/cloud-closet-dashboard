@@ -1,7 +1,6 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js');
 
-// Replace these with your Firebase project config values
 firebase.initializeApp({
   apiKey: "AIzaSyCqbMdwtlzsu4epexsg4KRT1hxV4L7gbhE",
   authDomain: "cloud-closet-dashboard.firebaseapp.com",
@@ -13,14 +12,18 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Handle background push notifications
+// Handle background push notifications.
+// Skip if a focused app window is already open — onMessage in the app will handle it.
 messaging.onBackgroundMessage(function (payload) {
-  const title = payload.notification?.title || 'Cloud Closet';
-  const body  = payload.notification?.body  || '';
-  self.registration.showNotification(title, {
-    body,
-    icon:  '/icon-192.png',
-    badge: '/icon-192.png',
-    data:  payload.data,
+  self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clients) {
+    const appOpen = clients.some(function (c) { return c.focused; });
+    if (appOpen) return; // foreground: let onMessage handle it, avoid duplicate
+    const body = payload.notification?.body || payload.notification?.title || 'New notification';
+    self.registration.showNotification('Cloud Closet Dashboard', {
+      body,
+      icon:  '/icon-192.png',
+      badge: '/icon-192.png',
+      data:  payload.data,
+    });
   });
 });

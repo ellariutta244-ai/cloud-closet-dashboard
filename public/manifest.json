@@ -1,7 +1,7 @@
 {
   "name": "Cloud Closet",
   "short_name": "Cloud Closet",
-  "description": "Cloud Closet",
+  "description": "Cloud Closet Dashboard",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#FAFAF9",

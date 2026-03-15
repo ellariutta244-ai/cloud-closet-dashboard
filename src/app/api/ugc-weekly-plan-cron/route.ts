@@ -90,9 +90,12 @@ export async function GET(req: NextRequest) {
           tokens.map((token: string) =>
             messaging.send({
               token,
-              notification: {
-                title: 'Weekly Plans Ready',
-                body: `${generated} new weekly content plan${generated > 1 ? 's' : ''} generated. Tap to review.`,
+              webpush: {
+                notification: {
+                  title: 'Cloud Closet Dashboard',
+                  body: `Weekly Plans Ready — ${generated} new content plan${generated > 1 ? 's' : ''} generated. Tap to review.`,
+                  icon: '/icon-192.png',
+                },
               },
               data: { page: 'ugc_weekly_plans' },
             })

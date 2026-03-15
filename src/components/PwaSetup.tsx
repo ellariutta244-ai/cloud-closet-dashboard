@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getFirebaseMessaging, getToken, onMessage } from "@/lib/firebase";
 
 const VAPID_KEY = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || "REPLACE_WITH_VAPID_KEY";
 
 export function PwaSetup({ userId }: { userId?: string }) {
   const [showBanner, setShowBanner] = useState(false);
+  const unsubRef = useRef<(() => void) | null>(null);
+  const initDoneRef = useRef(false);
 
   // Register service worker
   useEffect(() => {
@@ -28,7 +30,14 @@ export function PwaSetup({ userId }: { userId?: string }) {
     }
   }, [userId]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => { if (unsubRef.current) unsubRef.current(); };
+  }, []);
+
   async function initPush() {
+    if (initDoneRef.current) return; // prevent duplicate registrations
+    initDoneRef.current = true;
     const messaging = getFirebaseMessaging();
     if (!messaging) return;
     try {
@@ -39,11 +48,14 @@ export function PwaSetup({ userId }: { userId?: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, token }),
       });
-      onMessage(messaging, (payload) => {
+      // Clean up any previous handler before registering a new one
+      if (unsubRef.current) unsubRef.current();
+      unsubRef.current = onMessage(messaging, (payload) => {
         const body = payload.notification?.body || payload.notification?.title || "New notification";
         new Notification("Cloud Closet Dashboard", { body, icon: "/icon-192.png" });
       });
     } catch (err) {
+      initDoneRef.current = false;
       console.error("[FCM] Token error:", err);
     }
   }
