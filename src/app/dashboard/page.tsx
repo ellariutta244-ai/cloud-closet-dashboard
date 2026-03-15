@@ -6909,6 +6909,16 @@ export default function DashboardPage() {
   const [wisconsinReports, setWisconsinReports] = useState<WisconsinReport[]>([]);
   const [carolineSavedIdeas, setCarolineSavedIdeas] = useState<CarolineSavedIdea[]>([]);
   const [carolineHookBank, setCarolineHookBank] = useState<CarolineHook[]>([]);
+  const [briefSeenAt, setBriefSeenAt] = useState(() => parseInt(typeof window !== "undefined" ? (localStorage.getItem("ugc_brief_seen") || "0") : "0"));
+  const [qaSeenAt, setQaSeenAt] = useState(() => parseInt(typeof window !== "undefined" ? (localStorage.getItem("ugc_qa_seen") || "0") : "0"));
+  const [pivotSeenAt, setPivotSeenAt] = useState(() => parseInt(typeof window !== "undefined" ? (localStorage.getItem("ugc_pivots_seen") || "0") : "0"));
+
+  useEffect(() => {
+    const mark = (key: string, set: (t: number) => void) => { const t = Date.now(); localStorage.setItem(key, t.toString()); set(t); };
+    if (page === "ugc_weekly_brief") mark("ugc_brief_seen", setBriefSeenAt);
+    if (page === "ugc_qa") mark("ugc_qa_seen", setQaSeenAt);
+    if (page === "ugc_pivots") mark("ugc_pivots_seen", setPivotSeenAt);
+  }, [page]);
 
   useEffect(() => {
     async function init() {
@@ -7076,17 +7086,20 @@ export default function DashboardPage() {
   const isCreator = profile.team === "Content Creation";
   const openQCount = questions.filter(q => q.status === "open").length;
   const activeAlertCount = smartAlerts.filter(a => !a.dismissed).length;
+  const newBriefCount = isUGC ? ugcBriefs.filter(b => new Date(b.created_at).getTime() > briefSeenAt).length : 0;
+  const newPivotCount = isUGC ? ugcPivots.filter(p => p.creator_id === profile.id && new Date(p.created_at).getTime() > pivotSeenAt).length : 0;
+  const newQACount = isUGC ? ugcQuestions.filter(q => q.creator_id !== profile.id && new Date(q.created_at).getTime() > qaSeenAt).length : 0;
 
   const NAV = isUGC ? [
-    { id: "ugc_dashboard",     icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
-    { id: "ugc_submit",        icon: <BarChart3 size={16}/>,       label: "Submit Analytics" },
-    { id: "ugc_pivots",        icon: <TrendingUp size={16}/>,      label: "My Pivots" },
-    { id: "ugc_weekly_brief",  icon: <FileText size={16}/>,        label: "Weekly Brief" },
+    { id: "ugc_dashboard",      icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
+    { id: "ugc_submit",         icon: <BarChart3 size={16}/>,       label: "Submit Analytics" },
+    { id: "ugc_pivots",         icon: <TrendingUp size={16}/>,      label: "My Pivots",       badge: newPivotCount || null },
+    { id: "ugc_weekly_brief",   icon: <FileText size={16}/>,        label: "Weekly Brief",    badge: newBriefCount || null },
     { id: "ugc_hook_generator", icon: <Zap size={16}/>,             label: "Hook Generator" },
-    { id: "ugc_leaderboard",   icon: <Trophy size={16}/>,          label: "Leaderboard" },
-    { id: "ugc_qa",            icon: <MessageCircle size={16}/>,   label: "Community Q&A" },
-    { id: "ugc_history",       icon: <FileText size={16}/>,        label: "Submission History" },
-    { id: "ugc_resources",     icon: <FolderOpen size={16}/>,      label: "Resources" },
+    { id: "ugc_leaderboard",    icon: <Trophy size={16}/>,          label: "Leaderboard" },
+    { id: "ugc_qa",             icon: <MessageCircle size={16}/>,   label: "Community Q&A",   badge: newQACount || null },
+    { id: "ugc_history",        icon: <FileText size={16}/>,        label: "Submission History" },
+    { id: "ugc_resources",      icon: <FolderOpen size={16}/>,      label: "Resources" },
   ] : [
     { id: "dashboard", icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
     { id: "tasks",     icon: <CheckSquare size={16}/>,     label: isAdmin ? "All Tasks" : "My Tasks" },
