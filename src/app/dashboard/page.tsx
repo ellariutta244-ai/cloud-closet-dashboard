@@ -4629,6 +4629,40 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ full_name: "", email: "", tiktok_handle: "" });
   const [saving, setSaving] = useState(false);
+  const [editTarget, setEditTarget] = useState<UGCCreatorProfile | null>(null);
+  const [editForm, setEditForm] = useState({ full_name: "", tiktok_handle: "", tiktok_url: "" });
+  const [editSaving, setEditSaving] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  function openEdit(c: UGCCreatorProfile) {
+    setEditTarget(c);
+    setEditForm({ full_name: c.full_name, tiktok_handle: c.tiktok_handle ?? "", tiktok_url: c.tiktok_url ?? "" });
+  }
+
+  async function saveEdit() {
+    if (!editTarget) return;
+    setEditSaving(true);
+    await sb.from("profiles").update({
+      full_name: editForm.full_name.trim(),
+      tiktok_handle: editForm.tiktok_handle.trim() || null,
+      tiktok_url: editForm.tiktok_url.trim() || null,
+    }).eq("id", editTarget.id);
+    setUGCCreators(ugcCreators.map(c => c.id === editTarget.id
+      ? { ...c, full_name: editForm.full_name.trim(), tiktok_handle: editForm.tiktok_handle.trim() || undefined, tiktok_url: editForm.tiktok_url.trim() || undefined }
+      : c
+    ));
+    setEditSaving(false);
+    setEditTarget(null);
+  }
+
+  async function deleteCreator(id: string) {
+    setDeleting(true);
+    await sb.from("profiles").delete().eq("id", id);
+    setUGCCreators(ugcCreators.filter(c => c.id !== id));
+    setDeleting(false);
+    setConfirmDeleteId(null);
+  }
 
   const latestTier = (creatorId: string): string | undefined => {
     const subs = submissions.filter(s => s.creator_id === creatorId).sort((a, b) => b.week_date.localeCompare(a.week_date));
@@ -4705,7 +4739,10 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
                         {tier && <BenchmarkBadge tier={tier} />}
                       </div>
                     </div>
-                    <button onClick={() => archive(c.id)} className="text-xs text-stone-400 hover:text-red-500 px-2 py-1 rounded-lg hover:bg-red-50 transition-all">Archive</button>
+                    <div className="flex flex-col gap-1 items-end">
+                      <button onClick={() => openEdit(c)} className="text-xs text-stone-500 hover:text-stone-800 px-2 py-1 rounded-lg hover:bg-stone-100 transition-all flex items-center gap-1"><Pencil size={11}/>Edit</button>
+                      <button onClick={() => archive(c.id)} className="text-xs text-stone-400 hover:text-red-500 px-2 py-1 rounded-lg hover:bg-red-50 transition-all">Archive</button>
+                    </div>
                   </div>
                 </div>
               );
@@ -4727,7 +4764,18 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
                     <TikTokLink creator={c} />
                     <Bg v="default">Archived</Bg>
                   </div>
-                  <button onClick={() => unarchive(c.id)} className="text-xs text-emerald-600 hover:text-emerald-700 px-2 py-1 rounded-lg hover:bg-emerald-50 transition-all">Restore</button>
+                  <div className="flex flex-col gap-1 items-end">
+                    <button onClick={() => openEdit(c)} className="text-xs text-stone-500 hover:text-stone-800 px-2 py-1 rounded-lg hover:bg-stone-100 transition-all flex items-center gap-1"><Pencil size={11}/>Edit</button>
+                    <button onClick={() => unarchive(c.id)} className="text-xs text-emerald-600 hover:text-emerald-700 px-2 py-1 rounded-lg hover:bg-emerald-50 transition-all">Restore</button>
+                    {confirmDeleteId === c.id ? (
+                      <div className="flex gap-1">
+                        <button onClick={() => setConfirmDeleteId(null)} className="text-xs px-2 py-1 rounded-lg border border-stone-200 text-stone-400 hover:bg-stone-50">Cancel</button>
+                        <button onClick={() => deleteCreator(c.id)} disabled={deleting} className="text-xs px-2 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-50">{deleting ? "…" : "Delete"}</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setConfirmDeleteId(c.id)} className="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 transition-all">Delete</button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -4759,6 +4807,18 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
           <div className="flex justify-end gap-2 pt-2">
             <Btn variant="secondary" onClick={() => setModal(false)}>Cancel</Btn>
             <Btn onClick={addCreator} disabled={!form.full_name.trim() || !form.email.trim() || saving}>{saving ? "Saving..." : "Add Creator"}</Btn>
+          </div>
+        </div>
+      </Md>
+
+      <Md open={!!editTarget} onClose={() => setEditTarget(null)} title="Edit Creator">
+        <div className="flex flex-col gap-3">
+          <TI label="Full Name" value={editForm.full_name} onChange={v => setEditForm({ ...editForm, full_name: v })} required />
+          <TI label="TikTok Handle" value={editForm.tiktok_handle} onChange={v => setEditForm({ ...editForm, tiktok_handle: v })} placeholder="username (without @)" />
+          <TI label="TikTok Profile URL" value={editForm.tiktok_url} onChange={v => setEditForm({ ...editForm, tiktok_url: v })} placeholder="https://tiktok.com/@username" />
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="secondary" onClick={() => setEditTarget(null)}>Cancel</Btn>
+            <Btn onClick={saveEdit} disabled={!editForm.full_name.trim() || editSaving}>{editSaving ? "Saving..." : "Save Changes"}</Btn>
           </div>
         </div>
       </Md>
