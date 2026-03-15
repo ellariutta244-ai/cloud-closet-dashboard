@@ -7040,7 +7040,7 @@ export default function DashboardPage() {
           <Av name={profile.full_name} size={32}/>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-stone-800 truncate">{profile.full_name}</p>
-            <p className="text-xs text-stone-400 capitalize">{isAdmin ? "Admin" : isUGC ? "UGC Creator" : (profile.team || "Intern")}</p>
+            <p className="text-xs text-stone-400 capitalize">{isAdmin ? "Admin" : isDirector ? "Director" : isUGC ? "UGC Creator" : (profile.team || "Intern")}</p>
           </div>
           <button onClick={handleSignOut} className="p-1.5 rounded-lg text-stone-300 hover:text-stone-600 hover:bg-stone-100 transition-colors" title="Sign out"><LogOut size={14}/></button>
         </div>

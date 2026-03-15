@@ -1,7 +1,7 @@
 {
-  "name": "Cloud Closet Ops",
+  "name": "Cloud Closet",
   "short_name": "Cloud Closet",
-  "description": "Cloud Closet Content Lab Dashboard",
+  "description": "Cloud Closet",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#FAFAF9",
