@@ -229,15 +229,6 @@ function AdminDash({ interns, tasks, outreach, questions, activity, announcement
           <SC label="Kill Rule Alerts" value={killRuleAlerts.length} sub="under 1k views" />
           <SC label="Scale Rule" value={scaleRuleAlerts.length} sub="10k+ views 🔥" />
         </div>
-        {killRuleAlerts.length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-2">
-            <p className="text-xs font-semibold text-red-700 mb-1">🚨 Kill Rule Triggered</p>
-            {killRuleAlerts.map(s => {
-              const creator = ugcCreators.find(c => c.id === s.creator_id);
-              return <p key={s.id} className="text-xs text-red-600">{creator?.full_name || "Unknown"} — {s.total_views.toLocaleString()} views (pivot format + hook immediately)</p>;
-            })}
-          </div>
-        )}
         {scaleRuleAlerts.length > 0 && (
           <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
             <p className="text-xs font-semibold text-emerald-700 mb-1">🚀 Scale Rule Triggered</p>
@@ -248,30 +239,7 @@ function AdminDash({ interns, tasks, outreach, questions, activity, announcement
           </div>
         )}
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-white border border-stone-200/60 rounded-xl p-4">
-          <p className="text-sm font-semibold text-stone-700 mb-3">Recent Activity</p>
-          {activity.length===0 ? <ES icon={<Bell size={24}/>} message="No recent activity"/> : (
-            <div className="flex flex-col gap-3">
-              {activity.slice(0,8).map(a=>(
-                <div key={a.id} className="flex items-start gap-3">
-                  <Av name={a.user_name||"?"} size={28}/>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-stone-600 leading-relaxed">
-                      <span className="font-medium">{a.user_name}</span>{" "}
-                      {a.activity==="outreach_logged" && `logged outreach — ${a.metadata?.detail||""}`}
-                      {a.activity==="task_completed" && `completed "${a.metadata?.task||""}"`}
-                      {a.activity==="report_submitted" && "submitted weekly report"}
-                      {a.activity==="question_posted" && `asked: "${a.metadata?.title||""}"`}
-                      {!["outreach_logged","task_completed","report_submitted","question_posted"].includes(a.activity||"") && (a.activity||"")}
-                    </p>
-                    <p className="text-xs text-stone-400 mt-0.5">{fmt(a.created_at)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="grid grid-cols-1 gap-4">
         <div className="bg-white border border-stone-200/60 rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-semibold text-stone-700 flex items-center gap-1.5"><Bell size={14} className="text-stone-400"/>Announcements</p>
@@ -4300,6 +4268,7 @@ export default function DashboardPage() {
         { id: "ugc_pivots_hub",          icon: <Inbox size={16}/>,        label: "Pivots", badge: pendingPivotCount || null },
         { id: "ugc_briefs_announcements",icon: <FileText size={16}/>,     label: "Briefs & Announcements" },
         { id: "ugc_resources",           icon: <FolderOpen size={16}/>,   label: "UGC Resources" },
+        { id: "ugc_qa",                  icon: <MessageCircle size={16}/>,label: "Creator Q&A" },
         { id: "ugc_hooks",               icon: <Zap size={16}/>,          label: "Hook Library" },
         { id: "ugc_leaderboard",         icon: <Trophy size={16}/>,       label: "Leaderboard" },
       ],
