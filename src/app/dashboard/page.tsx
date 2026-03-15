@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Role = "admin" | "intern" | "ugc_creator" | "director";
+type Role = "admin" | "intern" | "ugc_creator" | "director" | "wisconsin_admin";
 type Profile = { id: string; full_name: string; email: string; role: Role; team?: string; active?: boolean };
 type Task = { id: string; title: string; description?: string; assigned_to?: string; category?: string; priority?: string; status: string; due_date?: string; created_at: string; completed_at?: string };
 type Outreach = { id: string; intern_id?: string; brand_or_creator: string; platform?: string; contact_name?: string; date_contacted?: string; status: string; notes?: string; created_at: string };
