@@ -1,8 +1,10 @@
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
+
+const SUPABASE_URL = 'https://gfdurfdqrhjzxjperknw.supabase.co';
+
 function getAdminApp() {
   if (getApps().length > 0) return getApps()[0];
   const b64 = process.env.FIREBASE_SA_BASE64;
@@ -20,6 +22,9 @@ export async function POST(req: NextRequest) {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 500 });
+
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceKey) return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' }, { status: 500 });
 
     const {
       total_views, likes, comments, shares, saves,
@@ -92,12 +97,10 @@ Be specific, data-driven, and encouraging. Reference the actual numbers.`;
     const geminiData = await geminiRes.json();
     const aiPivot = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      'https://gfdurfdqrhjzxjperknw.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmZHVyZmRxcmhqenhqcGVya253Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNjI3MDIsImV4cCI6MjA4ODkzODcwMn0.ciR7C4VK4vKvgqPHriiw7DmednNBBq7x_2zI1l-oAAY',
-      { cookies: { getAll: () => cookieStore.getAll(), setAll: (cs) => cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } }
-    );
+    // Use service role key to bypass RLS
+    const supabase = createClient(SUPABASE_URL, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
     const { data: queueRow, error: qErr } = await supabase.from('ugc_pivot_queue').insert({
       creator_id: analytics.creator_id ?? null,
