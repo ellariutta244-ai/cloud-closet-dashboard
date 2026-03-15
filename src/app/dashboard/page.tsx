@@ -13,7 +13,7 @@ import {
   CalendarClock, ShoppingBag, Coffee, HelpCircle, MapPin,
   Play, Trophy, ExternalLink, ArrowUpRight, MessageSquare, TrendingUp,
   Settings as SettingsIcon, Zap, ChevronDown, ChevronUp, AlertTriangle, Bookmark, Copy,
-  BookOpen,
+  BookOpen, RefreshCw,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -3559,13 +3559,25 @@ function PivotContent({ text }: { text: string }) {
 }
 
 // ── UGC My Pivots ─────────────────────────────────────────────────────────────
-function UGCMyPivotsPage({ profile, pivots, submissions }: {
-  profile: UGCCreatorProfile; pivots: UGCPivot[]; submissions: UGCSubmission[];
+function UGCMyPivotsPage({ profile, pivots, setPivots, submissions, sb }: {
+  profile: UGCCreatorProfile; pivots: UGCPivot[]; setPivots: (p: UGCPivot[]) => void;
+  submissions: UGCSubmission[]; sb: any;
 }) {
   const isAdmin = profile.role === "admin" || profile.role === "wisconsin_admin";
   const myPivots = isAdmin ? pivots : pivots.filter(p => p.creator_id === profile.id);
   const mySubmissions = isAdmin ? submissions : submissions.filter(s => s.creator_id === profile.id);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function refresh() {
+    setRefreshing(true);
+    const query = isAdmin
+      ? sb.from("ugc_pivots").select("*").order("created_at", { ascending: false })
+      : sb.from("ugc_pivots").select("*").eq("creator_id", profile.id).order("created_at", { ascending: false });
+    const { data } = await query;
+    if (data) setPivots(data as UGCPivot[]);
+    setRefreshing(false);
+  }
 
   const sorted = [...mySubmissions].sort((a, b) => new Date(a.week_date).getTime() - new Date(b.week_date).getTime());
   const graphData = sorted.map(s => s.total_views);
@@ -3573,7 +3585,13 @@ function UGCMyPivotsPage({ profile, pivots, submissions }: {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-bold text-stone-800">My Pivots</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-stone-800">My Pivots</h1>
+        <button onClick={refresh} disabled={refreshing} className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700 disabled:opacity-40 transition-colors">
+          <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </button>
+      </div>
 
       {sorted.length >= 2 && (
         <div className="bg-white border border-stone-200/60 rounded-xl p-5">
@@ -7186,12 +7204,38 @@ function WisconsinReportPage({ profile, reports, setReports, setPage, sb }: {
 }
 
 // ── Creator Weekly Brief + Plan page ───────────────────────────────────────────
-function CreatorWeeklyBriefPage({ profile, briefs, weeklyPlans, setWeeklyPlans, sb }: {
-  profile: UGCCreatorProfile; briefs: UGCBrief[]; weeklyPlans: WeeklyPlan[];
-  setWeeklyPlans: (p: WeeklyPlan[]) => void; sb: any;
+function CreatorWeeklyBriefPage({ profile, briefs, setBriefs, weeklyPlans, setWeeklyPlans, sb }: {
+  profile: UGCCreatorProfile; briefs: UGCBrief[]; setBriefs: (b: UGCBrief[]) => void;
+  weeklyPlans: WeeklyPlan[]; setWeeklyPlans: (p: WeeklyPlan[]) => void; sb: any;
 }) {
   const [tab, setTab] = useState<"brief" | "plan">("brief");
   const currentWeek = getMondayOfWeek(new Date());
+
+  // Auto-refresh when admin posts a new brief or approves a plan
+  useEffect(() => {
+    const briefChannel = sb
+      .channel(`brief-live-${profile.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ugc_briefs" }, async () => {
+        const { data } = await sb.from("ugc_briefs").select("*").order("week_date", { ascending: false }).limit(10);
+        if (data) setBriefs(data as UGCBrief[]);
+        setTab("brief");
+      })
+      .subscribe();
+
+    const planChannel = sb
+      .channel(`plan-live-${profile.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "weekly_plans", filter: `creator_id=eq.${profile.id}` }, async () => {
+        const { data } = await sb.from("weekly_plans").select("*").eq("creator_id", profile.id).order("week_date", { ascending: false });
+        if (data) setWeeklyPlans(data as WeeklyPlan[]);
+        setTab("plan");
+      })
+      .subscribe();
+
+    return () => {
+      sb.removeChannel(briefChannel);
+      sb.removeChannel(planChannel);
+    };
+  }, [profile.id]);
   const currentBrief = briefs.find(b => b.week_date === currentWeek) ?? briefs[0] ?? null;
   const myPlan = weeklyPlans.find(p => p.week_date === currentWeek) ?? weeklyPlans[0] ?? null;
 
@@ -7751,7 +7795,7 @@ export default function DashboardPage() {
       // UGC Creator pages (no access for wisconsin_admin)
       case "ugc_dashboard":     return (isFullAdmin || isUGC) ? <UGCDashboard profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} pivots={ugcPivots} briefs={ugcBriefs} announcements={ugcAnnouncements} sb={supabase} setPage={setPage}/> : null;
       case "ugc_submit":        return (isFullAdmin || isUGC) ? <UGCSubmitPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
-      case "ugc_pivots":        return (isFullAdmin || isUGC) ? <UGCMyPivotsPage profile={p as UGCCreatorProfile} pivots={ugcPivots} submissions={ugcSubmissions}/> : null;
+      case "ugc_pivots":        return (isFullAdmin || isUGC) ? <UGCMyPivotsPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} submissions={ugcSubmissions} sb={supabase}/> : null;
       case "ugc_hook_generator": return (isFullAdmin || isUGC) ? <HookGeneratorPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
       case "ugc_hooks":         return (isFullAdmin || isUGC) ? <UGCHooksPage profile={p as UGCCreatorProfile} hooks={ugcHooks} setHooks={setUGCHooks} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_leaderboard":   return (isFullAdmin || isUGC) ? <UGCLeaderboardPage submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
@@ -7759,7 +7803,7 @@ export default function DashboardPage() {
       case "ugc_announcements": return isFullAdmin ? <UGCAnnouncementsPage profile={p as UGCCreatorProfile} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
       case "ugc_pivots_hub":            return isFullAdmin ? <UGCPivotsHubPage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_briefs_announcements":  return isFullAdmin ? <UGCBriefsAnnouncementsPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} ugcCreators={ugcCreators} sb={supabase}/> : null;
-      case "ugc_weekly_brief":          return isUGC ? <CreatorWeeklyBriefPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} sb={supabase}/> : null;
+      case "ugc_weekly_brief":          return isUGC ? <CreatorWeeklyBriefPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} sb={supabase}/> : null;
       case "ugc_history":       return (isFullAdmin || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_resources":     return (isFullAdmin || isUGC) ? <UGCResourcesPage profile={p as UGCCreatorProfile} resources={ugcResources} setResources={setUGCResources} sb={supabase}/> : null;
       case "ugc_tutorials":     return (isFullAdmin || isUGC || isDirector) ? <TutorialLibraryPage profile={p as UGCCreatorProfile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={supabase}/> : null;
