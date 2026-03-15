@@ -40,9 +40,8 @@ export function PwaSetup({ userId }: { userId?: string }) {
         body: JSON.stringify({ userId, token }),
       });
       onMessage(messaging, (payload) => {
-        const title = payload.notification?.title || "Cloud Closet";
-        const body  = payload.notification?.body  || "";
-        new Notification(title, { body, icon: "/icon-192.png" });
+        const body = payload.notification?.body || payload.notification?.title || "New notification";
+        new Notification("Cloud Closet Dashboard", { body, icon: "/icon-192.png" });
       });
     } catch (err) {
       console.error("[FCM] Token error:", err);

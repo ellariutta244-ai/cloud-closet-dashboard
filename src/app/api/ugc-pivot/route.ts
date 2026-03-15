@@ -230,7 +230,7 @@ ACCOUNT HEALTH:
           const app = getAdminApp();
           const messaging = getMessaging(app);
           for (const token of tokens) {
-            try { await messaging.send({ token, webpush: { notification: { title, body, icon: '/icon-192.png' }, headers: { Urgency: 'high' } } }); } catch {}
+            try { await messaging.send({ token, webpush: { notification: { title: 'Cloud Closet Dashboard', body: `${title} — ${body}`, icon: '/icon-192.png' }, headers: { Urgency: 'high' } } }); } catch {}
           }
         } catch {}
       }
@@ -304,8 +304,8 @@ ACCOUNT HEALTH:
             token,
             webpush: {
               notification: {
-                title: '📊 New UGC Pivot Ready for Review',
-                body: `${creatorName} submitted analytics for week ${week_date}. AI pivot generated.`,
+                title: 'Cloud Closet Dashboard',
+                body: `📊 New UGC Pivot Ready for Review — ${creatorName} submitted analytics for week ${week_date}.`,
                 icon: '/icon-192.png',
               },
               headers: { Urgency: 'normal' },

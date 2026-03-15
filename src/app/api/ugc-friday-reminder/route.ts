@@ -41,8 +41,8 @@ export async function GET() {
           token,
           webpush: {
             notification: {
-              title: '📊 Time to Submit!',
-              body: "Don't forget to submit your weekly analytics for this week.",
+              title: 'Cloud Closet Dashboard',
+              body: "📊 Time to Submit! — Don't forget to submit your weekly analytics for this week.",
               icon: '/icon-192.png',
             },
             headers: { Urgency: 'high' },

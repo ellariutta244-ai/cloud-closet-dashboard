@@ -32,7 +32,7 @@ async function sendAdminPush(supabase: any, title: string, body: string) {
     const messaging = getMessaging(app);
     for (const token of tokens) {
       try {
-        await messaging.send({ token, webpush: { notification: { title, body, icon: '/icon-192.png' }, headers: { Urgency: 'normal' } } });
+        await messaging.send({ token, webpush: { notification: { title: 'Cloud Closet Dashboard', body: `${title} — ${body}`, icon: '/icon-192.png' }, headers: { Urgency: 'normal' } } });
       } catch {}
     }
   } catch {}
@@ -49,7 +49,7 @@ async function sendCreatorPush(supabase: any, creatorId: string, title: string, 
     const messaging = getMessaging(app);
     for (const token of tokens) {
       try {
-        await messaging.send({ token, webpush: { notification: { title, body, icon: '/icon-192.png' }, headers: { Urgency: 'high' } } });
+        await messaging.send({ token, webpush: { notification: { title: 'Cloud Closet Dashboard', body: `${title} — ${body}`, icon: '/icon-192.png' }, headers: { Urgency: 'high' } } });
       } catch {}
     }
   } catch {}

@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
         await messaging.send({
           token,
           webpush: {
-            notification: { title, body, icon: '/icon-192.png' },
+            notification: { title: 'Cloud Closet Dashboard', body: `${title} — ${body}`, icon: '/icon-192.png' },
             headers: { Urgency: 'high' },
           },
         });
