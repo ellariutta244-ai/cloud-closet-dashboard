@@ -2554,6 +2554,92 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
   );
 }
 
+// ── Pivot Markdown Renderer ────────────────────────────────────────────────────
+function PivotContent({ text }: { text: string }) {
+  const sectionColors: Record<string, string> = {
+    "Performance Analysis": "border-sky-200 bg-sky-50",
+    "What's Working": "border-emerald-200 bg-emerald-50",
+    "What to Change": "border-amber-200 bg-amber-50",
+    "Hook Suggestions": "border-violet-200 bg-violet-50",
+    "Format Recommendations": "border-rose-200 bg-rose-50",
+    "Hook Variations": "border-violet-200 bg-violet-50",
+  };
+  const sectionIcons: Record<string, string> = {
+    "Performance Analysis": "📊", "What's Working": "✅",
+    "What to Change": "🔄", "Hook Suggestions": "🎣",
+    "Format Recommendations": "🎬", "Hook Variations": "🔁",
+  };
+
+  // Split into sections on numbered bold headers like "1. **Section Title**"
+  const sectionRegex = /(?=\d+\.\s\*\*)/;
+  const rawSections = text.split(sectionRegex).filter(Boolean);
+
+  if (rawSections.length < 2) {
+    // Fallback: just render with basic formatting
+    return (
+      <div className="text-sm text-stone-700 leading-relaxed">
+        {text.split('\n').map((line, i) => {
+          if (!line.trim()) return <div key={i} className="h-2" />;
+          const bold = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+          if (line.trim().startsWith('-') || line.trim().startsWith('•')) {
+            return <div key={i} className="flex gap-2 ml-2 mb-1"><span className="text-stone-400 mt-0.5">•</span><span dangerouslySetInnerHTML={{ __html: bold.replace(/^[-•]\s*/, '') }} /></div>;
+          }
+          return <p key={i} className="mb-1" dangerouslySetInnerHTML={{ __html: bold }} />;
+        })}
+      </div>
+    );
+  }
+
+  function renderBody(body: string) {
+    const lines = body.trim().split('\n');
+    return lines.map((line, i) => {
+      if (!line.trim()) return <div key={i} className="h-1.5" />;
+      const html = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>');
+      if (/^\s*[-•*]\s/.test(line)) {
+        return (
+          <div key={i} className="flex gap-2 mb-1.5">
+            <span className="text-stone-400 shrink-0 mt-0.5">•</span>
+            <span className="text-sm text-stone-700 leading-snug" dangerouslySetInnerHTML={{ __html: html.replace(/^\s*[-•*]\s/, '') }} />
+          </div>
+        );
+      }
+      if (/^\d+\.\s/.test(line) && !line.includes('**')) {
+        const num = line.match(/^(\d+)\.\s/)?.[1];
+        return (
+          <div key={i} className="flex gap-2 mb-2">
+            <span className="text-xs font-bold text-stone-400 shrink-0 mt-0.5 w-4">{num}.</span>
+            <span className="text-sm text-stone-700 leading-snug" dangerouslySetInnerHTML={{ __html: html.replace(/^\d+\.\s/, '') }} />
+          </div>
+        );
+      }
+      return <p key={i} className="text-sm text-stone-700 leading-relaxed mb-1.5" dangerouslySetInnerHTML={{ __html: html }} />;
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {rawSections.map((section, idx) => {
+        const headerMatch = section.match(/^\d+\.\s\*\*(.*?)\*\*[\s—–-]*(.*?)$/m);
+        const title = headerMatch?.[1]?.trim() ?? `Section ${idx + 1}`;
+        const subtitle = headerMatch?.[2]?.trim() ?? '';
+        const body = section.replace(/^\d+\.\s\*\*.*?\*\*.*?\n/, '').replace(/^\d+\.\s\*\*.*?\*\*/, '');
+        const colorCls = Object.entries(sectionColors).find(([k]) => title.includes(k))?.[1] ?? "border-stone-200 bg-stone-50";
+        const icon = Object.entries(sectionIcons).find(([k]) => title.includes(k))?.[1] ?? "💡";
+        return (
+          <div key={idx} className={`border rounded-xl p-4 ${colorCls}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-base">{icon}</span>
+              <p className="text-sm font-bold text-stone-800">{title}</p>
+              {subtitle && <p className="text-xs text-stone-500 hidden sm:block">— {subtitle}</p>}
+            </div>
+            <div>{renderBody(body)}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── UGC My Pivots ─────────────────────────────────────────────────────────────
 function UGCMyPivotsPage({ profile, pivots, submissions }: {
   profile: UGCCreatorProfile; pivots: UGCPivot[]; submissions: UGCSubmission[];
@@ -2596,9 +2682,15 @@ function UGCMyPivotsPage({ profile, pivots, submissions }: {
                     {isExp ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </button>
                 </div>
-                <p className={`text-sm text-stone-700 whitespace-pre-wrap ${isExp ? "" : "line-clamp-3"}`}>{p.ai_pivot}</p>
-                {!isExp && p.ai_pivot && p.ai_pivot.length > 200 && (
-                  <button onClick={() => setExpanded(p.id)} className="text-xs text-stone-400 hover:text-stone-600 mt-1">Read more</button>
+                {isExp ? (
+                  p.ai_pivot ? <PivotContent text={p.ai_pivot} /> : null
+                ) : (
+                  <>
+                    <p className="text-sm text-stone-500 line-clamp-2">{p.ai_pivot?.replace(/\*\*/g, '').replace(/\n/g, ' ')}</p>
+                    {p.ai_pivot && p.ai_pivot.length > 100 && (
+                      <button onClick={() => setExpanded(p.id)} className="text-xs text-sky-600 hover:text-sky-700 mt-1 font-medium">Read full pivot →</button>
+                    )}
+                  </>
                 )}
                 {p.admin_notes && <p className="text-xs text-stone-500 mt-3 p-2 bg-stone-50 rounded-lg italic">Admin note: {p.admin_notes}</p>}
                 {p.example_video_link && (
