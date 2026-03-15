@@ -2092,7 +2092,7 @@ function SettingsPg({ settings, setSettings, sb }: { settings:AppSettings; setSe
 }
 
 // ── UGC Types ─────────────────────────────────────────────────────────────────
-type UGCSubmission = { id: string; creator_id?: string; week_date: string; total_views: number; views_day1: number; views_day2: number; views_day3: number; likes: number; comments: number; shares: number; followers_gained: number; best_video_link?: string; benchmark_tier?: string; created_at: string };
+type UGCSubmission = { id: string; creator_id?: string; week_date: string; total_views: number; likes: number; comments: number; shares: number; saves: number; followers_gained: number; followers_lost: number; net_follower_change: number; best_video_link?: string; benchmark_tier?: string; hook_text?: string; format_type?: string; video_length_seconds?: number; niche?: string; trending_sound?: boolean; has_cta?: boolean; avg_watch_time_seconds?: number; watch_completion_rate?: number; profile_visits?: number; traffic_fyp_pct?: number; traffic_following_pct?: number; traffic_search_pct?: number; comment_sentiment?: string; total_account_views?: number; videos_posted?: number; created_at: string };
 type UGCPivotQueue = { id: string; creator_id?: string; submission_id?: string; week_date: string; analytics_snapshot?: any; ai_pivot?: string; admin_notes?: string; example_video_link?: string; status: string; created_at: string };
 type UGCPivot = { id: string; creator_id?: string; queue_id?: string; week_date: string; ai_pivot?: string; admin_notes?: string; example_video_link?: string; created_at: string };
 type UGCHook = { id: string; hook_text: string; view_count?: number; week_date?: string; creator_id?: string; admin_notes?: string; created_at: string };
@@ -2116,8 +2116,8 @@ function BenchmarkBadge({ tier }: { tier?: string }) {
   return <Bg v={t.v}>{t.label}</Bg>;
 }
 
-function calcBenchmarkTier(views_day2: number, total_views: number): string {
-  if (views_day2 < 500) return "hook_failed";
+function calcBenchmarkTier(_completionRate: number, total_views: number): string {
+  if (total_views < 500) return "hook_failed";
   if (total_views < 2000) return "average";
   if (total_views < 10000) return "good";
   if (total_views < 50000) return "strong";
@@ -2323,40 +2323,67 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
 }) {
   const isAdmin = profile.role === "admin";
   const currentWeek = getMondayOfWeek(new Date());
-  const [form, setForm] = useState({
-    week_date: currentWeek,
-    total_views: "", views_day1: "", views_day2: "", views_day3: "",
-    likes: "", comments: "", shares: "", followers_gained: "",
+  const emptyForm = {
+    week_date: currentWeek, creator_id: isAdmin ? "" : profile.id,
+    // Video metadata
+    hook_text: "", format_type: "talking_head", video_length_seconds: "",
+    niche: "", trending_sound: false, has_cta: false,
+    // View data
+    total_views: "", avg_watch_time_seconds: "", watch_completion_rate: "",
+    profile_visits: "", traffic_fyp_pct: "", traffic_following_pct: "", traffic_search_pct: "",
+    // Engagement
+    likes: "", comments: "", shares: "", saves: "", comment_sentiment: "neutral",
+    // Account health
+    followers_gained: "", followers_lost: "",
+    total_account_views: "", videos_posted: "",
     best_video_link: "",
-    creator_id: isAdmin ? "" : profile.id,
-  });
+  };
+  const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<"idle" | "generating" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const selectedCreator = isAdmin
-    ? ugcCreators.find(c => c.id === form.creator_id) || null
-    : (profile as UGCCreatorProfile);
+  const selectedCreator = isAdmin ? ugcCreators.find(c => c.id === form.creator_id) || null : (profile as UGCCreatorProfile);
+
+  const trafficSum = (parseFloat(form.traffic_fyp_pct) || 0) + (parseFloat(form.traffic_following_pct) || 0) + (parseFloat(form.traffic_search_pct) || 0);
+  const trafficValid = trafficSum === 0 || Math.abs(trafficSum - 100) < 0.1;
 
   async function submit() {
     if (!form.week_date || (isAdmin && !form.creator_id)) return;
+    if (!trafficValid) { setErrorMsg("Traffic source percentages must add up to 100%."); setStatus("error"); return; }
     setLoading(true); setStatus("generating"); setErrorMsg("");
 
-    const v2 = parseInt(form.views_day2) || 0;
     const tv = parseInt(form.total_views) || 0;
-    const tier = calcBenchmarkTier(v2, tv);
+    const gained = parseInt(form.followers_gained) || 0;
+    const lost = parseInt(form.followers_lost) || 0;
+    const tier = calcBenchmarkTier(parseFloat(form.watch_completion_rate) || 0, tv);
 
-    const submissionData = {
+    const submissionData: Record<string, any> = {
       creator_id: form.creator_id || profile.id,
       week_date: form.week_date,
       total_views: tv,
-      views_day1: parseInt(form.views_day1) || 0,
-      views_day2: v2,
-      views_day3: parseInt(form.views_day3) || 0,
+      hook_text: form.hook_text || null,
+      format_type: form.format_type || null,
+      video_length_seconds: parseInt(form.video_length_seconds as string) || null,
+      niche: form.niche || null,
+      trending_sound: form.trending_sound,
+      has_cta: form.has_cta,
+      avg_watch_time_seconds: parseFloat(form.avg_watch_time_seconds) || null,
+      watch_completion_rate: parseFloat(form.watch_completion_rate) || null,
+      profile_visits: parseInt(form.profile_visits) || 0,
+      traffic_fyp_pct: parseFloat(form.traffic_fyp_pct) || 0,
+      traffic_following_pct: parseFloat(form.traffic_following_pct) || 0,
+      traffic_search_pct: parseFloat(form.traffic_search_pct) || 0,
       likes: parseInt(form.likes) || 0,
       comments: parseInt(form.comments) || 0,
       shares: parseInt(form.shares) || 0,
-      followers_gained: parseInt(form.followers_gained) || 0,
+      saves: parseInt(form.saves) || 0,
+      comment_sentiment: form.comment_sentiment,
+      followers_gained: gained,
+      followers_lost: lost,
+      net_follower_change: gained - lost,
+      total_account_views: parseInt(form.total_account_views) || 0,
+      videos_posted: parseInt(form.videos_posted) || 0,
       best_video_link: form.best_video_link || null,
       benchmark_tier: tier,
       created_at: new Date().toISOString(),
@@ -2369,45 +2396,23 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
     const creatorName = selectedCreator?.full_name || profile.full_name;
     const tiktokHandle = selectedCreator?.tiktok_handle || "";
 
-    // Fire and forget — AI pivot
     try {
       await fetch("/api/ugc-pivot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          submissionId: sub.id,
-          creatorName,
-          tiktokHandle,
-          analytics: { ...submissionData, benchmark_tier: tier },
-        }),
+        body: JSON.stringify({ submissionId: sub.id, creatorName, tiktokHandle, analytics: submissionData }),
       });
     } catch (e) { console.error("pivot api error", e); }
 
-    // Google Sheets sync
     try {
       await fetch("/api/ugc-sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          creatorName,
-          tiktokHandle,
-          weekDate: form.week_date,
-          totalViews: tv,
-          viewsDay1: parseInt(form.views_day1) || 0,
-          viewsDay2: v2,
-          viewsDay3: parseInt(form.views_day3) || 0,
-          likes: parseInt(form.likes) || 0,
-          comments: parseInt(form.comments) || 0,
-          shares: parseInt(form.shares) || 0,
-          followersGained: parseInt(form.followers_gained) || 0,
-          bestVideoLink: form.best_video_link,
-          benchmarkTier: tier,
-        }),
+        body: JSON.stringify({ creatorName, tiktokHandle, ...submissionData }),
       });
     } catch (e) { console.error("sheets api error", e); }
 
-    setStatus("success");
-    setLoading(false);
+    setStatus("success"); setLoading(false);
   }
 
   if (status === "success") {
@@ -2416,16 +2421,26 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
         <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center"><CheckCircle2 size={28} className="text-emerald-600"/></div>
         <h2 className="text-lg font-bold text-stone-800">Analytics Submitted!</h2>
         <p className="text-sm text-stone-500 max-w-sm">Your pivot strategy will appear after admin review. Check back in your Pivots page.</p>
-        <Btn onClick={() => setStatus("idle")}>Submit Another</Btn>
+        <Btn onClick={() => { setStatus("idle"); setForm(emptyForm); }}>Submit Another</Btn>
       </div>
     );
   }
 
-  const ni = (field: string, label: string) => (
+  const ni = (field: string, label: string, decimals = false) => (
     <div className="flex flex-col gap-1">
       <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">{label}</label>
-      <input type="number" min="0" value={(form as any)[field]} onChange={e => setForm({ ...form, [field]: e.target.value })}
+      <input type="number" min="0" step={decimals ? "0.1" : "1"} value={(form as any)[field]}
+        onChange={e => setForm({ ...form, [field]: e.target.value })}
         className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-800 focus:outline-none focus:border-stone-400" />
+    </div>
+  );
+  const tog = (field: "trending_sound" | "has_cta", label: string) => (
+    <div className="flex items-center justify-between py-2 px-3 bg-stone-50 rounded-lg">
+      <span className="text-sm text-stone-700">{label}</span>
+      <button type="button" onClick={() => setForm({ ...form, [field]: !(form as any)[field] })}
+        className={`w-10 h-6 rounded-full transition-colors relative ${(form as any)[field] ? "bg-stone-800" : "bg-stone-300"}`}>
+        <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${(form as any)[field] ? "translate-x-4 left-0.5" : "left-0.5"}`}/>
+      </button>
     </div>
   );
 
@@ -2433,53 +2448,95 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-xl font-bold text-stone-800">Submit Weekly Analytics</h1>
-        <p className="text-sm text-stone-400 mt-0.5">Your data will be used to generate a personalized pivot strategy.</p>
+        <p className="text-sm text-stone-400 mt-0.5">Your data generates a personalized AI pivot strategy.</p>
       </div>
 
-      {status === "error" && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-600">{errorMsg || "Something went wrong."}</div>
-      )}
+      {status === "error" && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-600">{errorMsg || "Something went wrong."}</div>}
 
-      <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-5">
         <TI label="Week Date (Monday)" value={form.week_date} onChange={v => setForm({ ...form, week_date: v })} type="date" />
+        {isAdmin && <Sel label="Creator" value={form.creator_id} onChange={v => setForm({ ...form, creator_id: v })}
+          options={[{ value: "", label: "— Select creator —" }, ...ugcCreators.filter(c => c.active !== false).map(c => ({ value: c.id, label: `${c.full_name}${c.tiktok_handle ? ` (@${c.tiktok_handle})` : ""}` }))]} />}
 
-        {isAdmin && (
-          <Sel label="Creator" value={form.creator_id} onChange={v => setForm({ ...form, creator_id: v })}
-            options={[{ value: "", label: "— Select creator —" }, ...ugcCreators.filter(c => c.active !== false).map(c => ({ value: c.id, label: `${c.full_name}${c.tiktok_handle ? ` (@${c.tiktok_handle})` : ""}` }))]} />
-        )}
-
-        <div>
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">Views Breakdown</p>
+        {/* Video Metadata */}
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Video Metadata</p>
+          <TI label="Hook Text (first 3 seconds)" value={form.hook_text} onChange={v => setForm({ ...form, hook_text: v })} placeholder="What did your video open with?" />
+          <Sel label="Format Type" value={form.format_type} onChange={v => setForm({ ...form, format_type: v })}
+            options={[{ value: "talking_head", label: "Talking Head" }, { value: "voiceover", label: "Voiceover" }, { value: "pov", label: "POV" }, { value: "transition", label: "Transition" }, { value: "other", label: "Other" }]} />
           <div className="grid grid-cols-2 gap-3">
-            {ni("total_views", "Total Views")}
-            {ni("views_day1", "Views Day 1")}
-            {ni("views_day2", "Views Day 2")}
-            {ni("views_day3", "Views Day 3")}
+            {ni("video_length_seconds", "Video Length (seconds)")}
+            <TI label="Niche / Topic" value={form.niche} onChange={v => setForm({ ...form, niche: v })} placeholder="e.g. fashion, styling tips" />
           </div>
+          {tog("trending_sound", "Used a trending sound?")}
+          {tog("has_cta", "Included a CTA?")}
         </div>
 
-        <div>
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">Engagement</p>
+        {/* View Data */}
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">View Data</p>
+          <div className="grid grid-cols-2 gap-3">
+            {ni("total_views", "Total Views")}
+            {ni("avg_watch_time_seconds", "Avg Watch Time (sec)", true)}
+            {ni("watch_completion_rate", "Watch Completion Rate (%)", true)}
+            {ni("profile_visits", "Profile Visits")}
+          </div>
+          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Traffic Source (must total 100%)</p>
+          <div className="grid grid-cols-3 gap-3">
+            {ni("traffic_fyp_pct", "For You Page %", true)}
+            {ni("traffic_following_pct", "Following %", true)}
+            {ni("traffic_search_pct", "Search %", true)}
+          </div>
+          {(form.traffic_fyp_pct || form.traffic_following_pct || form.traffic_search_pct) && (
+            <div className={`text-xs px-3 py-2 rounded-lg ${trafficValid ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
+              Total: {trafficSum.toFixed(1)}% {trafficValid ? "✓" : "— must equal 100%"}
+            </div>
+          )}
+        </div>
+
+        {/* Engagement */}
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Engagement Quality</p>
           <div className="grid grid-cols-2 gap-3">
             {ni("likes", "Likes")}
             {ni("comments", "Comments")}
             {ni("shares", "Shares")}
-            {ni("followers_gained", "Followers Gained")}
+            {ni("saves", "Saves")}
           </div>
+          <Sel label="Comment Sentiment" value={form.comment_sentiment} onChange={v => setForm({ ...form, comment_sentiment: v })}
+            options={[{ value: "positive", label: "Positive" }, { value: "neutral", label: "Neutral" }, { value: "negative", label: "Negative" }]} />
+        </div>
+
+        {/* Account Health */}
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Account Health</p>
+          <div className="grid grid-cols-2 gap-3">
+            {ni("followers_gained", "Followers Gained")}
+            {ni("followers_lost", "Followers Lost")}
+            {ni("total_account_views", "Total Account Views (week)")}
+            {ni("videos_posted", "Videos Posted (week)")}
+          </div>
+          {(form.followers_gained || form.followers_lost) && (
+            <div className="text-xs px-3 py-2 rounded-lg bg-stone-50 text-stone-600">
+              Net follower change: <span className={`font-semibold ${(parseInt(form.followers_gained)||0)-(parseInt(form.followers_lost)||0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                {((parseInt(form.followers_gained)||0)-(parseInt(form.followers_lost)||0)) >= 0 ? "+" : ""}{(parseInt(form.followers_gained)||0)-(parseInt(form.followers_lost)||0)}
+              </span>
+            </div>
+          )}
         </div>
 
         <TI label="Best Video Link (optional)" value={form.best_video_link} onChange={v => setForm({ ...form, best_video_link: v })} placeholder="https://tiktok.com/..." />
 
-        {form.views_day2 && (
+        {form.total_views && (
           <div className="flex items-center gap-2 py-2 px-3 bg-stone-50 rounded-lg">
             <span className="text-xs text-stone-500">Benchmark tier:</span>
-            <BenchmarkBadge tier={calcBenchmarkTier(parseInt(form.views_day2) || 0, parseInt(form.total_views) || 0)} />
+            <BenchmarkBadge tier={calcBenchmarkTier(parseFloat(form.watch_completion_rate) || 0, parseInt(form.total_views) || 0)} />
           </div>
         )}
 
-        <div className="flex justify-end gap-2 pt-2 border-t border-stone-100">
-          <Btn onClick={submit} disabled={loading || !form.week_date || (isAdmin && !form.creator_id)}>
-            {loading ? <><Loader2 size={14} className="animate-spin"/>Generating pivot strategy...</> : <><Send size={14}/>Submit Analytics</>}
+        <div className="flex justify-end pt-2 border-t border-stone-100">
+          <Btn onClick={submit} disabled={loading || !form.week_date || (isAdmin && !form.creator_id) || !trafficValid}>
+            {loading ? <><Loader2 size={14} className="animate-spin"/>Generating pivot...</> : <><Send size={14}/>Submit Analytics</>}
           </Btn>
         </div>
       </div>

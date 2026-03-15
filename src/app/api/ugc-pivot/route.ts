@@ -18,45 +18,64 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const {
-      total_views, views_day1, views_day2, views_day3,
-      likes, comments, shares, followers_gained,
-      best_video_link, benchmark_tier, week_date,
-    } = analytics;
-
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 500 });
 
-    const prompt = `You are a TikTok content strategist for Cloud Closet, a fashion brand. A UGC creator has submitted their weekly analytics. Generate a personalized pivot strategy.
+    const {
+      total_views, likes, comments, shares, saves,
+      followers_gained, followers_lost, net_follower_change,
+      total_account_views, videos_posted,
+      hook_text, format_type, video_length_seconds, niche,
+      trending_sound, has_cta,
+      avg_watch_time_seconds, watch_completion_rate, profile_visits,
+      traffic_fyp_pct, traffic_following_pct, traffic_search_pct,
+      comment_sentiment, best_video_link, benchmark_tier, week_date,
+    } = analytics;
+
+    const prompt = `You are a TikTok content strategist for Cloud Closet, a fashion brand. A UGC creator has submitted their weekly analytics. Generate a personalized, data-driven pivot strategy.
 
 Creator: ${creatorName} (@${tiktokHandle || 'unknown'})
 Week: ${week_date}
+Performance Tier: ${benchmark_tier}
 
-Analytics:
-- Total Views: ${total_views}
-- Views Day 1: ${views_day1}
-- Views Day 2: ${views_day2}
-- Views Day 3: ${views_day3}
-- Likes: ${likes}
-- Comments: ${comments}
-- Shares: ${shares}
-- Followers Gained: ${followers_gained}
+VIDEO METADATA:
+- Hook: "${hook_text || 'not provided'}"
+- Format: ${format_type || 'unknown'}
+- Video Length: ${video_length_seconds ? `${video_length_seconds}s` : 'unknown'}
+- Niche/Topic: ${niche || 'not specified'}
+- Trending Sound: ${trending_sound ? 'Yes' : 'No'}
+- CTA Included: ${has_cta ? 'Yes' : 'No'}
+
+VIEW DATA:
+- Total Views: ${total_views?.toLocaleString() || 0}
+- Avg Watch Time: ${avg_watch_time_seconds ? `${avg_watch_time_seconds}s` : 'unknown'}
+- Watch Completion Rate: ${watch_completion_rate ? `${watch_completion_rate}%` : 'unknown'}
+- Profile Visits: ${profile_visits || 0}
+- Traffic: FYP ${traffic_fyp_pct || 0}% / Following ${traffic_following_pct || 0}% / Search ${traffic_search_pct || 0}%
+
+ENGAGEMENT:
+- Likes: ${likes || 0} | Comments: ${comments || 0} | Shares: ${shares || 0} | Saves: ${saves || 0}
+- Comment Sentiment: ${comment_sentiment || 'neutral'}
+
+ACCOUNT HEALTH:
+- Followers Gained: ${followers_gained || 0} | Lost: ${followers_lost || 0} | Net: ${net_follower_change || 0}
+- Total Account Views This Week: ${total_account_views || 0}
+- Videos Posted This Week: ${videos_posted || 0}
 - Best Video: ${best_video_link || 'not provided'}
-- Performance Tier: ${benchmark_tier}
 
-Benchmark tiers: hook_failed (<500 views day 2), average (500-2000), good (2000-10000), strong (10000-50000), viral (50000+)
+BENCHMARK TIERS: hook_failed (<500 completion rate or low views), average, good (2k-10k views), strong (10k-50k), viral (50k+)
+KILL RULE: Under 1,000 total views → pivot format AND hook immediately.
+SCALE RULE: 10,000+ views → provide 3 hook variations to replicate across creators.
 
-Kill rule: If consistently under 1,000 views by day 3, pivot format AND hook immediately.
-Scale rule: If 10,000+ views, create 3 variations of this hook for multiple creators.
+Generate a pivot strategy with these sections:
+1. **Performance Analysis** — what the data tells us (reference specific numbers)
+2. **What's Working** — be specific about what drove results
+3. **What to Change** — concrete, actionable changes
+4. **3 Hook Suggestions** — write each hook out in full, tailored to this creator's niche
+5. **Format Recommendations** — length, style, sound strategy, CTA placement
+6. **Hook Variations** (only if scale rule triggered) — 3 variations of what worked
 
-Generate a pivot strategy covering:
-1. What's working (be specific)
-2. What to change (be specific)
-3. Three specific hook suggestions (write them out fully)
-4. Format recommendations (length, style, structure)
-5. If scale rule triggered: 3 hook variations
-
-Keep it actionable, specific, and encouraging. Format with clear sections.`;
+Be specific, data-driven, and encouraging. Reference the actual numbers.`;
 
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
