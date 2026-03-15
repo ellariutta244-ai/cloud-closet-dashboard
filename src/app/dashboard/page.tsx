@@ -4210,6 +4210,16 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [page, setPage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem("cc_nav_collapsed") || "{}"); } catch { return {}; }
+  });
+  function toggleSection(label: string) {
+    setCollapsedSections(prev => {
+      const next = { ...prev, [label]: !prev[label] };
+      try { localStorage.setItem("cc_nav_collapsed", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
   const [interns, setInterns] = useState<Profile[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [outreach, setOutreach] = useState<Outreach[]>([]);
@@ -4441,12 +4451,25 @@ export default function DashboardPage() {
       </div>
       <nav className="flex-1 p-3 flex flex-col gap-0.5 overflow-y-auto">
         {isAdmin ? (
-          ADMIN_SECTIONS.map(section => (
-            <div key={section.label} className="mb-1">
-              <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest px-3 py-2 mt-1">{section.label}</p>
-              {section.items.map(item => <NavItem key={item.id} item={item} />)}
-            </div>
-          ))
+          ADMIN_SECTIONS.map(section => {
+            const sectionHasActivePage = section.items.some(i => i.id === page);
+            // Default: GENERAL always open, active section open, other section collapsed
+            const isCollapsed = collapsedSections[section.label] !== undefined
+              ? collapsedSections[section.label]
+              : (section.label !== "GENERAL" && !sectionHasActivePage);
+            return (
+              <div key={section.label} className="mb-1">
+                <button
+                  onClick={() => toggleSection(section.label)}
+                  className="w-full flex items-center justify-between px-3 py-2 mt-1 group"
+                >
+                  <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest">{section.label}</span>
+                  <ChevronDown size={12} className={`text-stone-300 group-hover:text-stone-500 transition-transform duration-200 ${isCollapsed ? "-rotate-90" : ""}`} />
+                </button>
+                {!isCollapsed && section.items.map(item => <NavItem key={item.id} item={item} />)}
+              </div>
+            );
+          })
         ) : (
           NAV.map(item => <NavItem key={item.id} item={item} />)
         )}
