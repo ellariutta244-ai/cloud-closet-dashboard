@@ -5031,7 +5031,7 @@ export default function DashboardPage() {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile topbar */}
-        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-stone-100" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="lg:hidden flex items-center gap-3 px-4 bg-white border-b border-stone-100" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)', paddingBottom: '12px' }}>
           <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg text-stone-500 hover:bg-stone-100"><Menu size={18}/></button>
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-stone-800 rounded-lg flex items-center justify-center"><span className="text-white text-xs font-bold">CC</span></div>
@@ -5039,12 +5039,12 @@ export default function DashboardPage() {
           </div>
         </div>
         <main className="flex-1 overflow-y-auto p-4 lg:p-6" style={{ paddingBottom: isUGC ? undefined : 'env(safe-area-inset-bottom)' }}>
-          <div className={`max-w-4xl mx-auto ${isUGC ? "pb-20 lg:pb-0" : ""}`}>{renderPage()}</div>
+          <div className={`max-w-4xl mx-auto ${isUGC ? "pb-28 lg:pb-0" : ""}`}>{renderPage()}</div>
         </main>
       </div>
       {/* UGC bottom tab bar — mobile only */}
       {isUGC && (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 flex items-center justify-around px-2 z-30" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 flex items-center justify-around px-2 z-30" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 10px)', paddingTop: '6px' }}>
           {[
             { id: "ugc_dashboard", icon: <LayoutDashboard size={20}/>, label: "Home" },
             { id: "ugc_submit", icon: <BarChart3 size={20}/>, label: "Submit" },
