@@ -10,13 +10,21 @@ export function PwaSetup({ userId }: { userId?: string }) {
   const unsubRef = useRef<(() => void) | null>(null);
   const initDoneRef = useRef(false);
 
-  // Register service worker
+  // Register service worker once — skip if already active to avoid duplicate registrations
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/firebase-messaging-sw.js")
-        .catch((err) => console.error("[SW] Registration failed:", err));
-    }
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      const already = regs.some((r) =>
+        r.active?.scriptURL.includes("firebase-messaging-sw.js") ||
+        r.installing?.scriptURL.includes("firebase-messaging-sw.js") ||
+        r.waiting?.scriptURL.includes("firebase-messaging-sw.js")
+      );
+      if (!already) {
+        navigator.serviceWorker
+          .register("/firebase-messaging-sw.js")
+          .catch((err) => console.error("[SW] Registration failed:", err));
+      }
+    });
   }, []);
 
   // Check if we should show the banner
@@ -48,11 +56,12 @@ export function PwaSetup({ userId }: { userId?: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, token }),
       });
-      // Clean up any previous handler before registering a new one
+      // Register onMessage to keep the FCM connection alive in the foreground.
+      // Do NOT call new Notification() here — the service worker is the sole
+      // renderer for OS notifications, which prevents SW + page duplicates.
       if (unsubRef.current) unsubRef.current();
-      unsubRef.current = onMessage(messaging, (payload) => {
-        const body = payload.notification?.body || payload.notification?.title || "New notification";
-        new Notification("Cloud Closet Dashboard", { body, icon: "/icon-192.png" });
+      unsubRef.current = onMessage(messaging, (_payload) => {
+        // In-app handling can go here if needed (e.g. badge update).
       });
     } catch (err) {
       initDoneRef.current = false;

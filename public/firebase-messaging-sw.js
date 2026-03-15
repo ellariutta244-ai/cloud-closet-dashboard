@@ -12,18 +12,19 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Handle background push notifications.
-// Skip if a focused app window is already open — onMessage in the app will handle it.
+// The service worker is the single source of truth for OS notification display.
+// The page's onMessage handler does NOT show a Notification — it only handles
+// in-app state. This prevents the SW + page double-notification bug.
+// notif_id is used as the tag so the browser collapses any accidental duplicates.
 messaging.onBackgroundMessage(function (payload) {
-  self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clients) {
-    const appOpen = clients.some(function (c) { return c.focused; });
-    if (appOpen) return; // foreground: let onMessage handle it, avoid duplicate
-    const body = payload.notification?.body || payload.notification?.title || 'New notification';
-    self.registration.showNotification('Cloud Closet Dashboard', {
-      body,
-      icon:  '/icon-192.png',
-      badge: '/icon-192.png',
-      data:  payload.data,
-    });
+  const body = payload.notification?.body || payload.notification?.title || 'New notification';
+  const tag = payload.data?.notif_id || 'cloud-closet';
+  self.registration.showNotification('Cloud Closet Dashboard', {
+    body,
+    icon:  '/icon-192.png',
+    badge: '/icon-192.png',
+    tag,
+    renotify: false,
+    data: payload.data,
   });
 });

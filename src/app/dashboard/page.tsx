@@ -7656,7 +7656,8 @@ export default function DashboardPage() {
     {
       label: "MY CONTENT",
       items: [
-        { id: "director_content_studio", icon: <Video size={16}/>, label: "Content Studio" },
+        { id: "director_content_studio", icon: <Video size={16}/>,    label: "Content Studio" },
+        { id: "ugc_tutorials",           icon: <BookOpen size={16}/>, label: "Tutorial Library" },
       ],
     },
   ];
@@ -7761,7 +7762,7 @@ export default function DashboardPage() {
       case "ugc_weekly_brief":          return isUGC ? <CreatorWeeklyBriefPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} sb={supabase}/> : null;
       case "ugc_history":       return (isFullAdmin || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_resources":     return (isFullAdmin || isUGC) ? <UGCResourcesPage profile={p as UGCCreatorProfile} resources={ugcResources} setResources={setUGCResources} sb={supabase}/> : null;
-      case "ugc_tutorials":     return (isFullAdmin || isUGC) ? <TutorialLibraryPage profile={p as UGCCreatorProfile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={supabase}/> : null;
+      case "ugc_tutorials":     return (isFullAdmin || isUGC || isDirector) ? <TutorialLibraryPage profile={p as UGCCreatorProfile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={supabase}/> : null;
       // Admin-only UGC pages (no access for wisconsin_admin)
       case "ugc_creators":      return isFullAdmin ? <UGCCreatorMgmtPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} smartAlerts={smartAlerts} sb={supabase}/> : null;
       case "ugc_pivot_queue":   return isFullAdmin ? <UGCPivotQueuePage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} ugcCreators={ugcCreators} sb={supabase}/> : null;

@@ -44,14 +44,24 @@ export async function POST(req: NextRequest) {
     const app = getAdminApp();
     const messaging = getMessaging(app);
 
+    // One unique tag per notification batch — browser deduplicates if the same
+    // message somehow arrives twice (e.g. SW + page both trying to show it).
+    const notifId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
     let sent = 0;
     for (const token of tokens) {
       try {
         await messaging.send({
           token,
           webpush: {
-            notification: { title: 'Cloud Closet Dashboard', body: `${title} — ${body}`, icon: '/icon-192.png' },
+            notification: {
+              title: 'Cloud Closet Dashboard',
+              body: `${title} — ${body}`,
+              icon: '/icon-192.png',
+              tag: notifId,
+            },
             headers: { Urgency: 'high' },
+            data: { notif_id: notifId },
           },
         });
         sent++;
