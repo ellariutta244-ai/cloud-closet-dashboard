@@ -13,7 +13,7 @@ function getAdminApp() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { title, body, team, role } = await req.json();
+    const { title, body, team, role, userId } = await req.json();
     if (!title || !body) return NextResponse.json({ error: 'Missing title or body' }, { status: 400 });
 
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -25,14 +25,20 @@ export async function POST(req: NextRequest) {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    let query = supabase.from('fcm_tokens').select('token, profiles!inner(role, team)');
-    if (role) query = (query as any).eq('profiles.role', role);
+    let query = supabase.from('fcm_tokens').select('user_id, token, profiles!inner(role, team)');
+    if (userId) query = (query as any).eq('user_id', userId);
+    else if (role) query = (query as any).eq('profiles.role', role);
     else if (team) query = (query as any).eq('profiles.team', team);
 
     const { data: rows, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const tokens: string[] = Array.from(new Set<string>((rows || []).map((r: any) => r.token as string).filter((t: string) => !!t)));
+    // Deduplicate: one notification per user (latest token wins)
+    const userTokenMap = new Map<string, string>();
+    for (const r of (rows || []) as any[]) {
+      if (r.token && !userTokenMap.has(r.user_id)) userTokenMap.set(r.user_id, r.token);
+    }
+    const tokens = Array.from(userTokenMap.values());
     if (tokens.length === 0) return NextResponse.json({ ok: true, sent: 0 });
 
     const app = getAdminApp();

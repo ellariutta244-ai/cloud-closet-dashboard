@@ -2200,6 +2200,12 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
     await sb.from("weekly_plans").update({ status: "approved" }).eq("id", plan.id);
     setWeeklyPlans(weeklyPlans.map(p => p.id === plan.id ? { ...p, status: "approved" } : p));
     if (selectedPlan?.id === plan.id) setSelectedPlan({ ...selectedPlan, status: "approved" });
+    if (plan.creator_id) {
+      fetch("/api/send-notification", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: plan.creator_id, title: "Your content plan is ready 📅", body: `Your week of ${plan.week_date} content plan has been approved. Check it out!` }),
+      }).catch(() => {});
+    }
   }
 
   async function rejectPlan(plan: WeeklyPlan) {
@@ -2212,10 +2218,19 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
 
   async function approveAll() {
     if (samplePlans) { setSamplePlans(samplePlans.map(p => p.status === "draft" ? { ...p, status: "approved" } : p)); return; }
-    const draftIds = weeklyPlans.filter(p => p.status === "draft").map(p => p.id);
-    if (!draftIds.length) return;
-    await sb.from("weekly_plans").update({ status: "approved" }).in("id", draftIds);
-    setWeeklyPlans(weeklyPlans.map(p => draftIds.includes(p.id) ? { ...p, status: "approved" } : p));
+    const draftPlans = weeklyPlans.filter(p => p.status === "draft");
+    if (!draftPlans.length) return;
+    await sb.from("weekly_plans").update({ status: "approved" }).in("id", draftPlans.map(p => p.id));
+    setWeeklyPlans(weeklyPlans.map(p => draftPlans.some(d => d.id === p.id) ? { ...p, status: "approved" } : p));
+    // Notify each creator individually
+    draftPlans.forEach(plan => {
+      if (plan.creator_id) {
+        fetch("/api/send-notification", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: plan.creator_id, title: "Your content plan is ready 📅", body: `Your week of ${plan.week_date} content plan has been approved. Check it out!` }),
+        }).catch(() => {});
+      }
+    });
   }
 
   async function regeneratePlan(plan: WeeklyPlan) {
@@ -4163,6 +4178,10 @@ function UGCQAPage({ profile, questions, setQuestions, ugcCreators, sb }: {
     if (error) { console.error(error); return; }
     setQuestions([{ ...data as UGCQuestion, ugc_qa_replies: [] }, ...questions]);
     setQText(""); setModal(false);
+    fetch("/api/send-notification", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "ugc_creator", title: "New question in Community Q&A 💬", body: qText.length > 80 ? qText.slice(0, 77) + "…" : qText }),
+    }).catch(() => {});
   }
 
   async function postReply(qId: string) {
@@ -4891,6 +4910,12 @@ function UGCPivotQueuePage({ profile, pivotQueue, setPivotQueue, ugcCreators, sb
     await sb.from("ugc_pivot_queue").update({ status: "approved", admin_notes: notes, example_video_link: exLink }).eq("id", item.id);
     setPivotQueue(pivotQueue.map(q => q.id === item.id ? { ...q, status: "approved", admin_notes: notes || undefined, example_video_link: exLink || undefined } : q));
     setProcessing(prev => ({ ...prev, [item.id]: false }));
+    if (item.creator_id) {
+      fetch("/api/send-notification", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: item.creator_id, title: "Your pivot is ready 🎯", body: `Your week of ${item.week_date} pivot has been reviewed and is ready to view.` }),
+      }).catch(() => {});
+    }
   }
 
   async function reject(id: string) {
@@ -5288,6 +5313,10 @@ function UGCBriefPage({ briefs, setBriefs, sb }: {
     setBriefs([data as UGCBrief, ...briefs]);
     setSaved(true); setTimeout(() => setSaved(false), 2000);
     setForm({ week_date: currentWeek, hooks: "", format_recs: "", brand_guidelines: "" });
+    fetch("/api/send-notification", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "ugc_creator", title: "Weekly Brief is live 📋", body: `The week of ${form.week_date} brief has been posted. Check it out now.` }),
+    }).catch(() => {});
   }
 
   async function deleteBrief(id: string) {
