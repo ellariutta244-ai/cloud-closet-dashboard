@@ -13,6 +13,7 @@ import {
   CalendarClock, ShoppingBag, Coffee, HelpCircle, MapPin,
   Play, Trophy, ExternalLink, ArrowUpRight, MessageSquare, TrendingUp,
   Settings as SettingsIcon, Zap, ChevronDown, ChevronUp, AlertTriangle, Bookmark, Copy,
+  BookOpen,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -2907,6 +2908,8 @@ type UGCReply = { id: string; question_id: string; creator_id?: string; reply: s
 type UGCCreatorProfile = Profile & { tiktok_handle?: string; tiktok_url?: string; ugc_status?: string };
 type SmartAlert = { id: string; creator_id?: string; alert_type: string; message: string; urgency: 'red' | 'orange' | 'yellow' | 'purple'; dismissed: boolean; week_date?: string; created_at: string; };
 type CarolineSavedIdea = { id: string; hook?: string; concept_title?: string; full_concept?: any; caption?: string; format?: string; series_name?: string; series_episodes?: any[]; sound_notes?: string; mood?: string; audience?: string[]; notes?: string; filmed: boolean; saved_at: string; tiktok_url?: string; recreation_guide?: any; content_type?: string };
+type Tutorial = { id: string; title: string; description?: string; steps: string[]; pro_tips: string[]; best_for_tags: string[]; difficulty: string; sort_order?: number; created_at: string };
+type SavedCaption = { id: string; creator_id: string; caption?: string; alternate_caption?: string; seo_note?: string; hashtag_set_1?: string; hashtag_set_2?: string; posting_time?: string; video_topic?: string; goal?: string; generated_at: string };
 type CarolineHook = { id: string; hook_text: string; mood?: string; generated_at: string; saved: boolean };
 type DayPlan = { hook: string; format: string; postTime: string; note: string };
 type WeeklyPlan = { id: string; creator_id?: string; week_date: string; week_goal?: string; phase?: string; monday?: DayPlan; tuesday?: DayPlan; wednesday?: DayPlan; thursday?: DayPlan; friday?: DayPlan; saturday?: DayPlan; sunday?: DayPlan; ab_test?: string; weekly_reminder?: string; status: string; raw_ai_output?: string; completed_days?: string[]; created_at: string };
@@ -4050,6 +4053,444 @@ function UGCHooksPage({ profile, hooks, setHooks, ugcCreators, sb }: {
           <div className="flex justify-end gap-2 pt-2">
             <Btn variant="secondary" onClick={() => setModal(false)}>Cancel</Btn>
             <Btn onClick={addHook} disabled={!form.hook_text.trim() || saving}>{saving ? "Saving..." : "Add Hook"}</Btn>
+          </div>
+        </div>
+      </Md>
+    </div>
+  );
+}
+
+// ── Tutorial Library ───────────────────────────────────────────────────────────
+function TutorialLibraryPage({ profile, tutorials, setTutorials, savedCaptions, setSavedCaptions, sb }: {
+  profile: UGCCreatorProfile; tutorials: Tutorial[]; setTutorials: (t: Tutorial[]) => void;
+  savedCaptions: SavedCaption[]; setSavedCaptions: (c: SavedCaption[]) => void; sb: any;
+}) {
+  const isAdmin = profile.role === "admin" || profile.role === "wisconsin_admin";
+  const [tab, setTab] = useState<"guides" | "captions">("guides");
+
+  // ── Guides tab ────────────────────────────────────────────────────────────────
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [addModal, setAddModal] = useState(false);
+  const [addForm, setAddForm] = useState({ title: "", description: "", steps: [""], pro_tips: [""], best_for_tags: "", difficulty: "Easy" });
+  const [addSaving, setAddSaving] = useState(false);
+
+  // ── Caption tab ───────────────────────────────────────────────────────────────
+  const [capTab, setCapTab] = useState<"generate" | "history">("generate");
+  const [capForm, setCapForm] = useState({ topic: "", hook: "", format: "talking head", goal: "get views", audience: "everyone" });
+  const [generating, setGenerating] = useState(false);
+  const [capResult, setCapResult] = useState<SavedCaption | null>(null);
+  const [capError, setCapError] = useState("");
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [capSaving, setCapSaving] = useState(false);
+  const [capSaved, setCapSaved] = useState(false);
+
+  const myHistory = isAdmin ? savedCaptions : savedCaptions.filter(c => c.creator_id === profile.id);
+
+  const filtered = tutorials.filter(t =>
+    t.title.toLowerCase().includes(search.toLowerCase()) ||
+    (t.description || "").toLowerCase().includes(search.toLowerCase()) ||
+    t.best_for_tags.some(tag => tag.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  function toggleExpand(id: string) {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function addTutorial() {
+    if (!addForm.title.trim()) return;
+    setAddSaving(true);
+    const steps = addForm.steps.filter(s => s.trim());
+    const pro_tips = addForm.pro_tips.filter(s => s.trim());
+    const best_for_tags = addForm.best_for_tags.split(",").map(s => s.trim()).filter(Boolean);
+    const { data, error } = await sb.from("tutorials").insert({
+      title: addForm.title.trim(),
+      description: addForm.description.trim() || null,
+      steps, pro_tips, best_for_tags,
+      difficulty: addForm.difficulty,
+      sort_order: tutorials.length + 1,
+      created_at: new Date().toISOString(),
+    }).select().single();
+    setAddSaving(false);
+    if (error) { console.error(error); return; }
+    setTutorials([...tutorials, data as Tutorial]);
+    setAddModal(false);
+    setAddForm({ title: "", description: "", steps: [""], pro_tips: [""], best_for_tags: "", difficulty: "Easy" });
+  }
+
+  async function deleteTutorial(id: string) {
+    if (!window.confirm("Delete this tutorial?")) return;
+    await sb.from("tutorials").delete().eq("id", id);
+    setTutorials(tutorials.filter(t => t.id !== id));
+  }
+
+  async function generate() {
+    if (!capForm.topic.trim()) return;
+    setGenerating(true); setCapError(""); setCapResult(null); setCapSaved(false);
+    try {
+      const res = await fetch("/api/ugc-caption-generator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(capForm),
+      });
+      const data = await res.json();
+      if (data.error) { setCapError(data.error); return; }
+      setCapResult({ ...data, video_topic: capForm.topic, goal: capForm.goal, id: "", creator_id: profile.id, generated_at: new Date().toISOString() });
+    } catch (e: any) { setCapError(e.message); }
+    finally { setGenerating(false); }
+  }
+
+  async function saveCaption() {
+    if (!capResult) return;
+    setCapSaving(true);
+    const { data, error } = await sb.from("saved_captions").insert({
+      creator_id: profile.id,
+      caption: capResult.caption,
+      alternate_caption: capResult.alternate_caption,
+      seo_note: capResult.seo_note,
+      hashtag_set_1: capResult.hashtag_set_1,
+      hashtag_set_2: capResult.hashtag_set_2,
+      posting_time: capResult.posting_time,
+      video_topic: capResult.video_topic,
+      goal: capResult.goal,
+      generated_at: new Date().toISOString(),
+    }).select().single();
+    setCapSaving(false);
+    if (error) { console.error(error); return; }
+    setSavedCaptions([data as SavedCaption, ...savedCaptions]);
+    setCapSaved(true);
+  }
+
+  function copy(text: string, key: string) {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key); setTimeout(() => setCopiedKey(null), 1500);
+  }
+
+  async function deleteCaption(id: string) {
+    await sb.from("saved_captions").delete().eq("id", id);
+    setSavedCaptions(savedCaptions.filter(c => c.id !== id));
+  }
+
+  const diffBadge = (d: string) => d === "Very Easy"
+    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+    : "bg-sky-50 text-sky-700 border-sky-200";
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-xl font-bold text-stone-800">Tutorial Library</h1>
+          <p className="text-sm text-stone-400 mt-0.5">Learn to film and edit entirely inside TikTok</p>
+        </div>
+        <div className="flex gap-1 bg-stone-100 p-1 rounded-xl">
+          <button onClick={() => setTab("guides")} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${tab === "guides" ? "bg-white shadow-sm text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>How To Guides</button>
+          <button onClick={() => setTab("captions")} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${tab === "captions" ? "bg-white shadow-sm text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Caption & Hashtag Generator</button>
+        </div>
+      </div>
+
+      {/* ── HOW TO GUIDES TAB ─────────────────────────────────────────────────── */}
+      {tab === "guides" && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search tutorials..."
+                className="w-full pl-8 pr-3 py-2 bg-white border border-stone-200 rounded-xl text-sm text-stone-800 focus:outline-none focus:border-stone-400" />
+            </div>
+            {isAdmin && <Btn onClick={() => setAddModal(true)}><Plus size={14} />Add Tutorial</Btn>}
+          </div>
+
+          {filtered.length === 0 ? (
+            <ES icon={<BookOpen size={24} />} message="No tutorials found" />
+          ) : (
+            filtered.map(t => {
+              const isOpen = expanded.has(t.id);
+              return (
+                <div key={t.id} className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
+                  <button onClick={() => toggleExpand(t.id)} className="w-full flex items-start gap-3 p-4 text-left hover:bg-stone-50 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <p className="text-sm font-semibold text-stone-800">{t.title}</p>
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${diffBadge(t.difficulty)}`}>{t.difficulty}</span>
+                      </div>
+                      {t.description && <p className="text-xs text-stone-500">{t.description}</p>}
+                      {!isOpen && t.best_for_tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {t.best_for_tags.map(tag => (
+                            <span key={tag} className="text-[10px] bg-stone-100 text-stone-500 px-2 py-0.5 rounded-full">{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isAdmin && (
+                        <button onClick={e => { e.stopPropagation(); deleteTutorial(t.id); }} className="p-1.5 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                      <ChevronDown size={16} className={`text-stone-400 transition-transform duration-200 ${isOpen ? "" : "-rotate-90"}`} />
+                    </div>
+                  </button>
+
+                  {isOpen && (
+                    <div className="px-4 pb-4 flex flex-col gap-4 border-t border-stone-100">
+                      {/* Steps */}
+                      <div className="flex flex-col gap-2 pt-3">
+                        <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Step by Step</p>
+                        {t.steps.map((step, i) => (
+                          <div key={i} className="flex items-start gap-3">
+                            <span className="text-xs font-bold text-stone-400 mt-0.5 w-5 shrink-0">{i + 1}.</span>
+                            <p className="text-sm text-stone-700 leading-snug">{step}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Pro Tips */}
+                      {t.pro_tips.length > 0 && (
+                        <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex flex-col gap-1.5">
+                          <p className="text-xs font-semibold text-amber-700 uppercase tracking-widest">Pro Tips</p>
+                          {t.pro_tips.map((tip, i) => (
+                            <div key={i} className="flex items-start gap-2">
+                              <span className="text-amber-500 mt-0.5 shrink-0">•</span>
+                              <p className="text-xs text-amber-800">{tip}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Best For */}
+                      {t.best_for_tags.length > 0 && (
+                        <div className="flex flex-col gap-1.5">
+                          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Best for Cloud Closet</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {t.best_for_tags.map(tag => (
+                              <span key={tag} className="text-xs bg-violet-50 text-violet-700 border border-violet-100 px-2.5 py-1 rounded-full">{tag}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* ── CAPTION & HASHTAG GENERATOR TAB ──────────────────────────────────── */}
+      {tab === "captions" && (
+        <div className="flex flex-col gap-4">
+          <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit">
+            <button onClick={() => setCapTab("generate")} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${capTab === "generate" ? "bg-white shadow-sm text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Generate</button>
+            <button onClick={() => setCapTab("history")} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${capTab === "history" ? "bg-white shadow-sm text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>History {myHistory.length > 0 && <span className="ml-1 text-xs bg-stone-200 text-stone-600 px-1.5 py-0.5 rounded-full">{myHistory.length}</span>}</button>
+          </div>
+
+          {capTab === "generate" && (
+            <>
+              <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+                <p className="text-sm font-medium text-stone-700">Tell us about your video and we&apos;ll generate a ready-to-post caption and hashtag set.</p>
+                <TI label="What is your video about?" value={capForm.topic} onChange={v => setCapForm({ ...capForm, topic: v })} placeholder="e.g. showing how I organize my Cloud Closet wardrobe by color" required />
+                <TI label="What is your hook?" value={capForm.hook} onChange={v => setCapForm({ ...capForm, hook: v })} placeholder="e.g. This is why your outfits look off (optional)" />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Sel label="Format" value={capForm.format} onChange={v => setCapForm({ ...capForm, format: v })} options={[
+                    { value: "talking head", label: "Talking Head" },
+                    { value: "green screen", label: "Green Screen" },
+                    { value: "voiceover", label: "Voiceover" },
+                    { value: "screen recording", label: "Screen Recording" },
+                    { value: "before/after", label: "Before & After" },
+                    { value: "text on screen", label: "Text on Screen" },
+                    { value: "carousel", label: "Carousel" },
+                  ]} />
+                  <Sel label="Goal" value={capForm.goal} onChange={v => setCapForm({ ...capForm, goal: v })} options={[
+                    { value: "get views", label: "Get Views" },
+                    { value: "get saves", label: "Get Saves" },
+                    { value: "get shares", label: "Get Shares" },
+                    { value: "get follows", label: "Get Follows" },
+                    { value: "get app downloads", label: "Get App Downloads" },
+                  ]} />
+                  <Sel label="Audience" value={capForm.audience} onChange={v => setCapForm({ ...capForm, audience: v })} options={[
+                    { value: "everyone", label: "Everyone" },
+                    { value: "fashion lovers", label: "Fashion Lovers" },
+                    { value: "college women", label: "College Women" },
+                    { value: "closet organizers", label: "Closet Organizers" },
+                    { value: "sustainable fashion", label: "Sustainable Fashion" },
+                    { value: "GRWM fans", label: "GRWM Fans" },
+                  ]} />
+                </div>
+                {capError && <p className="text-xs text-red-500">{capError}</p>}
+                <div className="flex justify-end">
+                  <Btn onClick={generate} disabled={generating || !capForm.topic.trim()}>
+                    {generating ? "Generating..." : capResult ? "↺ Regenerate" : "Generate"}
+                  </Btn>
+                </div>
+              </div>
+
+              {capResult && (
+                <div className="flex flex-col gap-3">
+                  {/* Primary Caption */}
+                  <div className="bg-white border border-stone-200/60 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Primary Caption</p>
+                      <button onClick={() => copy(capResult.caption || "", "cap1")} className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${copiedKey === "cap1" ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "border-stone-200 text-stone-500 hover:border-stone-400"}`}>
+                        {copiedKey === "cap1" ? "Copied!" : <><Copy size={11} className="inline mr-1"/>Copy</>}
+                      </button>
+                    </div>
+                    <p className="text-sm text-stone-800 leading-relaxed">{capResult.caption}</p>
+                  </div>
+
+                  {/* Alternate Caption */}
+                  <div className="bg-white border border-stone-200/60 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Alternate Caption</p>
+                      <button onClick={() => copy(capResult.alternate_caption || "", "cap2")} className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${copiedKey === "cap2" ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "border-stone-200 text-stone-500 hover:border-stone-400"}`}>
+                        {copiedKey === "cap2" ? "Copied!" : <><Copy size={11} className="inline mr-1"/>Copy</>}
+                      </button>
+                    </div>
+                    <p className="text-sm text-stone-800 leading-relaxed">{capResult.alternate_caption}</p>
+                  </div>
+
+                  {/* SEO Note */}
+                  {capResult.seo_note && (
+                    <div className="bg-sky-50 border border-sky-100 rounded-xl p-3">
+                      <p className="text-xs font-semibold text-sky-700 uppercase tracking-widest mb-1">SEO Tip</p>
+                      <p className="text-xs text-sky-800">{capResult.seo_note}</p>
+                    </div>
+                  )}
+
+                  {/* Hashtag Sets */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="bg-white border border-stone-200/60 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Hashtag Set 1</p>
+                        <button onClick={() => copy(capResult.hashtag_set_1 || "", "ht1")} className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${copiedKey === "ht1" ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "border-stone-200 text-stone-500 hover:border-stone-400"}`}>
+                          {copiedKey === "ht1" ? "Copied!" : <><Copy size={11} className="inline mr-1"/>Copy</>}
+                        </button>
+                      </div>
+                      <p className="text-sm text-violet-600 font-medium leading-relaxed">{capResult.hashtag_set_1}</p>
+                    </div>
+                    <div className="bg-white border border-stone-200/60 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Hashtag Set 2</p>
+                        <button onClick={() => copy(capResult.hashtag_set_2 || "", "ht2")} className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${copiedKey === "ht2" ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "border-stone-200 text-stone-500 hover:border-stone-400"}`}>
+                          {copiedKey === "ht2" ? "Copied!" : <><Copy size={11} className="inline mr-1"/>Copy</>}
+                        </button>
+                      </div>
+                      <p className="text-sm text-violet-600 font-medium leading-relaxed">{capResult.hashtag_set_2}</p>
+                    </div>
+                  </div>
+
+                  {/* Posting Time */}
+                  {capResult.posting_time && (
+                    <div className="bg-white border border-stone-200/60 rounded-xl p-4 flex items-center gap-3">
+                      <span className="text-lg">⏰</span>
+                      <div>
+                        <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Best Posting Window</p>
+                        <p className="text-sm font-medium text-stone-800">{capResult.posting_time}</p>
+                        <p className="text-xs text-stone-400 mt-0.5">Check your own TikTok analytics as your account grows for your personal best time</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Save button */}
+                  <div className="flex justify-end">
+                    <button onClick={saveCaption} disabled={capSaving || capSaved} className={`text-sm px-4 py-2 rounded-xl border transition-all font-medium ${capSaved ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "bg-stone-800 text-white border-stone-800 hover:bg-stone-700"}`}>
+                      {capSaved ? "Saved ✓" : capSaving ? "Saving..." : <><Bookmark size={13} className="inline mr-1.5"/>Save to History</>}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {capTab === "history" && (
+            <div className="flex flex-col gap-3">
+              {myHistory.length === 0 ? (
+                <ES icon={<FileText size={24} />} message="No saved captions yet — generate and save your first one" />
+              ) : (
+                myHistory.map(c => (
+                  <div key={c.id} className="bg-white border border-stone-200/60 rounded-xl p-4 group">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        {c.video_topic && <p className="text-sm font-semibold text-stone-800">{c.video_topic}</p>}
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          {c.goal && <span className="text-xs text-stone-400">{c.goal}</span>}
+                          <span className="text-xs text-stone-400">{fmt(c.generated_at)}</span>
+                        </div>
+                      </div>
+                      <button onClick={() => deleteCaption(c.id)} className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all shrink-0"><Trash2 size={12}/></button>
+                    </div>
+                    {c.caption && (
+                      <div className="flex items-start gap-2 mb-2">
+                        <p className="text-sm text-stone-700 flex-1 leading-relaxed">{c.caption}</p>
+                        <button onClick={() => copy(c.caption!, `hist-cap-${c.id}`)} className={`text-xs px-2 py-1 rounded-lg border shrink-0 transition-all ${copiedKey === `hist-cap-${c.id}` ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "border-stone-200 text-stone-400 hover:text-stone-600"}`}>
+                          {copiedKey === `hist-cap-${c.id}` ? "✓" : <Copy size={11}/>}
+                        </button>
+                      </div>
+                    )}
+                    {c.hashtag_set_1 && (
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-violet-600 flex-1">{c.hashtag_set_1}</p>
+                        <button onClick={() => copy(c.hashtag_set_1!, `hist-ht-${c.id}`)} className={`text-xs px-2 py-1 rounded-lg border shrink-0 transition-all ${copiedKey === `hist-ht-${c.id}` ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "border-stone-200 text-stone-400 hover:text-stone-600"}`}>
+                          {copiedKey === `hist-ht-${c.id}` ? "✓" : <Copy size={11}/>}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Add Tutorial Modal */}
+      <Md open={addModal} onClose={() => setAddModal(false)} title="Add Tutorial">
+        <div className="flex flex-col gap-3 max-h-[70vh] overflow-y-auto">
+          <TI label="Title" value={addForm.title} onChange={v => setAddForm({ ...addForm, title: v })} required />
+          <TI label="Short Description (one line)" value={addForm.description} onChange={v => setAddForm({ ...addForm, description: v })} />
+          <Sel label="Difficulty" value={addForm.difficulty} onChange={v => setAddForm({ ...addForm, difficulty: v })} options={[
+            { value: "Very Easy", label: "Very Easy" },
+            { value: "Easy", label: "Easy" },
+            { value: "Intermediate", label: "Intermediate" },
+          ]} />
+          <div>
+            <label className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">Steps</label>
+            {addForm.steps.map((step, i) => (
+              <div key={i} className="flex items-center gap-2 mb-2">
+                <span className="text-xs text-stone-400 w-5 shrink-0">{i + 1}.</span>
+                <input value={step} onChange={e => { const s = [...addForm.steps]; s[i] = e.target.value; setAddForm({ ...addForm, steps: s }); }}
+                  className="flex-1 px-3 py-2 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
+                  placeholder={`Step ${i + 1}`} />
+                {addForm.steps.length > 1 && (
+                  <button onClick={() => setAddForm({ ...addForm, steps: addForm.steps.filter((_, j) => j !== i) })} className="text-stone-300 hover:text-red-500 transition-colors"><X size={14}/></button>
+                )}
+              </div>
+            ))}
+            <button onClick={() => setAddForm({ ...addForm, steps: [...addForm.steps, ""] })} className="text-xs text-stone-400 hover:text-stone-600 flex items-center gap-1 mt-1"><Plus size={12}/>Add Step</button>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">Pro Tips</label>
+            {addForm.pro_tips.map((tip, i) => (
+              <div key={i} className="flex items-center gap-2 mb-2">
+                <input value={tip} onChange={e => { const s = [...addForm.pro_tips]; s[i] = e.target.value; setAddForm({ ...addForm, pro_tips: s }); }}
+                  className="flex-1 px-3 py-2 border border-stone-200 rounded-lg text-sm focus:outline-none focus:border-stone-400"
+                  placeholder={`Tip ${i + 1}`} />
+                {addForm.pro_tips.length > 1 && (
+                  <button onClick={() => setAddForm({ ...addForm, pro_tips: addForm.pro_tips.filter((_, j) => j !== i) })} className="text-stone-300 hover:text-red-500 transition-colors"><X size={14}/></button>
+                )}
+              </div>
+            ))}
+            <button onClick={() => setAddForm({ ...addForm, pro_tips: [...addForm.pro_tips, ""] })} className="text-xs text-stone-400 hover:text-stone-600 flex items-center gap-1 mt-1"><Plus size={12}/>Add Tip</button>
+          </div>
+          <TI label="Best For Tags (comma separated)" value={addForm.best_for_tags} onChange={v => setAddForm({ ...addForm, best_for_tags: v })} placeholder="App walkthroughs, Outfit reactions" />
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="secondary" onClick={() => setAddModal(false)}>Cancel</Btn>
+            <Btn onClick={addTutorial} disabled={!addForm.title.trim() || addSaving}>{addSaving ? "Saving..." : "Add Tutorial"}</Btn>
           </div>
         </div>
       </Md>
@@ -6939,6 +7380,8 @@ export default function DashboardPage() {
   const [wisconsinReports, setWisconsinReports] = useState<WisconsinReport[]>([]);
   const [carolineSavedIdeas, setCarolineSavedIdeas] = useState<CarolineSavedIdea[]>([]);
   const [carolineHookBank, setCarolineHookBank] = useState<CarolineHook[]>([]);
+  const [tutorials, setTutorials] = useState<Tutorial[]>([]);
+  const [savedCaptions, setSavedCaptions] = useState<SavedCaption[]>([]);
   const [briefSeenAt, setBriefSeenAt] = useState(() => parseInt(typeof window !== "undefined" ? (localStorage.getItem("ugc_brief_seen") || "0") : "0"));
   const [qaSeenAt, setQaSeenAt] = useState(() => parseInt(typeof window !== "undefined" ? (localStorage.getItem("ugc_qa_seen") || "0") : "0"));
   const [pivotSeenAt, setPivotSeenAt] = useState(() => parseInt(typeof window !== "undefined" ? (localStorage.getItem("ugc_pivots_seen") || "0") : "0"));
@@ -7003,6 +7446,7 @@ export default function DashboardPage() {
           { data: ugcCrD }, { data: ugcSubD }, { data: ugcPqD }, { data: ugcPvD },
           { data: ugcHkD }, { data: ugcBrD }, { data: ugcAnD }, { data: ugcQsD },
           { data: ugcResD }, { data: alertsD }, { data: savedHkD },
+          { data: tutorialsD }, { data: savedCapsD },
         ] = await Promise.all([
           supabase.from("profiles").select("*").eq("role", "ugc_creator").order("full_name"),
           (prof.role === "admin" || prof.role === "director")
@@ -7023,6 +7467,10 @@ export default function DashboardPage() {
           prof.role === "admin"
             ? supabase.from("saved_hooks").select("*").order("saved_at", { ascending: false })
             : supabase.from("saved_hooks").select("*").eq("creator_id", prof.id).order("saved_at", { ascending: false }),
+          supabase.from("tutorials").select("*").order("sort_order").order("created_at"),
+          prof.role === "admin"
+            ? supabase.from("saved_captions").select("*").order("generated_at", { ascending: false })
+            : supabase.from("saved_captions").select("*").eq("creator_id", prof.id).order("generated_at", { ascending: false }),
         ]);
         setUGCCreators((ugcCrD || []) as UGCCreatorProfile[]);
         setUGCSubmissions((ugcSubD || []) as UGCSubmission[]);
@@ -7035,6 +7483,8 @@ export default function DashboardPage() {
         setUGCResources((ugcResD || []) as UGCResource[]);
         setSmartAlerts((alertsD || []) as SmartAlert[]);
         setSavedHooks((savedHkD || []) as SavedHook[]);
+        setTutorials((tutorialsD || []) as Tutorial[]);
+        setSavedCaptions((savedCapsD || []) as SavedCaption[]);
 
         // Brief comments (for director and admin)
         if (prof.role === "admin" || prof.role === "director") {
@@ -7126,6 +7576,7 @@ export default function DashboardPage() {
     { id: "ugc_pivots",         icon: <TrendingUp size={16}/>,      label: "My Pivots",       badge: newPivotCount || null },
     { id: "ugc_weekly_brief",   icon: <FileText size={16}/>,        label: "Weekly Brief",    badge: newBriefCount || null },
     { id: "ugc_hook_generator", icon: <Zap size={16}/>,             label: "Hook Generator" },
+    { id: "ugc_tutorials",      icon: <BookOpen size={16}/>,        label: "Tutorial Library" },
     { id: "ugc_leaderboard",    icon: <Trophy size={16}/>,          label: "Leaderboard" },
     { id: "ugc_qa",             icon: <MessageCircle size={16}/>,   label: "Community Q&A",   badge: newQACount || null },
     { id: "ugc_history",        icon: <FileText size={16}/>,        label: "Submission History" },
@@ -7180,6 +7631,7 @@ export default function DashboardPage() {
         { id: "ugc_qa",                  icon: <MessageCircle size={16}/>,label: "Creator Q&A" },
         { id: "ugc_hook_generator",      icon: <Zap size={16}/>,          label: "Hook Generator" },
         { id: "ugc_hooks",               icon: <Bookmark size={16}/>,     label: "Hook Library" },
+        { id: "ugc_tutorials",           icon: <BookOpen size={16}/>,     label: "Tutorial Library" },
         { id: "ugc_leaderboard",         icon: <Trophy size={16}/>,       label: "Leaderboard" },
       ],
     },
@@ -7309,6 +7761,7 @@ export default function DashboardPage() {
       case "ugc_weekly_brief":          return isUGC ? <CreatorWeeklyBriefPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} sb={supabase}/> : null;
       case "ugc_history":       return (isFullAdmin || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_resources":     return (isFullAdmin || isUGC) ? <UGCResourcesPage profile={p as UGCCreatorProfile} resources={ugcResources} setResources={setUGCResources} sb={supabase}/> : null;
+      case "ugc_tutorials":     return (isFullAdmin || isUGC) ? <TutorialLibraryPage profile={p as UGCCreatorProfile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={supabase}/> : null;
       // Admin-only UGC pages (no access for wisconsin_admin)
       case "ugc_creators":      return isFullAdmin ? <UGCCreatorMgmtPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} smartAlerts={smartAlerts} sb={supabase}/> : null;
       case "ugc_pivot_queue":   return isFullAdmin ? <UGCPivotQueuePage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} ugcCreators={ugcCreators} sb={supabase}/> : null;
