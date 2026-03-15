@@ -754,6 +754,7 @@ function RPg({ profile, interns, reports, setReports, sb, addActivity, settings 
     if(error){console.error(error);return;}
     setReports([data,...reports]);
     addActivity({user_id:profile.id,user_name:profile.full_name,activity:"report_submitted",metadata:{week:form.week_of}});
+    fetch("/api/send-notification",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"admin",title:"New Analytics Report 📊",body:`${profile.full_name} just submitted their week of ${form.week_of} analytics report.`})}).catch(()=>{});
     setModal(false);setReportFile(null);setCustomData({});
     setForm({week_of:"",tasks_completed:"",outreach_sent:"",responses_received:"",wins:"",challenges:"",ideas:""});
   }

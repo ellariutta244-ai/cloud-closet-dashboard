@@ -1,17 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getMessaging } from 'firebase-admin/messaging';
 
 const SUPABASE_URL = 'https://gfdurfdqrhjzxjperknw.supabase.co';
-
-function getAdminApp() {
-  if (getApps().length > 0) return getApps()[0];
-  const b64 = process.env.FIREBASE_SA_BASE64;
-  if (!b64) throw new Error('FIREBASE_SA_BASE64 not configured');
-  const sa = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
-  return initializeApp({ credential: cert(sa) });
-}
 
 function getMondayOfWeek(d: Date): string {
   const date = new Date(d);
@@ -21,37 +11,25 @@ function getMondayOfWeek(d: Date): string {
   return date.toISOString().split('T')[0];
 }
 
-async function sendAdminPush(supabase: any, title: string, body: string) {
+async function sendAdminPush(title: string, body: string) {
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://cloud-closet-ops.vercel.app';
   try {
-    const { data: adminTokens } = await supabase
-      .from('fcm_tokens')
-      .select('token, profiles!inner(role)')
-      .eq('profiles.role', 'admin');
-    const tokens = Array.from(new Set<string>((adminTokens || []).map((r: any) => r.token as string).filter((t: string) => !!t)));
-    const app = getAdminApp();
-    const messaging = getMessaging(app);
-    for (const token of tokens) {
-      try {
-        await messaging.send({ token, webpush: { notification: { title: 'Cloud Closet Dashboard', body: `${title} — ${body}`, icon: '/icon-192.png' }, headers: { Urgency: 'normal' } } });
-      } catch {}
-    }
+    await fetch(`${baseUrl}/api/send-notification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'admin', title, body }),
+    });
   } catch {}
 }
 
-async function sendCreatorPush(supabase: any, creatorId: string, title: string, body: string) {
+async function sendCreatorPush(_supabase: any, userId: string, title: string, body: string) {
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://cloud-closet-ops.vercel.app';
   try {
-    const { data: rows } = await supabase
-      .from('fcm_tokens')
-      .select('token')
-      .eq('user_id', creatorId);
-    const tokens = Array.from(new Set<string>((rows || []).map((r: any) => r.token as string).filter((t: string) => !!t)));
-    const app = getAdminApp();
-    const messaging = getMessaging(app);
-    for (const token of tokens) {
-      try {
-        await messaging.send({ token, webpush: { notification: { title: 'Cloud Closet Dashboard', body: `${title} — ${body}`, icon: '/icon-192.png' }, headers: { Urgency: 'high' } } });
-      } catch {}
-    }
+    await fetch(`${baseUrl}/api/send-notification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, title, body }),
+    });
   } catch {}
 }
 
@@ -106,7 +84,7 @@ export async function GET(req: NextRequest) {
         // Alert admin
         const msg = `${creator.full_name} has not submitted their Friday analytics yet.`;
         await createAlert(supabase, creator.id, 'missed_submission', msg, 'red', currentWeek);
-        await sendAdminPush(supabase, '⚠️ Missed Submission', msg);
+        await sendAdminPush('⚠️ Missed Submission', msg);
         results.push(`missed_submission: ${creator.full_name}`);
       }
     }
@@ -121,7 +99,7 @@ export async function GET(req: NextRequest) {
       if (isInactive) {
         const msg = `${creator.full_name} hasn't logged into the dashboard in 7+ days — check in with them.`;
         await createAlert(supabase, creator.id, 'creator_inactive', msg, 'yellow', currentWeek);
-        await sendAdminPush(supabase, '👻 Creator Inactive', msg);
+        await sendAdminPush('👻 Creator Inactive', msg);
         results.push(`creator_inactive: ${creator.full_name}`);
       }
     }
