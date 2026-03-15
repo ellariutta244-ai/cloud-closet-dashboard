@@ -2136,7 +2136,7 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
   const [generatingAll, setGeneratingAll] = useState(false);
-  const [generateResult, setGenerateResult] = useState<{ generated: number; skipped: number; errors: number } | null>(null);
+  const [generateResult, setGenerateResult] = useState<{ generated: number; skipped: number; errors: number; firstError?: string } | null>(null);
   const [samplePlans, setSamplePlans] = useState<WeeklyPlan[] | null>(null);
   const currentWeek = getMondayOfWeek(new Date());
 
@@ -2274,6 +2274,7 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
     setGeneratingAll(true);
     setGenerateResult(null);
     let generated = 0, skipped = 0, errors = 0;
+    let firstError: string | undefined;
     for (const creator of activeCreators) {
       try {
         const res = await fetch("/api/ugc-weekly-plan", {
@@ -2284,13 +2285,13 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
         const json = await res.json();
         if (json.exists) skipped++;
         else if (json.success) generated++;
-        else errors++;
-      } catch { errors++; }
+        else { errors++; if (!firstError) firstError = json.error ?? `HTTP ${res.status}`; }
+      } catch (e: any) { errors++; if (!firstError) firstError = e.message; }
     }
     // Refresh plans from DB
     const { data } = await sb.from("weekly_plans").select("*").order("week_date", { ascending: false });
     if (data) setWeeklyPlans(data as WeeklyPlan[]);
-    setGenerateResult({ generated, skipped, errors });
+    setGenerateResult({ generated, skipped, errors, firstError });
     setGeneratingAll(false);
   }
 
@@ -2340,11 +2341,14 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
             </div>
           )}
           {generateResult && (
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${generateResult.errors > 0 ? "bg-amber-50 border border-amber-200 text-amber-700" : "bg-emerald-50 border border-emerald-200 text-emerald-700"}`}>
-              {generateResult.generated > 0 && <span>{generateResult.generated} plan{generateResult.generated !== 1 ? "s" : ""} generated</span>}
-              {generateResult.skipped > 0 && <span>· {generateResult.skipped} already existed</span>}
-              {generateResult.errors > 0 && <span>· {generateResult.errors} error{generateResult.errors !== 1 ? "s" : ""}</span>}
-              <button onClick={() => setGenerateResult(null)} className="ml-auto text-stone-400 hover:text-stone-600">×</button>
+            <div className={`flex flex-col gap-1 px-3 py-2 rounded-lg text-xs ${generateResult.errors > 0 ? "bg-amber-50 border border-amber-200 text-amber-700" : "bg-emerald-50 border border-emerald-200 text-emerald-700"}`}>
+              <div className="flex items-center gap-2">
+                {generateResult.generated > 0 && <span>{generateResult.generated} plan{generateResult.generated !== 1 ? "s" : ""} generated</span>}
+                {generateResult.skipped > 0 && <span>· {generateResult.skipped} already existed</span>}
+                {generateResult.errors > 0 && <span>· {generateResult.errors} error{generateResult.errors !== 1 ? "s" : ""}</span>}
+                <button onClick={() => setGenerateResult(null)} className="ml-auto text-stone-400 hover:text-stone-600">×</button>
+              </div>
+              {generateResult.firstError && <span className="text-stone-500 font-mono">{generateResult.firstError}</span>}
             </div>
           )}
 
