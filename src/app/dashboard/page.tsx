@@ -5054,8 +5054,8 @@ function UGCPivotHistoryPage({ profile, pivots, setPivots, ugcCreators, sb }: {
 }
 
 // ── UGC Analytics Overview (admin) ────────────────────────────────────────────
-function UGCAnalyticsOverview({ submissions, ugcCreators, pivotQueue, smartAlerts }: {
-  submissions: UGCSubmission[]; ugcCreators: UGCCreatorProfile[]; pivotQueue: UGCPivotQueue[]; smartAlerts?: SmartAlert[];
+function UGCAnalyticsOverview({ submissions, setSubmissions, ugcCreators, pivotQueue, smartAlerts, sb }: {
+  submissions: UGCSubmission[]; setSubmissions?: (s: UGCSubmission[]) => void; ugcCreators: UGCCreatorProfile[]; pivotQueue: UGCPivotQueue[]; smartAlerts?: SmartAlert[]; sb?: any;
 }) {
   const currentWeek = getMondayOfWeek(new Date());
   const activeCreatorIds = new Set(ugcCreators.filter(c => c.ugc_status !== "archived").map(c => c.id));
@@ -5073,6 +5073,14 @@ function UGCAnalyticsOverview({ submissions, ugcCreators, pivotQueue, smartAlert
 
   const [c1, setC1] = useState("");
   const [c2, setC2] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  async function deleteSub(id: string) {
+    if (!sb || !setSubmissions) return;
+    await sb.from("ugc_submissions").delete().eq("id", id);
+    setSubmissions(submissions.filter(s => s.id !== id));
+    setConfirmDelete(null);
+  }
 
   const creatorGraphData = (creatorId: string) => {
     const subs = submissions.filter(s => s.creator_id === creatorId)
@@ -5148,9 +5156,10 @@ function UGCAnalyticsOverview({ submissions, ugcCreators, pivotQueue, smartAlert
               <th className="text-left py-2 pr-4 text-stone-400 font-medium">Week</th>
               <th className="text-center py-2 px-2 text-stone-400 font-medium">Views</th>
               <th className="text-center py-2 px-2 text-stone-400 font-medium">Tier</th>
+              <th className="py-2 w-8"></th>
             </tr></thead>
             <tbody>
-              {[...submissions].sort((a, b) => b.week_date.localeCompare(a.week_date)).slice(0, 20).map(s => {
+              {[...submissions].sort((a, b) => b.week_date.localeCompare(a.week_date)).map(s => {
                 const creator = ugcCreators.find(c => c.id === s.creator_id);
                 return (
                 <tr key={s.id} className="border-b border-stone-50 hover:bg-stone-50">
@@ -5161,6 +5170,16 @@ function UGCAnalyticsOverview({ submissions, ugcCreators, pivotQueue, smartAlert
                   <td className="py-2 pr-4 text-stone-500">{s.week_date}</td>
                   <td className="py-2 px-2 text-center font-semibold text-stone-700">{fmtViews(s.total_views)}</td>
                   <td className="py-2 px-2 text-center"><BenchmarkBadge tier={s.benchmark_tier} /></td>
+                  <td className="py-2 text-right">
+                    {confirmDelete === s.id ? (
+                      <div className="flex items-center gap-1 justify-end">
+                        <button onClick={() => setConfirmDelete(null)} className="px-2 py-0.5 rounded border border-stone-200 text-stone-400 hover:bg-stone-50">Cancel</button>
+                        <button onClick={() => deleteSub(s.id)} className="px-2 py-0.5 rounded bg-red-500 text-white hover:bg-red-600">Delete</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setConfirmDelete(s.id)} className="p-1 rounded text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={12}/></button>
+                    )}
+                  </td>
                 </tr>
                 );
               })}
@@ -7156,7 +7175,7 @@ export default function DashboardPage() {
       // Admin-only UGC pages
       case "ugc_creators":      return isAdmin ? <UGCCreatorMgmtPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} smartAlerts={smartAlerts} sb={supabase}/> : null;
       case "ugc_pivot_queue":   return isAdmin ? <UGCPivotQueuePage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} ugcCreators={ugcCreators} sb={supabase}/> : null;
-      case "ugc_analytics":     return isAdmin ? <UGCAnalyticsOverview submissions={ugcSubmissions} ugcCreators={ugcCreators} pivotQueue={ugcPivotQueue} smartAlerts={smartAlerts}/> : null;
+      case "ugc_analytics":     return isAdmin ? <UGCAnalyticsOverview submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} pivotQueue={ugcPivotQueue} smartAlerts={smartAlerts} sb={supabase}/> : null;
       case "ugc_pivot_history": return isAdmin ? <UGCPivotHistoryPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_brief":         return isAdmin ? <UGCBriefPage briefs={ugcBriefs} setBriefs={setUGCBriefs} sb={supabase}/> : null;
       case "director_home":      return isDirector ? <DirectorDash profile={profile!} events={events} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} ugcBriefs={ugcBriefs} smartAlerts={smartAlerts} reports={reports} outreach={outreach} ugcHooks={ugcHooks} settings={settings} setPage={setPage} sb={supabase}/> : null;
