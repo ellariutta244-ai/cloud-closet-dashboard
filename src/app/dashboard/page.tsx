@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Role = "admin" | "intern" | "ugc_creator";
+type Role = "admin" | "intern" | "ugc_creator" | "director";
 type Profile = { id: string; full_name: string; email: string; role: Role; team?: string; active?: boolean };
 type Task = { id: string; title: string; description?: string; assigned_to?: string; category?: string; priority?: string; status: string; due_date?: string; created_at: string; completed_at?: string };
 type Outreach = { id: string; intern_id?: string; brand_or_creator: string; platform?: string; contact_name?: string; date_contacted?: string; status: string; notes?: string; created_at: string };
@@ -2471,6 +2471,7 @@ type UGCPivot = { id: string; creator_id?: string; queue_id?: string; week_date:
 type UGCHook = { id: string; hook_text: string; view_count?: number; week_date?: string; creator_id?: string; admin_notes?: string; pushed_to?: string; push_note?: string; video_topic?: string; format_type?: string; goal?: string; audience?: string; save_count?: number; created_at: string };
 type SavedHook = { id: string; creator_id?: string; hook_text: string; video_topic?: string; format_type?: string; goal?: string; audience?: string; saved_at: string };
 type UGCBrief = { id: string; week_date: string; hooks?: string; format_recs?: string; brand_guidelines?: string; created_at: string };
+type BriefComment = { id: string; brief_id: string; author_id: string; author_name: string; body: string; created_at: string };
 type UGCAnnouncement = { id: string; title: string; body?: string; pinned?: boolean; created_at: string };
 type UGCResource = { id: string; title: string; description?: string; category?: string; file_url?: string; link?: string; created_at: string };
 type UGCQuestion = { id: string; creator_id?: string; question: string; created_at: string; ugc_qa_replies?: UGCReply[] };
@@ -4760,6 +4761,373 @@ function UGCBriefPage({ briefs, setBriefs, sb }: {
   );
 }
 
+// ── Director Dashboard (home) ──────────────────────────────────────────────────
+function DirectorDash({ profile, events, ugcSubmissions, ugcCreators, ugcBriefs, smartAlerts, reports, outreach, ugcHooks, settings, setPage, sb }: {
+  profile: Profile; events: CCEvent[]; ugcSubmissions: UGCSubmission[];
+  ugcCreators: UGCCreatorProfile[]; ugcBriefs: UGCBrief[]; smartAlerts: SmartAlert[];
+  reports: Report[]; outreach: Outreach[]; ugcHooks: UGCHook[]; settings: AppSettings;
+  setPage: (p: string) => void; sb: any;
+}) {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const first = profile.full_name?.split(" ")[0] || "Caroline";
+  const currentWeek = getMondayOfWeek(new Date());
+
+  // This week at a glance
+  const thisWeekSubs = ugcSubmissions.filter(s => s.week_date === currentWeek);
+  const totalViews = thisWeekSubs.reduce((s, x) => s + x.total_views, 0);
+  const submittedCount = new Set(thisWeekSubs.map(s => s.creator_id)).size;
+  const topSub = [...thisWeekSubs].sort((a, b) => b.total_views - a.total_views)[0];
+  const topCreatorName = topSub ? ugcCreators.find(c => c.id === topSub.creator_id)?.full_name || "—" : "—";
+
+  // Hook of the week
+  const hookOfWeekId = settings["hook_of_week"];
+  const hookOfWeek = ugcHooks.find(h => h.id === hookOfWeekId);
+
+  // Upcoming events (next 3 future events)
+  const today = new Date().toISOString().split("T")[0];
+  const upcomingEvents = [...events]
+    .filter(e => e.date && e.date >= today && e.status !== "cancelled")
+    .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
+    .slice(0, 3);
+
+  // Current week's brief
+  const currentBrief = ugcBriefs[0];
+
+  // Action items — red/orange alerts only, max 5
+  const actionAlerts = smartAlerts
+    .filter(a => !a.dismissed && ["red", "orange"].includes(a.urgency))
+    .slice(0, 5);
+
+  const eventTypeColor: Record<string, string> = {
+    planning: "#F59E0B", upcoming: "#8B5CF6", completed: "#10B981", cancelled: "#EF4444",
+  };
+
+  // suppress unused sb warning
+  void sb;
+  void reports;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-xl font-bold text-stone-800">{greeting}, {first}</h1>
+        <p className="text-sm text-stone-400 mt-0.5">Here&apos;s what&apos;s happening this week</p>
+      </div>
+
+      {/* This week at a glance */}
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+        <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-4">This Week at a Glance</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-stone-50 rounded-xl p-3 text-center">
+            <p className="text-xs text-stone-400 mb-1">Total UGC Views</p>
+            <p className="text-xl font-bold text-stone-800">{fmtViews(totalViews)}</p>
+          </div>
+          <div className="bg-stone-50 rounded-xl p-3 text-center">
+            <p className="text-xs text-stone-400 mb-1">Creators Submitted</p>
+            <p className="text-xl font-bold text-stone-800">{submittedCount}</p>
+          </div>
+          <div className="bg-stone-50 rounded-xl p-3 text-center">
+            <p className="text-xs text-stone-400 mb-1">Top Creator</p>
+            <p className="text-sm font-bold text-stone-800 truncate">{topCreatorName}</p>
+          </div>
+          <div className="bg-stone-50 rounded-xl p-3 text-center">
+            <p className="text-xs text-stone-400 mb-1">Hook of the Week</p>
+            <p className="text-xs font-medium text-stone-700 line-clamp-2">{hookOfWeek ? hookOfWeek.hook_text : "—"}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Upcoming events */}
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Upcoming Events</p>
+            <button onClick={() => setPage("director_calendar")} className="text-xs text-stone-400 hover:text-stone-700 flex items-center gap-1 transition-colors">View all<ChevronRight size={12}/></button>
+          </div>
+          {upcomingEvents.length === 0 ? (
+            <p className="text-xs text-stone-400 italic">No upcoming events</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {upcomingEvents.map(e => (
+                <div key={e.id} className="flex items-start gap-3">
+                  <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ background: eventTypeColor[e.status] || "#D1D5DB" }} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-stone-800 truncate">{e.title}</p>
+                    <p className="text-xs text-stone-400">{e.date}{e.time ? ` · ${e.time}` : ""}{e.location ? ` · ${e.location}` : ""}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Weekly brief */}
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Current Brief — {currentBrief?.week_date || currentWeek}</p>
+            <button onClick={() => setPage("director_brief")} className="text-xs text-stone-400 hover:text-stone-700 flex items-center gap-1 transition-colors">Read more<ChevronRight size={12}/></button>
+          </div>
+          {currentBrief ? (
+            <div className="flex flex-col gap-2">
+              {currentBrief.hooks && <div><p className="text-xs text-stone-400 uppercase tracking-widest mb-0.5">Hooks</p><p className="text-xs text-stone-700 line-clamp-2 whitespace-pre-wrap">{currentBrief.hooks}</p></div>}
+              {currentBrief.format_recs && <div><p className="text-xs text-stone-400 uppercase tracking-widest mb-0.5">Format</p><p className="text-xs text-stone-700 line-clamp-2 whitespace-pre-wrap">{currentBrief.format_recs}</p></div>}
+            </div>
+          ) : (
+            <p className="text-xs text-stone-400 italic">No brief published yet for this week</p>
+          )}
+        </div>
+      </div>
+
+      {/* Action items */}
+      {actionAlerts.length > 0 && (
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Action Items</p>
+          <div className="flex flex-col gap-2">
+            {actionAlerts.map(alert => (
+              <div key={alert.id} className="flex items-start gap-3 p-3 rounded-xl" style={{
+                background: alert.urgency === "red" ? "#FEF2F2" : "#FFF7ED",
+                border: `1px solid ${alert.urgency === "red" ? "#FECACA" : "#FED7AA"}`,
+              }}>
+                <span className="text-sm flex-shrink-0">{alert.urgency === "red" ? "🔴" : "🟠"}</span>
+                <p className="text-sm text-stone-700">{alert.message}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Director Analytics ─────────────────────────────────────────────────────────
+function DirectorAnalyticsPage({ ugcSubmissions, ugcCreators, reports, outreach }: {
+  ugcSubmissions: UGCSubmission[]; ugcCreators: UGCCreatorProfile[];
+  reports: Report[]; outreach: Outreach[];
+}) {
+  const currentWeek = getMondayOfWeek(new Date());
+  const thisWeekSubs = ugcSubmissions.filter(s => s.week_date === currentWeek);
+  const totalViewsThisWeek = thisWeekSubs.reduce((s, x) => s + x.total_views, 0);
+  const totalViewsAllTime = ugcSubmissions.reduce((s, x) => s + x.total_views, 0);
+
+  // Leaderboard this week
+  const leaderboard = thisWeekSubs
+    .map(s => ({ creator: ugcCreators.find(c => c.id === s.creator_id), views: s.total_views }))
+    .filter(x => x.creator)
+    .sort((a, b) => b.views - a.views)
+    .slice(0, 5);
+  const medals = ["🥇", "🥈", "🥉"];
+
+  // Benchmark distribution
+  const tierCounts = useMemo(() => {
+    const m: Record<string, number> = {};
+    ugcSubmissions.forEach(s => { if (s.benchmark_tier) m[s.benchmark_tier] = (m[s.benchmark_tier] || 0) + 1; });
+    return m;
+  }, [ugcSubmissions]);
+
+  // Week-over-week trend (last 8 weeks)
+  const weeks = useMemo(() => {
+    const wSet = new Set(ugcSubmissions.map(s => s.week_date));
+    return [...wSet].sort().slice(-8);
+  }, [ugcSubmissions]);
+  const trendData = weeks.map(w => ugcSubmissions.filter(s => s.week_date === w).reduce((s, x) => s + x.total_views, 0));
+  const trendLabels = weeks.map(w => w.slice(5));
+
+  // Wisconsin intern summary
+  const currentMonday = currentWeek;
+  const reportsThisWeek = reports.filter(r => r.week_of === currentMonday).length;
+  const outreachThisWeek = outreach.filter(o => o.date_contacted && o.date_contacted >= currentMonday).length;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-xl font-bold text-stone-800">Analytics Overview</h1>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <SC label="Views This Week" value={fmtViews(totalViewsThisWeek)} />
+        <SC label="Total Views" value={fmtViews(totalViewsAllTime)} />
+        <SC label="Submissions This Week" value={thisWeekSubs.length} />
+        <SC label="Active Creators" value={ugcCreators.filter(c => c.active !== false).length} />
+      </div>
+
+      {/* Week-over-week trend */}
+      {trendData.length > 1 && (
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <p className="text-sm font-semibold text-stone-700 mb-4">Views Week over Week</p>
+          <LineGraph data={trendData} labels={trendLabels} />
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Leaderboard */}
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <p className="text-sm font-semibold text-stone-700 mb-4">This Week&apos;s Leaderboard</p>
+          {leaderboard.length === 0 ? <ES message="No submissions yet this week" /> : (
+            <div className="flex flex-col gap-2">
+              {leaderboard.map((entry, i) => (
+                <div key={entry.creator!.id} className="flex items-center gap-3 p-2 rounded-lg bg-stone-50">
+                  <span className="text-lg w-7 text-center">{i < 3 ? medals[i] : <span className="text-sm font-bold text-stone-400">{i + 1}</span>}</span>
+                  <Av name={entry.creator!.full_name} size={28} />
+                  <span className="text-sm font-medium text-stone-800 flex-1 truncate">{entry.creator!.full_name}</span>
+                  <span className="text-sm font-bold text-stone-700">{fmtViews(entry.views)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Benchmark distribution */}
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <p className="text-sm font-semibold text-stone-700 mb-4">Benchmark Breakdown</p>
+          <div className="flex flex-col gap-2">
+            {[["viral", "Viral 🔥", "#7C3AED"], ["strong", "Strong", "#059669"], ["good", "Good", "#3B82F6"], ["average", "Average", "#F59E0B"], ["hook_failed", "Hook Failed", "#EF4444"]].map(([tier, label, color]) => (
+              <div key={tier} className="flex items-center gap-3">
+                <span className="text-xs font-medium text-stone-600 w-24">{label}</span>
+                <div className="flex-1 bg-stone-100 rounded-full h-2">
+                  <div className="h-2 rounded-full transition-all" style={{ width: `${ugcSubmissions.length > 0 ? Math.round(((tierCounts[tier] || 0) / ugcSubmissions.length) * 100) : 0}%`, background: color }} />
+                </div>
+                <span className="text-xs text-stone-500 w-8 text-right">{tierCounts[tier] || 0}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Wisconsin intern summary */}
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+        <p className="text-sm font-semibold text-stone-700 mb-4">Wisconsin Intern Activity — This Week</p>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-stone-50 rounded-xl p-3 text-center">
+            <p className="text-xs text-stone-400 mb-1">Outreach Logged</p>
+            <p className="text-xl font-bold text-stone-800">{outreachThisWeek}</p>
+          </div>
+          <div className="bg-stone-50 rounded-xl p-3 text-center">
+            <p className="text-xs text-stone-400 mb-1">Reports Submitted</p>
+            <p className="text-xl font-bold text-stone-800">{reportsThisWeek}</p>
+          </div>
+          <div className="bg-stone-50 rounded-xl p-3 text-center">
+            <p className="text-xs text-stone-400 mb-1">Total Outreach</p>
+            <p className="text-xl font-bold text-stone-800">{outreach.length}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Director Weekly Brief ──────────────────────────────────────────────────────
+function DirectorWeeklyBriefPage({ profile, ugcBriefs, briefComments, setBriefComments, sb }: {
+  profile: Profile; ugcBriefs: UGCBrief[]; briefComments: BriefComment[];
+  setBriefComments: (c: BriefComment[]) => void; sb: any;
+}) {
+  const [selectedBriefId, setSelectedBriefId] = useState<string | null>(ugcBriefs[0]?.id || null);
+  const [commentText, setCommentText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const selectedBrief = ugcBriefs.find(b => b.id === selectedBriefId) || ugcBriefs[0] || null;
+  const briefCommentsList = briefComments.filter(c => c.brief_id === selectedBrief?.id)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  async function postComment() {
+    if (!commentText.trim() || !selectedBrief) return;
+    setSaving(true);
+    const { data, error } = await sb.from("brief_comments").insert({
+      brief_id: selectedBrief.id,
+      author_id: profile.id,
+      author_name: profile.full_name,
+      body: commentText.trim(),
+      created_at: new Date().toISOString(),
+    }).select().single();
+    setSaving(false);
+    if (error) { console.error(error); return; }
+    setBriefComments([...(briefComments || []), data as BriefComment]);
+    setCommentText("");
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-xl font-bold text-stone-800">Weekly Brief</h1>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Brief list sidebar */}
+        <div className="lg:col-span-1">
+          <div className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest px-4 py-3 border-b border-stone-100">Past Briefs</p>
+            {ugcBriefs.length === 0 ? <p className="text-xs text-stone-400 italic p-4">No briefs yet</p> : (
+              <div className="flex flex-col">
+                {ugcBriefs.map(b => (
+                  <button key={b.id} onClick={() => setSelectedBriefId(b.id)} className={`text-left px-4 py-3 border-b border-stone-50 transition-all ${selectedBrief?.id === b.id ? "bg-stone-800 text-white" : "hover:bg-stone-50 text-stone-700"}`}>
+                    <p className={`text-sm font-medium ${selectedBrief?.id === b.id ? "text-white" : "text-stone-800"}`}>Week of {b.week_date}</p>
+                    <p className={`text-xs mt-0.5 ${selectedBrief?.id === b.id ? "text-stone-300" : "text-stone-400"}`}>{briefComments.filter(c => c.brief_id === b.id).length} comment{briefComments.filter(c => c.brief_id === b.id).length !== 1 ? "s" : ""}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Brief content + comments */}
+        <div className="lg:col-span-2 flex flex-col gap-4">
+          {selectedBrief ? (
+            <>
+              <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+                <p className="text-sm font-semibold text-stone-700">Week of {selectedBrief.week_date}</p>
+                {selectedBrief.hooks && (
+                  <div>
+                    <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-1.5">Hooks</p>
+                    <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{selectedBrief.hooks}</p>
+                  </div>
+                )}
+                {selectedBrief.format_recs && (
+                  <div>
+                    <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-1.5">Format Recommendations</p>
+                    <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{selectedBrief.format_recs}</p>
+                  </div>
+                )}
+                {selectedBrief.brand_guidelines && (
+                  <div>
+                    <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-1.5">Brand Guidelines</p>
+                    <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{selectedBrief.brand_guidelines}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Comments */}
+              <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+                <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Comments & Suggestions</p>
+                {briefCommentsList.length > 0 && (
+                  <div className="flex flex-col gap-3">
+                    {briefCommentsList.map(c => (
+                      <div key={c.id} className="flex gap-3">
+                        <Av name={c.author_name} size={28} />
+                        <div className="flex-1 bg-stone-50 rounded-xl p-3">
+                          <p className="text-xs font-semibold text-stone-700 mb-1">{c.author_name}</p>
+                          <p className="text-sm text-stone-700">{c.body}</p>
+                          <p className="text-xs text-stone-400 mt-1">{new Date(c.created_at).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex flex-col gap-2">
+                  <TA label="Leave a suggestion for admin" value={commentText} onChange={setCommentText} rows={3} placeholder="Suggest an edit or leave a note..." />
+                  <div className="flex items-center justify-end gap-3">
+                    {saved && <span className="text-xs text-emerald-600 font-medium">Comment saved!</span>}
+                    <Btn onClick={postComment} disabled={saving || !commentText.trim()}>{saving ? "Posting..." : "Post Comment"}</Btn>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <ES icon={<FileText size={24}/>} message="Select a brief to view" />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const router = useRouter();
@@ -4803,6 +5171,7 @@ export default function DashboardPage() {
   const [ugcCreators, setUGCCreators] = useState<UGCCreatorProfile[]>([]);
   const [ugcResources, setUGCResources] = useState<UGCResource[]>([]);
   const [savedHooks, setSavedHooks] = useState<SavedHook[]>([]);
+  const [briefComments, setBriefComments] = useState<BriefComment[]>([]);
 
   useEffect(() => {
     async function init() {
@@ -4813,6 +5182,7 @@ export default function DashboardPage() {
       setProfile(prof as Profile);
       if (prof?.id) supabase.from("profiles").update({ last_seen_at: new Date().toISOString() }).eq("id", prof.id).then(() => {});
       if (prof.role === "ugc_creator") setPage("ugc_dashboard");
+      if (prof.role === "director") setPage("director_home");
       const [
         { data: iD }, { data: tD }, { data: oD }, { data: qD },
         { data: rD }, { data: resD }, { data: aD }, { data: actD },
@@ -4850,7 +5220,7 @@ export default function DashboardPage() {
       try { setSettings(((stD||[]) as any[]).reduce((acc:AppSettings,s:any)=>({...acc,[s.key]:s.value}),{})); } catch(_) {}
 
       // UGC data
-      const isUGCRole = prof.role === "ugc_creator" || prof.role === "admin";
+      const isUGCRole = prof.role === "ugc_creator" || prof.role === "admin" || prof.role === "director";
       if (isUGCRole) {
         const [
           { data: ugcCrD }, { data: ugcSubD }, { data: ugcPqD }, { data: ugcPvD },
@@ -4858,7 +5228,7 @@ export default function DashboardPage() {
           { data: ugcResD }, { data: alertsD }, { data: savedHkD },
         ] = await Promise.all([
           supabase.from("profiles").select("*").eq("role", "ugc_creator").order("full_name"),
-          prof.role === "admin"
+          (prof.role === "admin" || prof.role === "director")
             ? supabase.from("ugc_submissions").select("*").order("created_at", { ascending: false })
             : supabase.from("ugc_submissions").select("*").eq("creator_id", prof.id).order("created_at", { ascending: false }),
           prof.role === "admin"
@@ -4888,6 +5258,12 @@ export default function DashboardPage() {
         setUGCResources((ugcResD || []) as UGCResource[]);
         setSmartAlerts((alertsD || []) as SmartAlert[]);
         setSavedHooks((savedHkD || []) as SavedHook[]);
+
+        // Brief comments (for director and admin)
+        if (prof.role === "admin" || prof.role === "director") {
+          const { data: bcD } = await supabase.from("brief_comments").select("*").order("created_at", { ascending: false });
+          setBriefComments((bcD || []) as BriefComment[]);
+        }
       }
 
       setLoading(false);
@@ -4934,7 +5310,8 @@ export default function DashboardPage() {
 
   const isAdmin = profile.role === "admin";
   const isUGC = profile.role === "ugc_creator";
-  const isIntern = !isAdmin && !isUGC;
+  const isDirector = profile.role === "director";
+  const isIntern = !isAdmin && !isUGC && !isDirector;
   const isTech = profile.team === "Tech/AI";
   const isCreator = profile.team === "Content Creation";
   const openQCount = questions.filter(q => q.status === "open").length;
@@ -5004,6 +5381,24 @@ export default function DashboardPage() {
     },
   ];
 
+  const DIRECTOR_SECTIONS = [
+    {
+      label: "GENERAL",
+      items: [
+        { id: "director_home",     icon: <LayoutDashboard size={16}/>, label: "Home" },
+        { id: "director_calendar", icon: <CalendarDays size={16}/>,    label: "Calendar" },
+      ],
+    },
+    {
+      label: "CONTENT LAB",
+      items: [
+        { id: "director_analytics", icon: <BarChart3 size={16}/>,  label: "Analytics Overview" },
+        { id: "director_brief",     icon: <FileText size={16}/>,   label: "Weekly Brief" },
+        { id: "director_hooks",     icon: <Zap size={16}/>,        label: "Hook Generator" },
+      ],
+    },
+  ];
+
   function NavItem({ item }: { item: { id: string; icon: React.ReactNode; label: string; badge?: number | null } }) {
     const active = page === item.id;
     return (
@@ -5042,6 +5437,13 @@ export default function DashboardPage() {
               </div>
             );
           })
+        ) : isDirector ? (
+          DIRECTOR_SECTIONS.map(section => (
+            <div key={section.label} className="mb-1">
+              <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest px-3 py-2 mt-1">{section.label}</p>
+              {section.items.map(item => <NavItem key={item.id} item={item} />)}
+            </div>
+          ))
         ) : (
           NAV.map(item => <NavItem key={item.id} item={item} />)
         )}
@@ -5102,6 +5504,11 @@ export default function DashboardPage() {
       case "ugc_analytics":     return isAdmin ? <UGCAnalyticsOverview submissions={ugcSubmissions} ugcCreators={ugcCreators} pivotQueue={ugcPivotQueue} smartAlerts={smartAlerts}/> : null;
       case "ugc_pivot_history": return isAdmin ? <UGCPivotHistoryPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_brief":         return isAdmin ? <UGCBriefPage briefs={ugcBriefs} setBriefs={setUGCBriefs} sb={supabase}/> : null;
+      case "director_home":      return isDirector ? <DirectorDash profile={profile!} events={events} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} ugcBriefs={ugcBriefs} smartAlerts={smartAlerts} reports={reports} outreach={outreach} ugcHooks={ugcHooks} settings={settings} setPage={setPage} sb={supabase}/> : null;
+      case "director_calendar":  return isDirector ? <EventsPage profile={profile!} interns={interns} events={events} setEvents={setEvents} sb={supabase}/> : null;
+      case "director_analytics": return isDirector ? <DirectorAnalyticsPage ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} reports={reports} outreach={outreach}/> : null;
+      case "director_brief":     return isDirector ? <DirectorWeeklyBriefPage profile={profile!} ugcBriefs={ugcBriefs} briefComments={briefComments} setBriefComments={setBriefComments} sb={supabase}/> : null;
+      case "director_hooks":     return isDirector ? <HookGeneratorPage profile={profile! as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
       case "alerts": return isAdmin ? <AlertsPage alerts={smartAlerts} setAlerts={setSmartAlerts} sb={supabase}/> : null;
       default:          return null;
     }
@@ -5155,6 +5562,17 @@ export default function DashboardPage() {
           <button key={item.id} onClick={() => setPage(item.id)} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all relative ${page === item.id ? "text-stone-800" : "text-stone-400"}`}>
             {item.icon}
             {item.badge != null && <span className="absolute top-1 right-2 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{item.badge}</span>}
+            <span className="text-[10px] font-medium">{item.label}</span>
+          </button>
+        ))}
+        {isDirector && [
+          { id: "director_home",      icon: <LayoutDashboard size={20}/>, label: "Home",      badge: null },
+          { id: "director_calendar",  icon: <CalendarDays size={20}/>,    label: "Calendar",  badge: null },
+          { id: "director_analytics", icon: <BarChart3 size={20}/>,       label: "Analytics", badge: null },
+          { id: "director_brief",     icon: <FileText size={20}/>,        label: "Brief",     badge: null },
+        ].map(item => (
+          <button key={item.id} onClick={() => setPage(item.id)} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all ${page === item.id ? "text-stone-800" : "text-stone-400"}`}>
+            {item.icon}
             <span className="text-[10px] font-medium">{item.label}</span>
           </button>
         ))}
