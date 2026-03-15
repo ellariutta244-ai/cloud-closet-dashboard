@@ -2475,7 +2475,7 @@ type UGCAnnouncement = { id: string; title: string; body?: string; pinned?: bool
 type UGCResource = { id: string; title: string; description?: string; category?: string; file_url?: string; link?: string; created_at: string };
 type UGCQuestion = { id: string; creator_id?: string; question: string; created_at: string; ugc_qa_replies?: UGCReply[] };
 type UGCReply = { id: string; question_id: string; creator_id?: string; reply: string; created_at: string };
-type UGCCreatorProfile = Profile & { tiktok_handle?: string; ugc_status?: string };
+type UGCCreatorProfile = Profile & { tiktok_handle?: string; tiktok_url?: string; ugc_status?: string };
 type SmartAlert = { id: string; creator_id?: string; alert_type: string; message: string; urgency: 'red' | 'orange' | 'yellow' | 'purple'; dismissed: boolean; week_date?: string; created_at: string; };
 
 // ── UGC Helpers ────────────────────────────────────────────────────────────────
@@ -2504,6 +2504,39 @@ function fmtViews(n: number): string {
   if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
   if (n >= 1000) return (n / 1000).toFixed(1) + "K";
   return n.toString();
+}
+
+function extractTikTokHandle(url: string): string {
+  const m = url.match(/tiktok\.com\/@?([\w.]+)/i);
+  return m ? m[1] : "";
+}
+
+function tiktokHref(creator: UGCCreatorProfile): string | null {
+  if (creator.tiktok_url) return creator.tiktok_url;
+  if (creator.tiktok_handle) return `https://www.tiktok.com/@${creator.tiktok_handle.replace(/^@/, '')}`;
+  return null;
+}
+
+function tiktokDisplay(creator: UGCCreatorProfile): string | null {
+  if (creator.tiktok_url) {
+    const h = extractTikTokHandle(creator.tiktok_url);
+    return h ? `@${h}` : creator.tiktok_url;
+  }
+  if (creator.tiktok_handle) return `@${creator.tiktok_handle.replace(/^@/, '')}`;
+  return null;
+}
+
+function TikTokLink({ creator }: { creator: UGCCreatorProfile }) {
+  const href = tiktokHref(creator);
+  const display = tiktokDisplay(creator);
+  if (!href) return <span className="text-xs text-stone-300">No TikTok linked</span>;
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer"
+       className="text-xs text-stone-500 hover:text-stone-800 hover:underline transition-colors"
+       onClick={e => e.stopPropagation()}>
+      {display}
+    </a>
+  );
 }
 
 function timeAgo(dt: string): string {
@@ -2601,8 +2634,10 @@ function TwoLineGraph({ data1, data2, labels, color1 = "#1C1917", color2 = "#7C3
 }
 
 // ── UGC Dashboard ──────────────────────────────────────────────────────────────
-function UGCDashboard({ profile, ugcCreators, submissions, pivots, briefs, announcements, sb, setPage }: {
-  profile: UGCCreatorProfile; ugcCreators: UGCCreatorProfile[]; submissions: UGCSubmission[];
+function UGCDashboard({ profile, ugcCreators, setUGCCreators, submissions, pivots, briefs, announcements, sb, setPage }: {
+  profile: UGCCreatorProfile; ugcCreators: UGCCreatorProfile[];
+  setUGCCreators?: (c: UGCCreatorProfile[]) => void;
+  submissions: UGCSubmission[];
   pivots: UGCPivot[]; briefs: UGCBrief[]; announcements: UGCAnnouncement[];
   sb: any; setPage: (p: string) => void;
 }) {
@@ -2624,6 +2659,28 @@ function UGCDashboard({ profile, ugcCreators, submissions, pivots, briefs, annou
   const lastViews = lastWeekSubs.reduce((s, x) => s + x.total_views, 0);
   const viewsDiff = lastViews > 0 ? Math.round(((thisViews - lastViews) / lastViews) * 100) : 0;
   const first = profile.full_name?.split(" ")[0] || "there";
+
+  const [editingTikTok, setEditingTikTok] = useState(false);
+  const [tikTokInput, setTikTokInput] = useState(profile.tiktok_url || (profile.tiktok_handle ? `https://www.tiktok.com/@${profile.tiktok_handle.replace(/^@/, '')}` : ""));
+  const [tikTokError, setTikTokError] = useState("");
+  const [savingTikTok, setSavingTikTok] = useState(false);
+
+  async function saveTikTok() {
+    const val = tikTokInput.trim();
+    if (val && !/^https?:\/\/(www\.)?tiktok\.com\//i.test(val)) {
+      setTikTokError("Must be a valid TikTok URL (e.g. https://www.tiktok.com/@username)");
+      return;
+    }
+    setSavingTikTok(true);
+    setTikTokError("");
+    await sb.from("profiles").update({ tiktok_url: val || null }).eq("id", profile.id);
+    (profile as any).tiktok_url = val || undefined;
+    if (setUGCCreators) {
+      setUGCCreators(ugcCreators.map(c => c.id === profile.id ? { ...c, tiktok_url: val || undefined } : c));
+    }
+    setSavingTikTok(false);
+    setEditingTikTok(false);
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -2686,6 +2743,29 @@ function UGCDashboard({ profile, ugcCreators, submissions, pivots, briefs, annou
           <p className="text-sm text-stone-700 line-clamp-4 whitespace-pre-wrap">{latestPivot.ai_pivot}</p>
           {latestPivot.admin_notes && <p className="text-xs text-stone-500 mt-2 italic">Admin: {latestPivot.admin_notes}</p>}
           <button onClick={() => setPage("ugc_pivots")} className="text-xs text-stone-500 hover:text-stone-700 mt-2 flex items-center gap-1">View all pivots<ChevronRight size={12}/></button>
+        </div>
+      )}
+
+      {!isAdmin && (
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">My TikTok</p>
+            {!editingTikTok && (
+              <button onClick={() => setEditingTikTok(true)} className="text-xs text-stone-400 hover:text-stone-700 px-2 py-1 rounded-lg hover:bg-stone-100 transition-all">Edit</button>
+            )}
+          </div>
+          {editingTikTok ? (
+            <div className="flex flex-col gap-2">
+              <TI label="TikTok Profile URL" value={tikTokInput} onChange={v => { setTikTokInput(v); setTikTokError(""); }} placeholder="https://www.tiktok.com/@username" />
+              {tikTokError && <p className="text-xs text-red-500">{tikTokError}</p>}
+              <div className="flex gap-2">
+                <Btn onClick={saveTikTok} disabled={savingTikTok}>{savingTikTok ? "Saving..." : "Save"}</Btn>
+                <Btn variant="secondary" onClick={() => { setEditingTikTok(false); setTikTokError(""); }}>Cancel</Btn>
+              </div>
+            </div>
+          ) : (
+            <TikTokLink creator={{ ...profile, tiktok_url: tikTokInput || profile.tiktok_url }} />
+          )}
         </div>
       )}
     </div>
@@ -3593,7 +3673,7 @@ function UGCLeaderboardPage({ submissions, ugcCreators }: {
                 <Av name={entry.creator!.full_name} size={32} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-stone-800">{entry.creator!.full_name}</p>
-                  {entry.creator!.tiktok_handle && <p className="text-xs text-stone-400">@{entry.creator!.tiktok_handle}</p>}
+                  <TikTokLink creator={entry.creator!} />
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-bold text-stone-800">{fmtViews(entry.views)}</p>
@@ -4184,7 +4264,7 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
                         </div>
                         <span style={{ width: 8, height: 8, borderRadius: "50%", background: statusDot(tier), display: "inline-block", flexShrink: 0 }} />
                       </div>
-                      {c.tiktok_handle && <p className="text-xs text-stone-400">@{c.tiktok_handle}</p>}
+                      <TikTokLink creator={c} />
                       <p className="text-xs text-stone-400">{c.email}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <Bg v="success">Active</Bg>
@@ -4210,7 +4290,7 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
                   <Av name={c.full_name} size={32} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-stone-700">{c.full_name}</p>
-                    {c.tiktok_handle && <p className="text-xs text-stone-400">@{c.tiktok_handle}</p>}
+                    <TikTokLink creator={c} />
                     <Bg v="default">Archived</Bg>
                   </div>
                   <button onClick={() => unarchive(c.id)} className="text-xs text-emerald-600 hover:text-emerald-700 px-2 py-1 rounded-lg hover:bg-emerald-50 transition-all">Restore</button>
@@ -4229,7 +4309,7 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
               <div key={c.id} className="flex items-center gap-3 py-1.5">
                 <Av name={c.full_name} size={24} />
                 <span className="text-sm text-stone-700 flex-1">{c.full_name}</span>
-                {c.tiktok_handle && <span className="text-xs text-stone-400">@{c.tiktok_handle}</span>}
+                <TikTokLink creator={c} />
               </div>
             ))}
           </div>
@@ -4316,6 +4396,7 @@ function UGCPivotQueuePage({ profile, pivotQueue, setPivotQueue, ugcCreators, sb
             <Av name={cName(item.creator_id)} size={32} />
             <div>
               <p className="text-sm font-semibold text-stone-800">{cName(item.creator_id)}</p>
+              {(() => { const c = ugcCreators.find(x => x.id === item.creator_id); return c ? <TikTokLink creator={c} /> : null; })()}
               <p className="text-xs text-stone-400">Week {item.week_date}</p>
             </div>
           </div>
@@ -4465,8 +4546,11 @@ function UGCPivotHistoryPage({ profile, pivots, setPivots, ugcCreators, sb }: {
         <div key={creatorId} className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
           <div className="px-5 py-3 bg-stone-50 border-b border-stone-100 flex items-center gap-3">
             <Av name={cName(creatorId)} size={28} />
-            <p className="text-sm font-semibold text-stone-800">{cName(creatorId)}</p>
-            <span className="text-xs text-stone-400">{cPivots.length} pivots</span>
+            <div>
+              <p className="text-sm font-semibold text-stone-800">{cName(creatorId)}</p>
+              {(() => { const c = ugcCreators.find(x => x.id === creatorId); return c ? <TikTokLink creator={c} /> : null; })()}
+            </div>
+            <span className="text-xs text-stone-400 ml-auto">{cPivots.length} pivots</span>
           </div>
           <div className="divide-y divide-stone-50">
             {[...cPivots].sort((a, b) => b.week_date.localeCompare(a.week_date)).map(p => (
@@ -4584,14 +4668,20 @@ function UGCAnalyticsOverview({ submissions, ugcCreators, pivotQueue, smartAlert
               <th className="text-center py-2 px-2 text-stone-400 font-medium">Tier</th>
             </tr></thead>
             <tbody>
-              {[...submissions].sort((a, b) => b.week_date.localeCompare(a.week_date)).slice(0, 20).map(s => (
+              {[...submissions].sort((a, b) => b.week_date.localeCompare(a.week_date)).slice(0, 20).map(s => {
+                const creator = ugcCreators.find(c => c.id === s.creator_id);
+                return (
                 <tr key={s.id} className="border-b border-stone-50 hover:bg-stone-50">
-                  <td className="py-2 pr-4 text-stone-700">{ugcCreators.find(c => c.id === s.creator_id)?.full_name || "—"}</td>
+                  <td className="py-2 pr-4">
+                    <p className="text-stone-700">{creator?.full_name || "—"}</p>
+                    {creator && <TikTokLink creator={creator} />}
+                  </td>
                   <td className="py-2 pr-4 text-stone-500">{s.week_date}</td>
                   <td className="py-2 px-2 text-center font-semibold text-stone-700">{fmtViews(s.total_views)}</td>
                   <td className="py-2 px-2 text-center"><BenchmarkBadge tier={s.benchmark_tier} /></td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -4994,7 +5084,7 @@ export default function DashboardPage() {
       case "notifications": return isAdmin ? <NotificationPg interns={interns} ugcCreators={ugcCreators}/> : null;
       case "settings":  return isAdmin ? <SettingsPg settings={settings} setSettings={setSettings} sb={supabase}/> : null;
       // UGC Creator pages
-      case "ugc_dashboard":     return (isAdmin || isUGC) ? <UGCDashboard profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} submissions={ugcSubmissions} pivots={ugcPivots} briefs={ugcBriefs} announcements={ugcAnnouncements} sb={supabase} setPage={setPage}/> : null;
+      case "ugc_dashboard":     return (isAdmin || isUGC) ? <UGCDashboard profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} pivots={ugcPivots} briefs={ugcBriefs} announcements={ugcAnnouncements} sb={supabase} setPage={setPage}/> : null;
       case "ugc_submit":        return (isAdmin || isUGC) ? <UGCSubmitPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_pivots":        return (isAdmin || isUGC) ? <UGCMyPivotsPage profile={p as UGCCreatorProfile} pivots={ugcPivots} submissions={ugcSubmissions}/> : null;
       case "ugc_hook_generator": return (isAdmin || isUGC) ? <HookGeneratorPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
