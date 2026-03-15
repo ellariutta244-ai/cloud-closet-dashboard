@@ -3002,14 +3002,15 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
   async function addCreator() {
     if (!form.full_name.trim() || !form.email.trim()) return;
     setSaving(true);
-    const { data, error } = await sb.from("profiles").insert({
-      full_name: form.full_name, email: form.email,
-      tiktok_handle: form.tiktok_handle || null,
-      role: "ugc_creator", active: true, ugc_status: "active",
-    }).select().single();
+    const res = await fetch("/api/ugc-create-creator", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ full_name: form.full_name, email: form.email, tiktok_handle: form.tiktok_handle }),
+    });
+    const json = await res.json();
     setSaving(false);
-    if (error) { console.error(error); return; }
-    setUGCCreators([data as UGCCreatorProfile, ...ugcCreators]);
+    if (!res.ok || json.error) { alert(json.error || "Failed to create creator"); return; }
+    setUGCCreators([json.profile as UGCCreatorProfile, ...ugcCreators]);
     setModal(false); setForm({ full_name: "", email: "", tiktok_handle: "" });
   }
 
