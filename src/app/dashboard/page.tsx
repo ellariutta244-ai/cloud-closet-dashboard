@@ -4844,6 +4844,7 @@ export default function DashboardPage() {
 
   const isAdmin = profile.role === "admin";
   const isUGC = profile.role === "ugc_creator";
+  const isIntern = !isAdmin && !isUGC;
   const isTech = profile.team === "Tech/AI";
   const isCreator = profile.team === "Content Creation";
   const openQCount = questions.filter(q => q.status === "open").length;
@@ -5038,30 +5039,52 @@ export default function DashboardPage() {
             <span className="text-sm font-semibold text-stone-800">Cloud Closet</span>
           </div>
         </div>
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6" style={{ paddingBottom: isUGC ? undefined : 'env(safe-area-inset-bottom)' }}>
-          <div className={`max-w-4xl mx-auto ${isUGC ? "pb-28 lg:pb-0" : ""}`}>{renderPage()}</div>
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+          <div className="max-w-4xl mx-auto pb-28 lg:pb-0">{renderPage()}</div>
         </main>
       </div>
-      {/* UGC bottom tab bar — mobile only */}
-      {isUGC && (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 flex items-center justify-around px-2 z-30" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 10px)', paddingTop: '6px' }}>
-          {[
-            { id: "ugc_dashboard", icon: <LayoutDashboard size={20}/>, label: "Home" },
-            { id: "ugc_submit", icon: <BarChart3 size={20}/>, label: "Submit" },
-            { id: "ugc_pivots", icon: <TrendingUp size={20}/>, label: "Pivots" },
-            { id: "ugc_hook_generator", icon: <Zap size={20}/>, label: "Hooks" },
-          ].map(item => (
-            <button key={item.id} onClick={() => setPage(item.id)} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all ${page === item.id ? "text-stone-800" : "text-stone-400"}`}>
-              {item.icon}
-              <span className="text-[10px] font-medium">{item.label}</span>
-            </button>
-          ))}
-          <button onClick={() => setSidebarOpen(true)} className="flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl text-stone-400">
-            <Menu size={20}/>
-            <span className="text-[10px] font-medium">More</span>
+      {/* Mobile bottom tab bar — all roles */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 flex items-center justify-around px-2 z-30" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)', paddingTop: '6px' }}>
+        {isUGC && [
+          { id: "ugc_dashboard",      icon: <LayoutDashboard size={20}/>, label: "Home" },
+          { id: "ugc_submit",         icon: <BarChart3 size={20}/>,       label: "Submit" },
+          { id: "ugc_pivots",         icon: <TrendingUp size={20}/>,      label: "Pivots" },
+          { id: "ugc_hook_generator", icon: <Zap size={20}/>,             label: "Hooks" },
+        ].map(item => (
+          <button key={item.id} onClick={() => setPage(item.id)} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all ${page === item.id ? "text-stone-800" : "text-stone-400"}`}>
+            {item.icon}
+            <span className="text-[10px] font-medium">{item.label}</span>
           </button>
-        </div>
-      )}
+        ))}
+        {isIntern && [
+          { id: "dashboard", icon: <LayoutDashboard size={20}/>, label: "Home",     badge: null },
+          { id: "tasks",     icon: <CheckSquare size={20}/>,     label: "Tasks",    badge: null },
+          { id: "outreach",  icon: <Mail size={20}/>,            label: "Outreach", badge: null },
+          { id: "questions", icon: <MessageCircle size={20}/>,   label: "Questions",badge: openQCount || null },
+        ].map(item => (
+          <button key={item.id} onClick={() => setPage(item.id)} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all relative ${page === item.id ? "text-stone-800" : "text-stone-400"}`}>
+            {item.icon}
+            {item.badge != null && <span className="absolute top-1 right-2 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{item.badge}</span>}
+            <span className="text-[10px] font-medium">{item.label}</span>
+          </button>
+        ))}
+        {isAdmin && [
+          { id: "dashboard", icon: <LayoutDashboard size={20}/>, label: "Home",   badge: null },
+          { id: "tasks",     icon: <CheckSquare size={20}/>,     label: "Tasks",  badge: null },
+          { id: "ugc_analytics", icon: <BarChart3 size={20}/>,  label: "UGC",    badge: null },
+          { id: "alerts",    icon: <AlertTriangle size={20}/>,   label: "Alerts", badge: activeAlertCount || null },
+        ].map(item => (
+          <button key={item.id} onClick={() => setPage(item.id)} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all relative ${page === item.id ? "text-stone-800" : "text-stone-400"}`}>
+            {item.icon}
+            {item.badge != null && <span className="absolute top-1 right-2 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{item.badge}</span>}
+            <span className="text-[10px] font-medium">{item.label}</span>
+          </button>
+        ))}
+        <button onClick={() => setSidebarOpen(true)} className="flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl text-stone-400">
+          <Menu size={20}/>
+          <span className="text-[10px] font-medium">More</span>
+        </button>
+      </div>
     </div>
   );
 }
