@@ -56,12 +56,15 @@ export function PwaSetup({ userId }: { userId?: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, token }),
       });
-      // Register onMessage to keep the FCM connection alive in the foreground.
-      // Do NOT call new Notification() here — the service worker is the sole
-      // renderer for OS notifications, which prevents SW + page duplicates.
+      // onMessage fires when the app is in the foreground.
+      // onBackgroundMessage (SW) fires when the app is in the background.
+      // They are mutually exclusive, so both showing a Notification is safe.
+      // The shared notif_id tag collapses any accidental duplicates at the browser level.
       if (unsubRef.current) unsubRef.current();
-      unsubRef.current = onMessage(messaging, (_payload) => {
-        // In-app handling can go here if needed (e.g. badge update).
+      unsubRef.current = onMessage(messaging, (payload) => {
+        const body = payload.notification?.body || payload.notification?.title || "New notification";
+        const tag = (payload.data as any)?.notif_id || "cloud-closet";
+        new Notification("Cloud Closet Dashboard", { body, icon: "/icon-192.png", tag });
       });
     } catch (err) {
       initDoneRef.current = false;
