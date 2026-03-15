@@ -81,8 +81,9 @@ Keep it actionable, specific, and encouraging. Format with clear sections.`;
     );
 
     const { data: queueRow, error: qErr } = await supabase.from('ugc_pivot_queue').insert({
+      creator_id: analytics.creator_id ?? null,
       submission_id: submissionId,
-      week_date,
+      week_date: week_date?.split('T')[0] ?? week_date,
       analytics_snapshot: analytics,
       ai_pivot: aiPivot,
       status: 'pending',
