@@ -87,7 +87,7 @@ function PB({ priority }: { priority?: string }) {
   return <span style={{ background:c.bg, color:c.text }} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize">{priority}</span>;
 }
 function Btn({ onClick, children, variant="primary", disabled, className="", type="button", size="md" }: { onClick?: ()=>void; children: React.ReactNode; variant?: "primary"|"secondary"|"ghost"|"danger"; disabled?: boolean; className?: string; type?: "button"|"submit"; size?: "sm"|"md" }) {
-  const base = "inline-flex items-center gap-1.5 font-medium rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer";
+  const base = "inline-flex items-center gap-1.5 font-medium rounded-xl transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer min-h-[44px]";
   const sz = { sm:"px-3 py-1.5 text-xs", md:"px-4 py-2 text-sm" };
   const vv = { primary:"bg-stone-800 text-white hover:bg-stone-700 shadow-sm", secondary:"bg-stone-100 text-stone-700 hover:bg-stone-200", ghost:"text-stone-600 hover:bg-stone-100", danger:"bg-red-50 text-red-600 hover:bg-red-100" };
   return <button type={type} onClick={onClick} disabled={disabled} className={`${base} ${sz[size]} ${vv[variant]} ${className}`}>{children}</button>;
@@ -96,7 +96,7 @@ function TI({ label, value, onChange, placeholder, type="text", required }: { la
   return (
     <div className="flex flex-col gap-1">
       {label && <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">{label}</label>}
-      <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} required={required} className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-800 focus:outline-none focus:border-stone-400" />
+      <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} required={required} className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-base text-stone-800 focus:outline-none focus:border-stone-400" />
     </div>
   );
 }
@@ -104,7 +104,7 @@ function TA({ label, value, onChange, placeholder, rows=3 }: { label?: string; v
   return (
     <div className="flex flex-col gap-1">
       {label && <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">{label}</label>}
-      <textarea value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={rows} className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-800 focus:outline-none focus:border-stone-400 resize-none" />
+      <textarea value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={rows} className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-base text-stone-800 focus:outline-none focus:border-stone-400 resize-none" />
     </div>
   );
 }
@@ -112,7 +112,7 @@ function Sel({ label, value, onChange, options }: { label?: string; value: strin
   return (
     <div className="flex flex-col gap-1">
       {label && <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">{label}</label>}
-      <select value={value} onChange={e=>onChange(e.target.value)} className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-800 focus:outline-none focus:border-stone-400">
+      <select value={value} onChange={e=>onChange(e.target.value)} className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-base text-stone-800 focus:outline-none focus:border-stone-400">
         {options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </div>
@@ -336,7 +336,7 @@ function InternDash({ profile, tasks, outreach, announcements, requests, setPage
         </div>
         <Btn onClick={()=>setPage("outreach")}><Plus size={14}/>Log Outreach</Btn>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <SC label="Active Tasks" value={active}/>
         <SC label="Outreach Sent" value={myOut.length}/>
         <SC label="Response Rate" value={`${rate}%`}/>
@@ -1093,7 +1093,7 @@ function AnPg({ interns, tasks, outreach, content, requests, questions, techProj
       {/* Content Analytics */}
       <div className="bg-white border border-stone-200/60 rounded-xl p-4">
         <p className="text-sm font-semibold text-stone-700 mb-4 flex items-center gap-2"><Video size={14} className="text-stone-400"/>Content Analytics</p>
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           <SC label="Total Videos" value={content.length}/>
           <SC label="Published" value={published}/>
           <SC label="Total Views" value={totalViews.toLocaleString()}/>
@@ -1754,7 +1754,7 @@ function TechProjectsPage({ profile, interns, projects, setProjects, sb }: { pro
         <div><h1 className="text-xl font-bold text-stone-800">Tech Projects</h1><p className="text-sm text-stone-400 mt-0.5">Built by the Tech/AI team</p></div>
         <Btn onClick={()=>setShowC(true)}><Plus size={14}/>New Project</Btn>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <SC label="In Progress" value={inProgress}/><SC label="Completed" value={completed}/><SC label="Avg Progress" value={`${avgProg}%`}/>
       </div>
       <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit flex-wrap">
@@ -1894,7 +1894,7 @@ function ContentPage({ profile, interns, content, setContent, ugcHooks, setUGCHo
       )}
       {view==="all" && (
         allVids.length===0 ? <ES icon={<Video size={24}/>} message="No published videos"/> : (
-          <div className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
+          <div className="bg-white border border-stone-200/60 rounded-xl overflow-x-auto">
             <table className="w-full text-xs">
               <thead><tr className="border-b border-stone-100 bg-stone-50"><th className="text-left p-3 text-stone-400 font-medium">Title</th><th className="text-left p-3 text-stone-400 font-medium">Creator</th><th className="text-right p-3 text-stone-400 font-medium">Views</th><th className="text-right p-3 text-stone-400 font-medium">Likes</th><th className="p-3"></th></tr></thead>
               <tbody>{allVids.map(v=>(
@@ -1930,7 +1930,7 @@ function ContentPage({ profile, interns, content, setContent, ugcHooks, setUGCHo
         <div className="flex flex-col gap-3">
           <TI label="Title" value={nc.title} onChange={v=>setNc({...nc,title:v})} required/>
           <TI label="TikTok URL" value={nc.tiktok_url} onChange={v=>setNc({...nc,tiktok_url:v})} placeholder="https://tiktok.com/@cloudcloset/..."/>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <TI label="Views" value={nc.views} onChange={v=>setNc({...nc,views:v})}/>
             <TI label="Likes" value={nc.likes} onChange={v=>setNc({...nc,likes:v})}/>
             <TI label="Comments" value={nc.comments} onChange={v=>setNc({...nc,comments:v})}/>
@@ -2817,7 +2817,7 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
       <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">{label}</label>
       <input type="number" min="0" step={decimals ? "0.1" : "1"} value={(form as any)[field]}
         onChange={e => setForm({ ...form, [field]: e.target.value })}
-        className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-800 focus:outline-none focus:border-stone-400" />
+        className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-base text-stone-800 focus:outline-none focus:border-stone-400" />
     </div>
   );
   const tog = (field: "trending_sound" | "has_cta", label: string) => (
@@ -2868,7 +2868,7 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
             {ni("profile_visits", "Profile Visits")}
           </div>
           <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Traffic Source (must total 100%)</p>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {ni("traffic_fyp_pct", "For You Page %", true)}
             {ni("traffic_following_pct", "Following %", true)}
             {ni("traffic_search_pct", "Search %", true)}
@@ -2921,7 +2921,7 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
         )}
 
         <div className="flex justify-end pt-2 border-t border-stone-100">
-          <Btn onClick={submit} disabled={loading || !form.week_date || (isAdmin && !form.creator_id) || !trafficValid}>
+          <Btn onClick={submit} disabled={loading || !form.week_date || (isAdmin && !form.creator_id) || !trafficValid} className="w-full sm:w-auto justify-center">
             {loading ? <><Loader2 size={14} className="animate-spin"/>Generating pivot...</> : <><Send size={14}/>Submit Analytics</>}
           </Btn>
         </div>
@@ -4326,7 +4326,7 @@ function UGCPivotQueuePage({ profile, pivotQueue, setPivotQueue, ugcCreators, sb
         </div>
 
         {snap && (
-          <div className="grid grid-cols-4 gap-2 mb-3 text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-center">
             {[["Views", snap.total_views], ["Likes", snap.likes], ["Comments", snap.comments], ["Followers+", snap.followers_gained]].map(([l, v]) => (
               <div key={l as string} className="bg-stone-50 rounded-lg p-2">
                 <p className="text-xs text-stone-400">{l}</p>
@@ -5017,7 +5017,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex h-screen bg-stone-50 overflow-hidden">
+    <div className="flex h-screen bg-stone-50 overflow-hidden overflow-x-hidden">
       <PwaSetup userId={profile?.id}/>
       {/* Mobile overlay sidebar */}
       {sidebarOpen && (
@@ -5031,17 +5031,37 @@ export default function DashboardPage() {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile topbar */}
-        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-stone-100">
+        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-stone-100" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
           <button onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg text-stone-500 hover:bg-stone-100"><Menu size={18}/></button>
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-stone-800 rounded-lg flex items-center justify-center"><span className="text-white text-xs font-bold">CC</span></div>
             <span className="text-sm font-semibold text-stone-800">Cloud Closet</span>
           </div>
         </div>
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <div className="max-w-4xl mx-auto">{renderPage()}</div>
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6" style={{ paddingBottom: isUGC ? undefined : 'env(safe-area-inset-bottom)' }}>
+          <div className={`max-w-4xl mx-auto ${isUGC ? "pb-20 lg:pb-0" : ""}`}>{renderPage()}</div>
         </main>
       </div>
+      {/* UGC bottom tab bar — mobile only */}
+      {isUGC && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 flex items-center justify-around px-2 z-30" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          {[
+            { id: "ugc_dashboard", icon: <LayoutDashboard size={20}/>, label: "Home" },
+            { id: "ugc_submit", icon: <BarChart3 size={20}/>, label: "Submit" },
+            { id: "ugc_pivots", icon: <TrendingUp size={20}/>, label: "Pivots" },
+            { id: "ugc_hook_generator", icon: <Zap size={20}/>, label: "Hooks" },
+          ].map(item => (
+            <button key={item.id} onClick={() => setPage(item.id)} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all ${page === item.id ? "text-stone-800" : "text-stone-400"}`}>
+              {item.icon}
+              <span className="text-[10px] font-medium">{item.label}</span>
+            </button>
+          ))}
+          <button onClick={() => setSidebarOpen(true)} className="flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl text-stone-400">
+            <Menu size={20}/>
+            <span className="text-[10px] font-medium">More</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
