@@ -3,8 +3,6 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
-import Anthropic from '@anthropic-ai/sdk';
-
 function getAdminApp() {
   if (getApps().length > 0) return getApps()[0];
   const b64 = process.env.FIREBASE_SA_BASE64;
@@ -26,10 +24,8 @@ export async function POST(req: NextRequest) {
       best_video_link, benchmark_tier, week_date,
     } = analytics;
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY not configured' }, { status: 500 });
-
-    const client = new Anthropic({ apiKey });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 500 });
 
     const prompt = `You are a TikTok content strategist for Cloud Closet, a fashion brand. A UGC creator has submitted their weekly analytics. Generate a personalized pivot strategy.
 
@@ -62,13 +58,20 @@ Generate a pivot strategy covering:
 
 Keep it actionable, specific, and encouraging. Format with clear sections.`;
 
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const aiPivot = message.content[0].type === 'text' ? message.content[0].text : '';
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      }
+    );
+    if (!geminiRes.ok) {
+      const err = await geminiRes.text();
+      return NextResponse.json({ error: `Gemini error: ${err}` }, { status: 500 });
+    }
+    const geminiData = await geminiRes.json();
+    const aiPivot = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 
     const cookieStore = await cookies();
     const supabase = createServerClient(
