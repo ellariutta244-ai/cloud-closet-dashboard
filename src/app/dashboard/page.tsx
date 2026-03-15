@@ -4409,8 +4409,8 @@ function UGCSubmissionHistoryPage({ profile, submissions, setSubmissions, ugcCre
       <div className="flex flex-col gap-3">
         {sorted.map(s => (
           <div key={s.id} className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
-            <button
-              className="w-full flex items-center justify-between p-4 text-left hover:bg-stone-50 transition-all"
+            <div
+              className="w-full flex items-center justify-between p-4 hover:bg-stone-50 transition-all cursor-pointer"
               onClick={() => setExpanded(expanded === s.id ? null : s.id)}
             >
               <div className="flex items-center gap-3 min-w-0">
@@ -4434,7 +4434,7 @@ function UGCSubmissionHistoryPage({ profile, submissions, setSubmissions, ugcCre
                 ) : null}
                 <ChevronRight size={14} className={`text-stone-400 transition-transform ${expanded === s.id ? "rotate-90" : ""}`} />
               </div>
-            </button>
+            </div>
 
             {expanded === s.id && (
               <div className="border-t border-stone-100 p-4 flex flex-col gap-4">
@@ -4774,6 +4774,13 @@ function UGCPivotQueuePage({ profile, pivotQueue, setPivotQueue, ugcCreators, sb
   const [processing, setProcessing] = useState<Record<string, boolean>>({});
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [confirmDeleteQueue, setConfirmDeleteQueue] = useState<string | null>(null);
+
+  async function deleteQueueItem(id: string) {
+    await sb.from("ugc_pivot_queue").delete().eq("id", id);
+    setPivotQueue(pivotQueue.filter(q => q.id !== id));
+    setConfirmDeleteQueue(null);
+  }
 
   async function refresh() {
     setRefreshing(true); setFetchError(null);
@@ -4835,6 +4842,14 @@ function UGCPivotQueuePage({ profile, pivotQueue, setPivotQueue, ugcCreators, sb
           <div className="flex items-center gap-2">
             {snap?.benchmark_tier && <BenchmarkBadge tier={snap.benchmark_tier} />}
             <Bg v={item.status === "pending" ? "warning" : item.status === "approved" ? "success" : "danger"}>{item.status}</Bg>
+            {confirmDeleteQueue === item.id ? (
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => setConfirmDeleteQueue(null)} className="text-xs px-2 py-1 rounded-lg border border-stone-200 text-stone-400 hover:bg-stone-50">Cancel</button>
+                <button onClick={() => deleteQueueItem(item.id)} className="text-xs px-2 py-1 rounded-lg bg-red-500 text-white hover:bg-red-600">Delete</button>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmDeleteQueue(item.id)} className="p-1 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={13}/></button>
+            )}
           </div>
         </div>
 
