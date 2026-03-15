@@ -27,7 +27,7 @@ async function sendAdminPush(supabase: any, title: string, body: string) {
       .from('fcm_tokens')
       .select('token, profiles!inner(role)')
       .eq('profiles.role', 'admin');
-    const tokens = (adminTokens || []).map((r: any) => r.token).filter(Boolean);
+    const tokens = Array.from(new Set<string>((adminTokens || []).map((r: any) => r.token as string).filter((t: string) => !!t)));
     const app = getAdminApp();
     const messaging = getMessaging(app);
     for (const token of tokens) {
@@ -44,7 +44,7 @@ async function sendCreatorPush(supabase: any, creatorId: string, title: string, 
       .from('fcm_tokens')
       .select('token')
       .eq('user_id', creatorId);
-    const tokens = (rows || []).map((r: any) => r.token).filter(Boolean);
+    const tokens = Array.from(new Set<string>((rows || []).map((r: any) => r.token as string).filter((t: string) => !!t)));
     const app = getAdminApp();
     const messaging = getMessaging(app);
     for (const token of tokens) {

@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     const { data: rows, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const tokens: string[] = (rows || []).map((r: any) => r.token).filter(Boolean);
+    const tokens: string[] = Array.from(new Set<string>((rows || []).map((r: any) => r.token as string).filter((t: string) => !!t)));
     if (tokens.length === 0) return NextResponse.json({ ok: true, sent: 0 });
 
     const app = getAdminApp();

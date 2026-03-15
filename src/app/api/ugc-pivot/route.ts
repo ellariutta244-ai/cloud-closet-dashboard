@@ -226,7 +226,7 @@ ACCOUNT HEALTH:
       async function pushAdmins(title: string, body: string) {
         try {
           const { data: adminTokens } = await supabase.from('fcm_tokens').select('token, profiles!inner(role)').eq('profiles.role', 'admin');
-          const tokens = (adminTokens || []).map((r: any) => r.token).filter(Boolean);
+          const tokens = Array.from(new Set<string>((adminTokens || []).map((r: any) => r.token as string).filter((t: string) => !!t)));
           const app = getAdminApp();
           const messaging = getMessaging(app);
           for (const token of tokens) {
@@ -297,7 +297,7 @@ ACCOUNT HEALTH:
         .select('token, profiles!inner(role)')
         .eq('profiles.role', 'admin');
 
-      const tokens = (adminTokens || []).map((r: any) => r.token).filter(Boolean);
+      const tokens = Array.from(new Set<string>((adminTokens || []).map((r: any) => r.token as string).filter((t: string) => !!t)));
       for (const token of tokens) {
         try {
           await messaging.send({
