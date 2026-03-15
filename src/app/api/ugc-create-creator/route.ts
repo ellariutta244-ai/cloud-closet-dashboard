@@ -17,13 +17,24 @@ export async function POST(req: NextRequest) {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Invite user via email (they get a magic link to set password)
+    // Try to invite; if already registered, look up existing user
+    let userId: string;
     const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
       data: { full_name },
     });
-    if (inviteErr) return NextResponse.json({ error: inviteErr.message }, { status: 500 });
-
-    const userId = invited.user.id;
+    if (inviteErr) {
+      if (!inviteErr.message.toLowerCase().includes('already')) {
+        return NextResponse.json({ error: inviteErr.message }, { status: 500 });
+      }
+      // User exists — find their ID
+      const { data: { users }, error: listErr } = await admin.auth.admin.listUsers();
+      if (listErr) return NextResponse.json({ error: listErr.message }, { status: 500 });
+      const existing = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+      if (!existing) return NextResponse.json({ error: 'Could not find existing user' }, { status: 500 });
+      userId = existing.id;
+    } else {
+      userId = invited.user.id;
+    }
 
     // Upsert profile with ugc_creator role
     const { data: profile, error: profileErr } = await admin
