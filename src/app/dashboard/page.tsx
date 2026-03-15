@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { PwaSetup } from "@/components/PwaSetup";
@@ -2087,21 +2087,353 @@ function UGCPivotsHubPage({ profile, pivotQueue, setPivotQueue, pivots, setPivot
   );
 }
 
-function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements, setAnnouncements, sb }: {
+function PhaseBadge({ phase }: { phase?: string }) {
+  const map: Record<string, { bg: string; text: string; label: string }> = {
+    setup:    { bg: "#f1f0ef", text: "#6b6560", label: "Setup" },
+    volume:   { bg: "#eff6ff", text: "#1d4ed8", label: "Volume" },
+    optimize: { bg: "#fffbeb", text: "#92400e", label: "Optimize" },
+    scale:    { bg: "#f0fdf4", text: "#166534", label: "Scale" },
+  };
+  const p = phase ? map[phase] : null;
+  if (!p) return null;
+  return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: p.bg, color: p.text }}>{p.label}</span>;
+}
+
+function PlanStatusBadge({ status }: { status: string }) {
+  const map: Record<string, { bg: string; text: string; label: string }> = {
+    draft:    { bg: "#fff7ed", text: "#c2410c", label: "Draft" },
+    approved: { bg: "#f0fdf4", text: "#166534", label: "Approved" },
+    sent:     { bg: "#eff6ff", text: "#1d4ed8", label: "Sent" },
+  };
+  const s = map[status] ?? map["draft"];
+  return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: s.bg, color: s.text }}>{s.label}</span>;
+}
+
+function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements, setAnnouncements, weeklyPlans, setWeeklyPlans, ugcCreators, sb }: {
   profile: UGCCreatorProfile; briefs: UGCBrief[]; setBriefs: (b: UGCBrief[]) => void;
-  announcements: UGCAnnouncement[]; setAnnouncements: (a: UGCAnnouncement[]) => void; sb: any;
+  announcements: UGCAnnouncement[]; setAnnouncements: (a: UGCAnnouncement[]) => void;
+  weeklyPlans: WeeklyPlan[]; setWeeklyPlans: (p: WeeklyPlan[]) => void;
+  ugcCreators: UGCCreatorProfile[]; sb: any;
 }) {
-  const [tab, setTab] = useState<"briefs" | "announcements">("briefs");
+  const [tab, setTab] = useState<"brief" | "plans" | "announcements">("brief");
+  const [selectedPlan, setSelectedPlan] = useState<WeeklyPlan | null>(null);
+  const [editingPlan, setEditingPlan] = useState<Partial<WeeklyPlan> | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState<string | null>(null);
+  const [samplePlans, setSamplePlans] = useState<WeeklyPlan[] | null>(null);
+  const currentWeek = getMondayOfWeek(new Date());
+
+  function loadSampleData() {
+    const phases: WeeklyPlan["phase"][] = ["setup", "volume", "optimize", "scale"];
+    const statuses = ["draft", "draft", "approved"];
+    const sampleCreators = ugcCreators.length > 0
+      ? ugcCreators.slice(0, 4)
+      : [{ id: "sample-1", full_name: "Jordan Lee" }, { id: "sample-2", full_name: "Maya Chen" }, { id: "sample-3", full_name: "Tae Williams" }] as any[];
+
+    const hookSets = [
+      ["This is why your outfit looks off the second you leave the house", "The one item I stopped buying after my closet audit", "I tried the 1-in-1-out rule for 30 days"],
+      ["Get dressed with me for a day I have nothing to wear", "Why I stopped buying trendy pieces and what I buy instead", "The mirror check that changed how I dress"],
+      ["Real talk: here's what's actually in my closet", "I wore the same 10 pieces for a month — here's what I learned", "The outfit formula that works every single time"],
+    ];
+    const formats = ["Talking head", "B-roll montage", "GRWM", "Trending sound + text", "Stitch/Duet"];
+    const times = ["7pm CST", "6pm CST", "8am CST", "12pm CST"];
+    const notes = [
+      "Start mid-sentence, no intro",
+      "Cut to result in first 3 seconds",
+      "Add bold on-screen text at second 2",
+      "Use a relatable sound from FYP",
+      "Keep under 30 seconds",
+    ];
+
+    const generated: WeeklyPlan[] = sampleCreators.map((c: any, i: number) => {
+      const hooks = hookSets[i % hookSets.length];
+      const days: Record<string, DayPlan> = {};
+      ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"].forEach((d, di) => {
+        days[d] = {
+          hook: hooks[di % hooks.length],
+          format: formats[(i + di) % formats.length],
+          postTime: times[(i + di) % times.length],
+          note: notes[(i + di) % notes.length],
+        };
+      });
+      return {
+        id: `sample-${i}`,
+        creator_id: c.id,
+        week_date: currentWeek,
+        week_goal: ["Post every day and find your best-performing format this week", "Double down on B-roll — test 3 different hooks against the same footage", "Hit 10k views on at least one video by optimizing your hook game"][i % 3],
+        phase: phases[i % phases.length],
+        status: statuses[i % statuses.length],
+        ab_test: "Test hook A: start with a question vs hook B: start with a bold statement — post same day, 6 hours apart",
+        weekly_reminder: "One change at a time. Don't touch the format if the hook hasn't been tested yet.",
+        completed_days: i === 2 ? ["monday", "tuesday"] : [],
+        created_at: new Date().toISOString(),
+        ...days,
+      } as WeeklyPlan;
+    });
+    setSamplePlans(generated);
+  }
+
+  const activePlans = samplePlans ?? weeklyPlans;
+  const draftCount = activePlans.filter(p => p.status === "draft" && p.week_date === currentWeek).length;
+
+  const DAYS: (keyof WeeklyPlan)[] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+  const DAY_LABELS: Record<string, string> = {
+    monday: "Monday", tuesday: "Tuesday", wednesday: "Wednesday",
+    thursday: "Thursday", friday: "Friday", saturday: "Saturday", sunday: "Sunday"
+  };
+
+  async function approvePlan(plan: WeeklyPlan) {
+    if (samplePlans) { setSamplePlans(samplePlans.map(p => p.id === plan.id ? { ...p, status: "approved" } : p)); if (selectedPlan?.id === plan.id) setSelectedPlan({ ...selectedPlan, status: "approved" }); return; }
+    await sb.from("weekly_plans").update({ status: "approved" }).eq("id", plan.id);
+    setWeeklyPlans(weeklyPlans.map(p => p.id === plan.id ? { ...p, status: "approved" } : p));
+    if (selectedPlan?.id === plan.id) setSelectedPlan({ ...selectedPlan, status: "approved" });
+  }
+
+  async function rejectPlan(plan: WeeklyPlan) {
+    if (!window.confirm("Delete this plan?")) return;
+    if (samplePlans) { setSamplePlans(samplePlans.filter(p => p.id !== plan.id)); setSelectedPlan(null); return; }
+    await sb.from("weekly_plans").delete().eq("id", plan.id);
+    setWeeklyPlans(weeklyPlans.filter(p => p.id !== plan.id));
+    setSelectedPlan(null);
+  }
+
+  async function approveAll() {
+    if (samplePlans) { setSamplePlans(samplePlans.map(p => p.status === "draft" ? { ...p, status: "approved" } : p)); return; }
+    const draftIds = weeklyPlans.filter(p => p.status === "draft").map(p => p.id);
+    if (!draftIds.length) return;
+    await sb.from("weekly_plans").update({ status: "approved" }).in("id", draftIds);
+    setWeeklyPlans(weeklyPlans.map(p => draftIds.includes(p.id) ? { ...p, status: "approved" } : p));
+  }
+
+  async function regeneratePlan(plan: WeeklyPlan) {
+    if (!window.confirm("Regenerate this plan? The current version will be replaced.")) return;
+    setGenerating(plan.id);
+    try {
+      const res = await fetch("/api/ugc-weekly-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creatorId: plan.creator_id, weekDate: plan.week_date, forceRegenerate: true }),
+      });
+      const json = await res.json();
+      if (json.success && json.plan) {
+        setWeeklyPlans(weeklyPlans.map(p => p.id === plan.id ? json.plan : p));
+        if (selectedPlan?.id === plan.id) setSelectedPlan(json.plan);
+      }
+    } finally {
+      setGenerating(null);
+    }
+  }
+
+  async function saveEdit() {
+    if (!editingPlan?.id) return;
+    setSaving(true);
+    const { data } = await sb.from("weekly_plans").update(editingPlan).eq("id", editingPlan.id).select().single();
+    setSaving(false);
+    if (data) {
+      setWeeklyPlans(weeklyPlans.map(p => p.id === data.id ? data : p));
+      setSelectedPlan(data);
+    }
+    setEditingPlan(null);
+  }
+
+  const plansForCurrentWeek = activePlans.filter(p => p.week_date === currentWeek);
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit">
-        <button onClick={() => setTab("briefs")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "briefs" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Weekly Brief</button>
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit flex-wrap">
+        <button onClick={() => setTab("brief")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "brief" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Weekly Brief</button>
+        <button onClick={() => setTab("plans")} className={`relative text-sm px-4 py-2 rounded-lg transition-all ${tab === "plans" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>
+          Content Plans
+          {draftCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{draftCount}</span>}
+        </button>
         <button onClick={() => setTab("announcements")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "announcements" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Announcements</button>
       </div>
-      {tab === "briefs"
-        ? <UGCBriefPage briefs={briefs} setBriefs={setBriefs} sb={sb} />
-        : <UGCAnnouncementsPage profile={profile} announcements={announcements} setAnnouncements={setAnnouncements} sb={sb} />
-      }
+
+      {tab === "brief" && <UGCBriefPage briefs={briefs} setBriefs={setBriefs} sb={sb} />}
+      {tab === "announcements" && <UGCAnnouncementsPage profile={profile} announcements={announcements} setAnnouncements={setAnnouncements} sb={sb} />}
+
+      {tab === "plans" && !selectedPlan && (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h1 className="text-xl font-bold text-stone-800">Content Plans</h1>
+              <p className="text-sm text-stone-400 mt-0.5">Week of {currentWeek} · {plansForCurrentWeek.length} plan{plansForCurrentWeek.length !== 1 ? "s" : ""}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {samplePlans && (
+                <button onClick={() => { setSamplePlans(null); setSelectedPlan(null); }} className="text-xs px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all">✕ Clear sample data</button>
+              )}
+              {draftCount > 0 && (
+                <Btn onClick={approveAll}>Approve All ({draftCount})</Btn>
+              )}
+            </div>
+          </div>
+          {samplePlans && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+              <span className="text-xs text-amber-700 font-medium">Sample data — changes won't be saved</span>
+            </div>
+          )}
+
+          {plansForCurrentWeek.length === 0 ? (
+            <div className="flex flex-col items-center gap-4 py-12">
+              <ES icon={<FileText size={24}/>} message="No content plans for this week yet. They'll be generated Sunday night." />
+              <button onClick={loadSampleData} className="text-sm px-4 py-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-all">Try with sample data</button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {plansForCurrentWeek.map(plan => {
+                const creator = ugcCreators.find(c => c.id === plan.creator_id);
+                return (
+                  <div
+                    key={plan.id}
+                    onClick={() => setSelectedPlan(plan)}
+                    className="bg-white border border-stone-200/60 rounded-xl p-4 cursor-pointer hover:border-stone-300 hover:shadow-sm transition-all flex flex-col gap-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-stone-800 leading-tight">{creator?.full_name ?? "Unknown"}</p>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <PhaseBadge phase={plan.phase} />
+                        <PlanStatusBadge status={plan.status} />
+                      </div>
+                    </div>
+                    {plan.week_goal && (
+                      <p className="text-xs text-stone-500 leading-snug line-clamp-2">{plan.week_goal}</p>
+                    )}
+                    <div className="flex flex-col gap-1.5 border-t border-stone-100 pt-3">
+                      {(["monday", "tuesday"] as const).map(day => {
+                        const d = plan[day] as DayPlan | undefined;
+                        if (!d) return null;
+                        return (
+                          <div key={day}>
+                            <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-wide">{DAY_LABELS[day]}</span>
+                            <p className="text-xs text-stone-700 leading-snug line-clamp-1">{d.hook}</p>
+                            <p className="text-[10px] text-stone-400">{d.format}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex justify-end">
+                      <span className="text-xs text-stone-400 font-medium">Review →</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "plans" && selectedPlan && (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <button onClick={() => { setSelectedPlan(null); setEditingPlan(null); }} className="text-sm text-stone-500 hover:text-stone-800 flex items-center gap-1">← Back</button>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-lg font-bold text-stone-800">{ugcCreators.find(c => c.id === selectedPlan.creator_id)?.full_name ?? "Unknown"}</p>
+                  <PhaseBadge phase={selectedPlan.phase} />
+                  <PlanStatusBadge status={selectedPlan.status} />
+                </div>
+                <p className="text-sm text-stone-400">Week of {selectedPlan.week_date}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => regeneratePlan(selectedPlan)}
+                disabled={generating === selectedPlan.id}
+                className="text-sm px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 disabled:opacity-50 transition-all"
+              >
+                {generating === selectedPlan.id ? "Regenerating…" : "Regenerate"}
+              </button>
+              {selectedPlan.status !== "approved" && (
+                <button onClick={() => rejectPlan(selectedPlan)} className="text-sm px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-all">Reject</button>
+              )}
+              {selectedPlan.status !== "approved" && (
+                <Btn onClick={() => approvePlan(selectedPlan)}>Approve</Btn>
+              )}
+            </div>
+          </div>
+
+          {selectedPlan.week_goal && (
+            <div className="bg-stone-50 rounded-xl p-4 border border-stone-200/60">
+              <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-1">Week Goal</p>
+              {editingPlan ? (
+                <input className="w-full text-sm text-stone-800 bg-white border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-stone-400" value={editingPlan.week_goal ?? ""} onChange={e => setEditingPlan({ ...editingPlan, week_goal: e.target.value })} />
+              ) : (
+                <p className="text-sm text-stone-700">{selectedPlan.week_goal}</p>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-3">
+            {DAYS.map(day => {
+              const d = selectedPlan[day] as DayPlan | undefined;
+              if (!d) return null;
+              const editDay = editingPlan ? editingPlan[day] as DayPlan | undefined : undefined;
+              return (
+                <div key={String(day)} className="bg-white border border-stone-200/60 rounded-xl p-4">
+                  <p className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-3">{DAY_LABELS[String(day)]}</p>
+                  {editingPlan ? (
+                    <div className="flex flex-col gap-2">
+                      <input className="text-sm border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-stone-400" placeholder="Hook" value={editDay?.hook ?? ""} onChange={e => setEditingPlan({ ...editingPlan, [day]: { ...(editDay ?? d), hook: e.target.value } })} />
+                      <div className="flex gap-2">
+                        <input className="flex-1 text-xs border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-stone-400" placeholder="Format" value={editDay?.format ?? ""} onChange={e => setEditingPlan({ ...editingPlan, [day]: { ...(editDay ?? d), format: e.target.value } })} />
+                        <input className="w-32 text-xs border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-stone-400" placeholder="Post time" value={editDay?.postTime ?? ""} onChange={e => setEditingPlan({ ...editingPlan, [day]: { ...(editDay ?? d), postTime: e.target.value } })} />
+                      </div>
+                      <input className="text-xs border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-stone-400" placeholder="Note" value={editDay?.note ?? ""} onChange={e => setEditingPlan({ ...editingPlan, [day]: { ...(editDay ?? d), note: e.target.value } })} />
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      <p className="text-sm text-stone-800 leading-snug">{d.hook}</p>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-xs text-stone-400">{d.format}</span>
+                        {d.postTime && <span className="text-xs text-stone-400">· {d.postTime}</span>}
+                      </div>
+                      {d.note && <p className="text-xs text-stone-500 italic mt-1">{d.note}</p>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {(selectedPlan.ab_test || selectedPlan.weekly_reminder) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {selectedPlan.ab_test && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                  <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">A/B Test</p>
+                  {editingPlan ? (
+                    <input className="w-full text-sm bg-white border border-blue-200 rounded-lg px-3 py-2 focus:outline-none" value={editingPlan.ab_test ?? ""} onChange={e => setEditingPlan({ ...editingPlan, ab_test: e.target.value })} />
+                  ) : (
+                    <p className="text-sm text-blue-800">{selectedPlan.ab_test}</p>
+                  )}
+                </div>
+              )}
+              {selectedPlan.weekly_reminder && (
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+                  <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">Weekly Reminder</p>
+                  {editingPlan ? (
+                    <input className="w-full text-sm bg-white border border-amber-200 rounded-lg px-3 py-2 focus:outline-none" value={editingPlan.weekly_reminder ?? ""} onChange={e => setEditingPlan({ ...editingPlan, weekly_reminder: e.target.value })} />
+                  ) : (
+                    <p className="text-sm text-amber-800">{selectedPlan.weekly_reminder}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            {editingPlan ? (
+              <>
+                <button onClick={() => setEditingPlan(null)} className="text-sm px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-all">Cancel</button>
+                <Btn onClick={saveEdit} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</Btn>
+              </>
+            ) : (
+              <button onClick={() => setEditingPlan({ ...selectedPlan })} className="text-sm px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-all">Edit Plan</button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2460,9 +2792,76 @@ Always structure every pivot exactly like this:
           </div>
         )}
       </div>
+
+      {/* Wisconsin Report */}
+      <WisconsinReportTrigger />
     </div>
   );
 }
+
+function WisconsinReportTrigger() {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ success: boolean; message: string; stats?: any } | null>(null);
+
+  async function generate() {
+    if (!window.confirm("Generate Wisconsin Weekly Report now using real data? This will overwrite the current week's report if one exists.")) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/wisconsin-report?manual=true");
+      const json = await res.json();
+      if (json.success) {
+        const s = json.stats;
+        setResult({
+          success: true,
+          message: `Report generated for week of ${json.weekDate}. Caroline will see it when she opens her Wisconsin Report page.`,
+          stats: s,
+        });
+      } else {
+        setResult({ success: false, message: json.error ?? "Unknown error" });
+      }
+    } catch (e: any) {
+      setResult({ success: false, message: e.message });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+      <div>
+        <p className="text-sm font-semibold text-stone-700">Wisconsin Weekly Report</p>
+        <p className="text-xs text-stone-400 mt-1">Manually generate this week's Wisconsin report for Caroline. Uses real data from tech projects, requests, outreach, events, and weekly reports. Also sends Caroline a push notification.</p>
+      </div>
+      {result && (
+        <div className={`text-sm px-4 py-3 rounded-xl border ${result.success ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-700"}`}>
+          <p className="font-medium">{result.success ? "✓ " : "✗ "}{result.message}</p>
+          {result.stats && (
+            <p className="text-xs mt-1 opacity-80">
+              {result.stats.projects} projects · {result.stats.requests} requests · {result.stats.outreach} outreach · {result.stats.submitted} submitted / {result.stats.missing} missing reports
+            </p>
+          )}
+        </div>
+      )}
+      <div className="flex justify-end">
+        <Btn onClick={generate} disabled={loading}>{loading ? "Generating…" : "Generate Report Now"}</Btn>
+      </div>
+    </div>
+  );
+}
+
+type WisconsinReport = {
+  id: string; week_date: string;
+  projects_snapshot: any[];
+  requests_snapshot: any[];
+  outreach_snapshot: { entries: any[]; total: number; positive_count: number };
+  events_snapshot: { this_week: any[]; upcoming: any[] };
+  report_submissions_snapshot: { submitted: string[]; missing: string[]; total_interns: number };
+  gemini_summary?: string;
+  action_items: string[];
+  caroline_notes: Record<string, string>;
+  created_at: string;
+};
 
 // ── UGC Types ─────────────────────────────────────────────────────────────────
 type UGCSubmission = { id: string; creator_id?: string; week_date: string; total_views: number; likes: number; comments: number; shares: number; saves: number; followers_gained: number; followers_lost: number; net_follower_change: number; best_video_link?: string; benchmark_tier?: string; hook_text?: string; format_type?: string; video_length_seconds?: number; niche?: string; trending_sound?: boolean; has_cta?: boolean; avg_watch_time_seconds?: number; watch_completion_rate?: number; profile_visits?: number; traffic_fyp_pct?: number; traffic_following_pct?: number; traffic_search_pct?: number; comment_sentiment?: string; total_account_views?: number; videos_posted?: number; created_at: string };
@@ -2478,6 +2877,10 @@ type UGCQuestion = { id: string; creator_id?: string; question: string; created_
 type UGCReply = { id: string; question_id: string; creator_id?: string; reply: string; created_at: string };
 type UGCCreatorProfile = Profile & { tiktok_handle?: string; tiktok_url?: string; ugc_status?: string };
 type SmartAlert = { id: string; creator_id?: string; alert_type: string; message: string; urgency: 'red' | 'orange' | 'yellow' | 'purple'; dismissed: boolean; week_date?: string; created_at: string; };
+type CarolineSavedIdea = { id: string; hook?: string; concept_title?: string; full_concept?: any; caption?: string; format?: string; series_name?: string; series_episodes?: any[]; sound_notes?: string; mood?: string; audience?: string[]; notes?: string; filmed: boolean; saved_at: string; tiktok_url?: string; recreation_guide?: any; content_type?: string };
+type CarolineHook = { id: string; hook_text: string; mood?: string; generated_at: string; saved: boolean };
+type DayPlan = { hook: string; format: string; postTime: string; note: string };
+type WeeklyPlan = { id: string; creator_id?: string; week_date: string; week_goal?: string; phase?: string; monday?: DayPlan; tuesday?: DayPlan; wednesday?: DayPlan; thursday?: DayPlan; friday?: DayPlan; saturday?: DayPlan; sunday?: DayPlan; ab_test?: string; weekly_reminder?: string; status: string; raw_ai_output?: string; completed_days?: string[]; created_at: string };
 
 // ── UGC Helpers ────────────────────────────────────────────────────────────────
 function BenchmarkBadge({ tier }: { tier?: string }) {
@@ -5128,6 +5531,1146 @@ function DirectorWeeklyBriefPage({ profile, ugcBriefs, briefComments, setBriefCo
   );
 }
 
+// ── Founder Content Studio (Director / Caroline only) ─────────────────────────
+const MOODS = ["Building in public", "Personal story", "Fashion moment", "Startup tips", "Behind the scenes"] as const;
+const AUDIENCES = ["Other founders", "Fashion girls", "College women", "Future Cloud Closet users", "Everyone"] as const;
+const TIMES = ["Under 2 minutes", "5-10 minutes", "I have time"] as const;
+
+function ContentStudioPage({ savedIdeas, setSavedIdeas, hookBank, setHookBank, setPage, sb }: {
+  savedIdeas: CarolineSavedIdea[]; setSavedIdeas: (i: CarolineSavedIdea[]) => void;
+  hookBank: CarolineHook[]; setHookBank: (h: CarolineHook[]) => void;
+  setPage: (p: string) => void; sb: any;
+}) {
+  const [tab, setTab] = useState<"generate" | "recreate" | "saved" | "done" | "hooks">("generate");
+  const [form, setForm] = useState({ mind: "", mood: "Building in public" as string, audience: [] as string[], time: "Under 2 minutes" as string, inspiration: "" });
+  const [generating, setGenerating] = useState(false);
+  const [quickLoading, setQuickLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState("");
+  const [hookSearch, setHookSearch] = useState("");
+  const [remindingId, setRemindingId] = useState<string | null>(null);
+  const [savedFilter, setSavedFilter] = useState<"all" | "original" | "recreation">("all");
+  const [recForm, setRecForm] = useState({ url: "", drawnTo: [] as string[], time: "Under 2 minutes" as string });
+  const [recGenerating, setRecGenerating] = useState(false);
+  const [recResult, setRecResult] = useState<any>(null);
+  const [toast, setToast] = useState("");
+  const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    if (toastRef.current) clearTimeout(toastRef.current);
+    toastRef.current = setTimeout(() => setToast(""), 2000);
+  }
+
+  function toggleAudience(a: string) {
+    setForm(f => ({
+      ...f,
+      audience: f.audience.includes(a) ? f.audience.filter(x => x !== a) : [...f.audience, a],
+    }));
+  }
+
+  async function generate() {
+    if (!form.mind.trim()) { setError("Tell Gemini what's on your mind first."); return; }
+    if (!form.audience.length) { setError("Pick at least one audience."); return; }
+    setGenerating(true); setError(""); setResult(null);
+    try {
+      const res = await fetch("/api/caroline-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "full", ...form }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setError(json.error ?? "Generation failed"); return; }
+      setResult(json);
+      // Refresh hook bank
+      const { data } = await sb.from("caroline_hook_bank").select("*").order("generated_at", { ascending: false });
+      setHookBank((data || []) as CarolineHook[]);
+    } catch (e: any) { setError(e.message); }
+    finally { setGenerating(false); }
+  }
+
+  async function quickHooks() {
+    setQuickLoading(true); setError("");
+    try {
+      const res = await fetch("/api/caroline-content", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "quick" }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setError(json.error ?? "Failed"); return; }
+      const { data } = await sb.from("caroline_hook_bank").select("*").order("generated_at", { ascending: false });
+      setHookBank((data || []) as CarolineHook[]);
+      setTab("hooks");
+    } catch (e: any) { setError(e.message); }
+    finally { setQuickLoading(false); }
+  }
+
+  async function saveConcept(concept: any) {
+    const { data } = await sb.from("caroline_saved_ideas").insert({
+      hook: concept.hook, concept_title: concept.hook?.slice(0, 60),
+      full_concept: concept, caption: concept.caption, format: concept.format,
+      mood: result?.mood, audience: form.audience, filmed: false,
+    }).select().single();
+    if (data) { setSavedIdeas([data as CarolineSavedIdea, ...savedIdeas]); showToast("Concept saved"); }
+  }
+
+  async function saveHook(hook: string) {
+    const { data } = await sb.from("caroline_saved_ideas").insert({
+      hook, concept_title: hook.slice(0, 60), mood: result?.mood ?? form.mood,
+      audience: form.audience, filmed: false,
+    }).select().single();
+    if (data) { setSavedIdeas([data as CarolineSavedIdea, ...savedIdeas]); showToast("Hook saved"); }
+  }
+
+  async function saveSeries(series: any) {
+    const { data } = await sb.from("caroline_saved_ideas").insert({
+      concept_title: series.name, series_name: series.name,
+      series_episodes: series.episodes, mood: result?.mood ?? form.mood,
+      audience: form.audience, filmed: false,
+    }).select().single();
+    if (data) { setSavedIdeas([data as CarolineSavedIdea, ...savedIdeas]); showToast("Series saved"); }
+  }
+
+  const DRAWN_TO = ["The hook", "The editing style", "The storytelling", "The format", "The pacing", "The vibe/aesthetic", "The caption", "The CTA", "The sound"];
+
+  async function generateRec() {
+    if (!recForm.url.trim()) { setError("Paste the TikTok URL first."); return; }
+    setRecGenerating(true); setError(""); setRecResult(null);
+    try {
+      const res = await fetch("/api/caroline-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "recreate", ...recForm }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setError(json.error ?? "Generation failed"); return; }
+      setRecResult(json);
+    } catch (e: any) { setError(e.message); }
+    finally { setRecGenerating(false); }
+  }
+
+  async function saveRec() {
+    if (!recResult) return;
+    const { data } = await sb.from("caroline_saved_ideas").insert({
+      concept_title: recResult.step_by_step?.hook?.slice(0, 80) ?? "Recreation",
+      hook: recResult.step_by_step?.hook,
+      caption: recResult.caption,
+      recreation_guide: recResult,
+      tiktok_url: recForm.url,
+      content_type: "recreation",
+      filmed: false,
+    }).select().single();
+    if (data) { setSavedIdeas([data as CarolineSavedIdea, ...savedIdeas]); showToast("Recreation saved"); }
+  }
+
+  async function toggleFilmed(idea: CarolineSavedIdea) {
+    await sb.from("caroline_saved_ideas").update({ filmed: !idea.filmed }).eq("id", idea.id);
+    setSavedIdeas(savedIdeas.map(i => i.id === idea.id ? { ...i, filmed: !i.filmed } : i));
+  }
+
+  async function deleteIdea(id: string) {
+    await sb.from("caroline_saved_ideas").delete().eq("id", id);
+    setSavedIdeas(savedIdeas.filter(i => i.id !== id));
+  }
+
+  async function updateNote(id: string, notes: string) {
+    await sb.from("caroline_saved_ideas").update({ notes }).eq("id", id);
+    setSavedIdeas(savedIdeas.map(i => i.id === id ? { ...i, notes } : i));
+  }
+
+  async function saveHookFromBank(h: CarolineHook) {
+    await sb.from("caroline_hook_bank").update({ saved: true }).eq("id", h.id);
+    setHookBank(hookBank.map(x => x.id === h.id ? { ...x, saved: true } : x));
+    const { data } = await sb.from("caroline_saved_ideas").insert({
+      hook: h.hook_text, concept_title: h.hook_text.slice(0, 60),
+      mood: h.mood, filmed: false,
+    }).select().single();
+    if (data) { setSavedIdeas([data as CarolineSavedIdea, ...savedIdeas]); showToast("Hook saved to ideas"); }
+  }
+
+  async function remindMe(idea: CarolineSavedIdea) {
+    setRemindingId(idea.id);
+    try {
+      await fetch("/api/caroline-remind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ideaId: idea.id, ideaTitle: idea.concept_title ?? idea.hook ?? "Content idea" }),
+      });
+      showToast("Reminders set — now, tomorrow & in 3 days");
+    } catch { showToast("Reminder sent"); }
+    finally { setRemindingId(null); }
+  }
+
+  const tabBtn = (id: typeof tab, label: string, count?: number) => (
+    <button key={id} onClick={() => setTab(id)} className={`relative text-sm px-4 py-2 rounded-lg transition-all ${tab === id ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>
+      {label}
+      {count != null && count > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-stone-700 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{count}</span>}
+    </button>
+  );
+
+  const activeSavedAll = savedIdeas.filter(i => !i.filmed);
+  const activeSaved = savedFilter === "all" ? activeSavedAll : activeSavedAll.filter(i => (i.content_type ?? "original") === savedFilter);
+  const done = savedIdeas.filter(i => i.filmed);
+  const filteredHooks = hookSearch ? hookBank.filter(h => h.hook_text.toLowerCase().includes(hookSearch.toLowerCase())) : hookBank;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-stone-800">Content Studio</h1>
+          <p className="text-sm text-stone-400 mt-0.5">Your personal TikTok content generator</p>
+        </div>
+        <button
+          onClick={quickHooks}
+          disabled={quickLoading}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-stone-800 text-white text-sm font-medium hover:bg-stone-700 disabled:opacity-50 transition-all"
+        >
+          <Zap size={14}/>
+          {quickLoading ? "Generating…" : "Quick Hooks"}
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit flex-wrap">
+        {tabBtn("generate", "Generate")}
+        {tabBtn("recreate", "Recreate")}
+        {tabBtn("saved", "Saved", activeSavedAll.length)}
+        {tabBtn("done", "Done", done.length)}
+        {tabBtn("hooks", "Hook Bank", hookBank.length)}
+      </div>
+
+      {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</p>}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-stone-800 text-white text-sm font-medium px-5 py-2.5 rounded-full shadow-lg pointer-events-none animate-fade-in">
+          {toast} ✓
+        </div>
+      )}
+
+      {/* ── GENERATE TAB ── */}
+      {tab === "generate" && (
+        <div className="flex flex-col gap-4">
+          {/* Form */}
+          <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+            <TA
+              label="What's on your mind this week?"
+              value={form.mind}
+              onChange={v => setForm({ ...form, mind: v })}
+              rows={3}
+              placeholder="What's happening with Cloud Closet, what you're building, what you're thinking about…"
+            />
+
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-semibold text-stone-600 uppercase tracking-widest">Content Mood</p>
+              <div className="flex flex-wrap gap-2">
+                {MOODS.map(m => (
+                  <button key={m} onClick={() => setForm({ ...form, mood: m })}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-all ${form.mood === m ? "bg-stone-800 text-white border-stone-800" : "border-stone-200 text-stone-600 hover:border-stone-400"}`}
+                  >{m}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-semibold text-stone-600 uppercase tracking-widest">Who is this for?</p>
+              <div className="flex flex-wrap gap-2">
+                {AUDIENCES.map(a => (
+                  <button key={a} onClick={() => toggleAudience(a)}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-all ${form.audience.includes(a) ? "bg-stone-800 text-white border-stone-800" : "border-stone-200 text-stone-600 hover:border-stone-400"}`}
+                  >{a}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-semibold text-stone-600 uppercase tracking-widest">How much time to film?</p>
+              <div className="flex flex-wrap gap-2">
+                {TIMES.map(t => (
+                  <button key={t} onClick={() => setForm({ ...form, time: t })}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-all ${form.time === t ? "bg-stone-800 text-white border-stone-800" : "border-stone-200 text-stone-600 hover:border-stone-400"}`}
+                  >{t}</button>
+                ))}
+              </div>
+            </div>
+
+            <TI
+              label="Inspiration (optional)"
+              value={form.inspiration}
+              onChange={v => setForm({ ...form, inspiration: v })}
+              placeholder="Paste a TikTok hook or idea you want to riff on…"
+            />
+
+            <div className="flex justify-end pt-1">
+              <Btn onClick={generate} disabled={generating}>
+                {generating ? "Generating…" : "Generate Content Drop"}
+              </Btn>
+            </div>
+          </div>
+
+          {/* Results */}
+          {result && (
+            <div className="flex flex-col gap-4">
+
+              {/* Video Concepts */}
+              <div>
+                <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">3 Video Concepts</p>
+                <div className="flex flex-col gap-3">
+                  {(result.concepts ?? []).map((c: any, i: number) => (
+                    <div key={i} className="bg-white border border-stone-200/60 rounded-xl p-4 flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-1">Hook</p>
+                          <p className="text-sm font-medium text-stone-800 leading-snug">"{c.hook}"</p>
+                        </div>
+                        <span className="text-xs px-2 py-1 bg-stone-100 text-stone-500 rounded-lg flex-shrink-0">{c.format}</span>
+                      </div>
+                      <div className="bg-stone-50 rounded-lg p-3 flex flex-col gap-2">
+                        <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest">Outline</p>
+                        {c.outline?.opening && <p className="text-xs text-stone-600"><span className="font-semibold">Open:</span> {c.outline.opening}</p>}
+                        {c.outline?.middle && <p className="text-xs text-stone-600"><span className="font-semibold">Middle:</span> {c.outline.middle}</p>}
+                        {c.outline?.end && <p className="text-xs text-stone-600"><span className="font-semibold">End:</span> {c.outline.end}</p>}
+                      </div>
+                      {c.caption && <p className="text-xs text-stone-500 italic">{c.caption}</p>}
+                      {c.why && <p className="text-xs text-blue-600 bg-blue-50 rounded-lg px-3 py-2">{c.why}</p>}
+                      <button onClick={() => saveConcept(c)} className="self-end text-xs px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-all">Save Concept</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 5 Hook Ideas */}
+              <div>
+                <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">5 Hook Ideas</p>
+                <div className="flex flex-col gap-2">
+                  {(result.hooks ?? []).map((h: string, i: number) => (
+                    <div key={i} className="bg-white border border-stone-200/60 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                      <p className="text-sm text-stone-700">"{h}"</p>
+                      <button onClick={() => saveHook(h)} className="flex-shrink-0 text-xs px-3 py-1 rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-50 transition-all">Save</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Series Idea */}
+              {result.series && (
+                <div>
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Content Series Idea</p>
+                  <div className="bg-white border border-stone-200/60 rounded-xl p-4 flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-stone-800">{result.series.name}</p>
+                        <p className="text-xs text-stone-500 mt-1">{result.series.premise}</p>
+                      </div>
+                      <button onClick={() => saveSeries(result.series)} className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-all">Save</button>
+                    </div>
+                    {(result.series.episodes ?? []).length > 0 && (
+                      <div className="flex flex-col gap-1.5 pt-2 border-t border-stone-100">
+                        {result.series.episodes.map((ep: any, i: number) => (
+                          <div key={i} className="flex gap-2 text-xs">
+                            <span className="text-stone-400 font-medium flex-shrink-0">Ep {i + 1}.</span>
+                            <span className="text-stone-700 font-medium">{ep.title}</span>
+                            {ep.description && <span className="text-stone-400">— {ep.description}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Sound Suggestions */}
+              {(result.sounds ?? []).length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Sound Suggestions</p>
+                  <div className="bg-white border border-stone-200/60 rounded-xl p-4 flex flex-col gap-2">
+                    {result.sounds.map((s: string, i: number) => (
+                      <div key={i} className="flex items-start gap-2 text-sm">
+                        <span className="text-stone-400 flex-shrink-0">{i + 1}.</span>
+                        <p className="text-stone-700">{s}</p>
+                      </div>
+                    ))}
+                    {result.sound_note && <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-1">{result.sound_note}</p>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── RECREATE TAB ── */}
+      {tab === "recreate" && (
+        <div className="flex flex-col gap-4">
+          <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+            <TI
+              label="TikTok URL"
+              value={recForm.url}
+              onChange={v => setRecForm({ ...recForm, url: v })}
+              placeholder="https://www.tiktok.com/@username/video/..."
+            />
+
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-semibold text-stone-600 uppercase tracking-widest">What drew you to it?</p>
+              <div className="flex flex-wrap gap-2">
+                {DRAWN_TO.map(d => (
+                  <button key={d} onClick={() => setRecForm(f => ({
+                    ...f,
+                    drawnTo: f.drawnTo.includes(d) ? f.drawnTo.filter(x => x !== d) : [...f.drawnTo, d]
+                  }))}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-all ${recForm.drawnTo.includes(d) ? "bg-stone-800 text-white border-stone-800" : "border-stone-200 text-stone-600 hover:border-stone-400"}`}
+                  >{d}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-semibold text-stone-600 uppercase tracking-widest">How much time to film?</p>
+              <div className="flex flex-wrap gap-2">
+                {TIMES.map(t => (
+                  <button key={t} onClick={() => setRecForm({ ...recForm, time: t })}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-all ${recForm.time === t ? "bg-stone-800 text-white border-stone-800" : "border-stone-200 text-stone-600 hover:border-stone-400"}`}
+                  >{t}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <Btn onClick={generateRec} disabled={recGenerating}>
+                {recGenerating ? "Generating…" : "Generate Recreation Guide"}
+              </Btn>
+            </div>
+          </div>
+
+          {recResult && (
+            <div className="flex flex-col gap-4">
+              {/* Video Breakdown */}
+              {recResult.breakdown && (
+                <div className="bg-white border border-stone-200/60 rounded-xl p-4 flex flex-col gap-3">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Video Breakdown</p>
+                  {recResult.breakdown.what_worked && <div><p className="text-[10px] text-stone-400 font-semibold mb-0.5">What worked</p><p className="text-sm text-stone-700">{recResult.breakdown.what_worked}</p></div>}
+                  {recResult.breakdown.why_performed && <div><p className="text-[10px] text-stone-400 font-semibold mb-0.5">Why it performed</p><p className="text-sm text-stone-700">{recResult.breakdown.why_performed}</p></div>}
+                  {recResult.breakdown.what_to_keep && <div><p className="text-[10px] text-stone-400 font-semibold mb-0.5">Keep</p><p className="text-sm text-stone-700">{recResult.breakdown.what_to_keep}</p></div>}
+                  {recResult.breakdown.what_to_change && <div><p className="text-[10px] text-stone-400 font-semibold mb-0.5">Change for Cloud Closet</p><p className="text-sm text-stone-700">{recResult.breakdown.what_to_change}</p></div>}
+                </div>
+              )}
+
+              {/* Step-by-Step */}
+              {recResult.step_by_step && (
+                <div className="bg-white border border-stone-200/60 rounded-xl p-4 flex flex-col gap-3">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Step-by-Step Guide</p>
+                  {recResult.step_by_step.setup && <div><p className="text-[10px] text-stone-400 font-semibold mb-0.5">Setup</p><p className="text-sm text-stone-700">{recResult.step_by_step.setup}</p></div>}
+                  {recResult.step_by_step.hook && (
+                    <div className="bg-stone-800 rounded-xl px-4 py-3">
+                      <p className="text-[10px] text-stone-400 font-semibold mb-1">Your Hook</p>
+                      <p className="text-sm text-white font-medium leading-snug">"{recResult.step_by_step.hook}"</p>
+                    </div>
+                  )}
+                  {recResult.step_by_step.middle && <div><p className="text-[10px] text-stone-400 font-semibold mb-0.5">Middle</p><p className="text-sm text-stone-700">{recResult.step_by_step.middle}</p></div>}
+                  {recResult.step_by_step.end && <div><p className="text-[10px] text-stone-400 font-semibold mb-0.5">Closing</p><p className="text-sm text-stone-700">{recResult.step_by_step.end}</p></div>}
+                  <div className="flex gap-4 pt-1 border-t border-stone-100">
+                    {recResult.step_by_step.filming_time && <p className="text-xs text-stone-500"><span className="font-semibold">Filming:</span> {recResult.step_by_step.filming_time}</p>}
+                    {recResult.step_by_step.video_length && <p className="text-xs text-stone-500"><span className="font-semibold">Video:</span> {recResult.step_by_step.video_length}</p>}
+                  </div>
+                </div>
+              )}
+
+              {/* Full Script */}
+              {recResult.script && (
+                <div className="bg-white border border-stone-200/60 rounded-xl p-4 flex flex-col gap-2">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">
+                    {recResult.script_type === "narration_notes" ? "Narration Notes" : "Full Script"}
+                  </p>
+                  <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{recResult.script}</p>
+                </div>
+              )}
+
+              {/* Technical Instructions */}
+              {recResult.technical && (
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-amber-700 uppercase tracking-widest mb-2">Technical Instructions</p>
+                  <p className="text-sm text-amber-800">{recResult.technical}</p>
+                </div>
+              )}
+
+              {/* Caption + Hashtags */}
+              {(recResult.caption || recResult.hashtags) && (
+                <div className="bg-white border border-stone-200/60 rounded-xl p-4 flex flex-col gap-3">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Caption & Hashtags</p>
+                  {recResult.caption && <p className="text-sm text-stone-700 italic">{recResult.caption}</p>}
+                  {recResult.app_mention_note && <p className="text-xs text-blue-600 bg-blue-50 rounded-lg px-3 py-2">{recResult.app_mention_note}</p>}
+                  {recResult.hashtags?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {recResult.hashtags.map((h: string, i: number) => (
+                        <span key={i} className="text-xs px-2 py-1 bg-stone-100 text-stone-600 rounded-full">{h.startsWith("#") ? h : `#${h}`}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sound */}
+              {recResult.sound && (
+                <div className="bg-white border border-stone-200/60 rounded-xl p-4 flex flex-col gap-2">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Sound</p>
+                  <p className="text-sm text-stone-700">{recResult.sound}</p>
+                  {recResult.sound_note && <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{recResult.sound_note}</p>}
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Btn onClick={saveRec}>Save Recreation</Btn>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── SAVED IDEAS TAB ── */}
+      {tab === "saved" && (
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-2">
+            {(["all", "original", "recreation"] as const).map(f => (
+              <button key={f} onClick={() => setSavedFilter(f)}
+                className={`text-xs px-3 py-1.5 rounded-full border capitalize transition-all ${savedFilter === f ? "bg-stone-800 text-white border-stone-800" : "border-stone-200 text-stone-500 hover:border-stone-400"}`}
+              >{f}</button>
+            ))}
+          </div>
+          {activeSaved.length === 0 ? (
+            <ES icon={<Bookmark size={24}/>} message="No saved ideas yet. Generate content and tap Save on anything you like." />
+          ) : activeSaved.map(idea => (
+            <IdeaCard key={idea.id} idea={idea} onFilmed={() => toggleFilmed(idea)} onDelete={() => deleteIdea(idea.id)} onNote={updateNote} onRemind={() => remindMe(idea)} reminding={remindingId === idea.id} />
+          ))}
+        </div>
+      )}
+
+      {/* ── DONE TAB ── */}
+      {tab === "done" && (
+        <div className="flex flex-col gap-3">
+          {done.length === 0 ? (
+            <ES icon={<CheckSquare size={24}/>} message="Nothing filmed yet. Mark ideas as filmed and they'll appear here." />
+          ) : done.map(idea => (
+            <IdeaCard key={idea.id} idea={idea} onFilmed={() => toggleFilmed(idea)} onDelete={() => deleteIdea(idea.id)} onNote={updateNote} onRemind={() => remindMe(idea)} reminding={remindingId === idea.id} filmed />
+          ))}
+        </div>
+      )}
+
+      {/* ── HOOK BANK TAB ── */}
+      {tab === "hooks" && (
+        <div className="flex flex-col gap-3">
+          <input
+            value={hookSearch}
+            onChange={e => setHookSearch(e.target.value)}
+            placeholder="Search hooks…"
+            className="border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-stone-400"
+          />
+          {filteredHooks.length === 0 ? (
+            <ES icon={<Zap size={24}/>} message="No hooks yet. Use Quick Hooks or Generate Content to fill your hook bank." />
+          ) : (
+            <div className="flex flex-col gap-2">
+              {filteredHooks.map(h => (
+                <div key={h.id} className="bg-white border border-stone-200/60 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-stone-700">"{h.hook_text}"</p>
+                    {h.mood && <p className="text-[10px] text-stone-400 mt-0.5">{h.mood} · {new Date(h.generated_at).toLocaleDateString()}</p>}
+                  </div>
+                  {!h.saved && (
+                    <button onClick={() => saveHookFromBank(h)} className="flex-shrink-0 text-xs px-3 py-1 rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-50 transition-all">Save</button>
+                  )}
+                  {h.saved && <span className="flex-shrink-0 text-xs text-emerald-600 font-medium">Saved ✓</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IdeaCard({ idea, onFilmed, onDelete, onNote, onRemind, reminding = false, filmed = false }: {
+  idea: CarolineSavedIdea; onFilmed: () => void; onDelete: () => void;
+  onNote: (id: string, note: string) => void; onRemind: () => void; reminding?: boolean; filmed?: boolean;
+}) {
+  const [noteVal, setNoteVal] = useState(idea.notes ?? "");
+  const isSeries = !!idea.series_name;
+  const isRec = idea.content_type === "recreation";
+
+  return (
+    <div className={`bg-white border rounded-xl p-4 flex flex-col gap-3 ${filmed ? "border-stone-100 opacity-70" : "border-stone-200/60"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          {isRec ? (
+            <>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-semibold">Recreation</span>
+                {idea.mood && <span className="text-[10px] text-stone-400">{idea.mood}</span>}
+              </div>
+              {idea.hook && <p className="text-sm font-medium text-stone-800 leading-snug">"{idea.hook}"</p>}
+              {idea.tiktok_url && (
+                <a href={idea.tiktok_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 underline mt-0.5 inline-block truncate max-w-full">Original TikTok</a>
+              )}
+            </>
+          ) : isSeries ? (
+            <>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">Series</span>
+                {idea.mood && <span className="text-[10px] text-stone-400">{idea.mood}</span>}
+              </div>
+              <p className="text-sm font-semibold text-stone-800">{idea.series_name}</p>
+              {(idea.series_episodes ?? []).length > 0 && (
+                <div className="flex flex-col gap-1.5 mt-2 pt-2 border-t border-stone-100">
+                  {(idea.series_episodes ?? []).map((ep: any, i: number) => (
+                    <div key={i} className="flex gap-2 text-xs">
+                      <span className="text-stone-400 font-medium flex-shrink-0">Ep {i + 1}.</span>
+                      <div>
+                        <span className="text-stone-700 font-medium">{ep.title}</span>
+                        {ep.description && <span className="text-stone-400"> — {ep.description}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {idea.mood && <p className="text-[10px] text-stone-400 mb-1">{idea.mood}</p>}
+              {idea.hook && <p className="text-sm font-medium text-stone-800 leading-snug">"{idea.hook}"</p>}
+              {idea.format && <p className="text-xs text-stone-400 mt-0.5">{idea.format}</p>}
+              {idea.caption && <p className="text-xs text-stone-500 italic mt-1.5">{idea.caption}</p>}
+              {idea.full_concept?.why && <p className="text-xs text-blue-600 mt-1.5">{idea.full_concept.why}</p>}
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button onClick={onRemind} disabled={reminding} title="Remind me to film this" className="p-1.5 rounded-lg text-stone-400 hover:text-amber-500 hover:bg-amber-50 disabled:opacity-50 transition-all"><Bell size={14}/></button>
+          <button onClick={onDelete} title="Delete" className="p-1.5 rounded-lg text-stone-400 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={14}/></button>
+        </div>
+      </div>
+      <textarea
+        value={noteVal}
+        onChange={e => setNoteVal(e.target.value)}
+        onBlur={e => onNote(idea.id, e.target.value)}
+        placeholder="Add a note…"
+        rows={1}
+        className="w-full text-xs text-stone-500 bg-stone-50 border border-stone-100 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-stone-300 placeholder-stone-300"
+      />
+      <div className="flex items-center justify-between pt-1 border-t border-stone-100">
+        <p className="text-[10px] text-stone-400">{new Date(idea.saved_at).toLocaleDateString()}</p>
+        <button
+          onClick={onFilmed}
+          className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${filmed ? "border-stone-200 text-stone-400 hover:bg-stone-50" : "border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100"}`}
+        >{filmed ? "Unmark filmed" : "Mark as filmed ✓"}</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Wisconsin Weekly Report (Director view) ────────────────────────────────────
+function WisconsinReportPage({ profile, reports, setReports, setPage, sb }: {
+  profile: Profile; reports: WisconsinReport[]; setReports: (r: WisconsinReport[]) => void;
+  setPage: (p: string) => void; sb: any;
+}) {
+  const [view, setView] = useState<"current" | "history">("current");
+  const [selectedReport, setSelectedReport] = useState<WisconsinReport | null>(reports[0] ?? null);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [generating, setGenerating] = useState(false);
+  const [genResult, setGenResult] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function refresh() {
+    setRefreshing(true);
+    const { data } = await sb.from("wisconsin_reports").select("*").order("week_date", { ascending: false });
+    const loaded = (data || []) as WisconsinReport[];
+    setReports(loaded);
+    setSelectedReport(loaded[0] ?? null);
+    setRefreshing(false);
+  }
+
+  // Auto-fetch on first load if no reports yet
+  useEffect(() => { if (reports.length === 0) refresh(); }, []);
+
+  const current = selectedReport ?? reports[0] ?? null;
+
+  async function saveNote(section: string, value: string) {
+    if (!current) return;
+    const updated = { ...current, caroline_notes: { ...(current.caroline_notes ?? {}), [section]: value } };
+    await sb.from("wisconsin_reports").update({ caroline_notes: updated.caroline_notes }).eq("id", current.id);
+    setReports(reports.map(r => r.id === current.id ? updated : r));
+    setSelectedReport(updated);
+  }
+
+  function toggle(key: string) {
+    setCollapsed(c => ({ ...c, [key]: !c[key] }));
+  }
+
+  function SectionCard({
+    id, title, count, flagCount = 0, children, linkPage,
+    defaultOpen = false,
+  }: {
+    id: string; title: string; count?: number | string; flagCount?: number;
+    children: React.ReactNode; linkPage?: string; defaultOpen?: boolean;
+  }) {
+    const open = collapsed[id] === undefined ? defaultOpen : !collapsed[id];
+    const note = current?.caroline_notes?.[id] ?? "";
+    const [noteVal, setNoteVal] = useState(note);
+    useEffect(() => { setNoteVal(current?.caroline_notes?.[id] ?? ""); }, [current?.id]);
+
+    return (
+      <div className={`bg-white border rounded-xl overflow-hidden ${flagCount > 0 ? "border-orange-200" : "border-stone-200/60"}`}>
+        <div
+          onClick={() => toggle(id)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-stone-50 transition-all cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <p className="text-sm font-semibold text-stone-800">{title}</p>
+            {count !== undefined && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-stone-100 text-stone-500 font-medium">{count}</span>
+            )}
+            {flagCount > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium">{flagCount} flagged</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {linkPage && (
+              <button
+                onClick={e => { e.stopPropagation(); setPage(linkPage); }}
+                className="text-xs text-stone-400 hover:text-stone-600 px-2 py-1 rounded border border-stone-200 hover:bg-stone-50 transition-all"
+              >View in Dashboard</button>
+            )}
+            <span className="text-stone-400 text-xs">{open ? "▲" : "▼"}</span>
+          </div>
+        </div>
+
+        {open && (
+          <div className="px-5 pb-5 flex flex-col gap-4">
+            {children}
+            <div className="pt-3 border-t border-stone-100">
+              <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest mb-1.5">My Notes (private)</p>
+              <textarea
+                value={noteVal}
+                onChange={e => setNoteVal(e.target.value)}
+                onBlur={e => saveNote(id, e.target.value)}
+                placeholder="Add a private note..."
+                rows={2}
+                className="w-full text-xs text-stone-600 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-stone-400 placeholder-stone-300"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (reports.length === 0 && !refreshing) {
+    return (
+      <div className="flex flex-col gap-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-stone-800">Wisconsin Report</h1>
+            <p className="text-sm text-stone-400 mt-0.5">Automated weekly summary</p>
+          </div>
+          <button onClick={refresh} disabled={refreshing} className="text-xs px-3 py-1.5 rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-50 transition-all">↻ Refresh</button>
+        </div>
+        <ES icon={<FileText size={24}/>} message="No reports yet. Reports are generated every Sunday night at 7pm." />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-stone-800">Wisconsin Report</h1>
+          <p className="text-sm text-stone-400 mt-0.5">
+            {current ? `Week of ${current.week_date}` : "Automated weekly summary"}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={refresh} disabled={refreshing} className="text-xs px-3 py-1.5 rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-50 disabled:opacity-50 transition-all">{refreshing ? "Loading…" : "↻ Refresh"}</button>
+          <div className="flex gap-1 bg-stone-100 p-1 rounded-xl">
+            <button onClick={() => { setView("current"); setSelectedReport(reports[0] ?? null); }} className={`text-sm px-3 py-1.5 rounded-lg transition-all ${view === "current" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>This Week</button>
+            <button onClick={() => setView("history")} className={`text-sm px-3 py-1.5 rounded-lg transition-all ${view === "history" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>History</button>
+          </div>
+        </div>
+      </div>
+
+      {genResult && (
+        <div className={`text-sm px-4 py-3 rounded-xl border ${genResult.startsWith("✓") ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-700"}`}>
+          {genResult}
+        </div>
+      )}
+
+      {view === "history" && (
+        <div className="flex flex-col gap-2">
+          {reports.length === 0 ? (
+            <ES icon={<FileText size={24}/>} message="No past reports yet." />
+          ) : reports.map(r => (
+            <button
+              key={r.id}
+              onClick={() => { setSelectedReport(r); setView("current"); }}
+              className="bg-white border border-stone-200/60 rounded-xl px-4 py-3 flex items-center justify-between hover:border-stone-300 hover:shadow-sm transition-all text-left"
+            >
+              <div>
+                <p className="text-sm font-semibold text-stone-800">Week of {r.week_date}</p>
+                <p className="text-xs text-stone-400 mt-0.5">{r.action_items?.length ?? 0} action items · {r.projects_snapshot?.length ?? 0} projects · {r.outreach_snapshot?.total ?? 0} outreach</p>
+              </div>
+              <span className="text-stone-400 text-xs">View →</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {view === "current" && current && (
+        <div className="flex flex-col gap-3">
+
+          {/* Action Items — always expanded, pinned top */}
+          <SectionCard id="action_items" title="Action Items" count={current.action_items?.length ?? 0} defaultOpen={true} flagCount={current.action_items?.length ?? 0}>
+            {(current.action_items ?? []).length === 0 ? (
+              <p className="text-sm text-stone-400">No action items this week.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {(current.action_items ?? []).map((item, i) => (
+                  <div key={i} className="flex items-start gap-2.5">
+                    <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-bold flex items-center justify-center">{i + 1}</span>
+                    <p className="text-sm text-stone-700 leading-snug">{item}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Gemini Summary */}
+          <SectionCard id="summary" title="Weekly Summary" defaultOpen={true}>
+            {current.gemini_summary ? (
+              <p className="text-sm text-stone-700 leading-relaxed">{current.gemini_summary}</p>
+            ) : (
+              <p className="text-sm text-stone-400 italic">No summary generated.</p>
+            )}
+          </SectionCard>
+
+          {/* Projects */}
+          <SectionCard
+            id="projects"
+            title="Projects in Progress"
+            count={current.projects_snapshot?.length ?? 0}
+            flagCount={current.projects_snapshot?.filter((p: any) => p.stalled).length ?? 0}
+            linkPage="director_home"
+          >
+            {(current.projects_snapshot ?? []).length === 0 ? (
+              <p className="text-sm text-stone-400">No active projects this week.</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {(current.projects_snapshot ?? []).map((p: any) => (
+                  <div key={p.id} className={`rounded-lg p-3 border ${p.stalled ? "border-orange-200 bg-orange-50/40" : "border-stone-100 bg-stone-50/40"}`}>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="text-sm font-medium text-stone-800">{p.title}</p>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {p.stalled && <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-semibold">Stalled</span>}
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">{p.status}</span>
+                      </div>
+                    </div>
+                    {p.description && <p className="text-xs text-stone-500 leading-snug mb-1.5">{p.description}</p>}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-stone-700 rounded-full" style={{ width: `${p.progress ?? 0}%` }} />
+                      </div>
+                      <span className="text-[10px] text-stone-400 font-medium">{p.progress ?? 0}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Requests */}
+          <SectionCard
+            id="requests"
+            title="Requested Materials"
+            count={current.requests_snapshot?.length ?? 0}
+            flagCount={current.requests_snapshot?.filter((r: any) => r.overdue).length ?? 0}
+          >
+            {(current.requests_snapshot ?? []).length === 0 ? (
+              <p className="text-sm text-stone-400">No open requests.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {(current.requests_snapshot ?? []).map((r: any) => (
+                  <div key={r.id} className={`rounded-lg p-3 border text-sm ${r.overdue ? "border-red-200 bg-red-50/40" : r.is_new ? "border-stone-200 bg-stone-50" : "border-stone-100"}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-stone-800 leading-snug flex-1">{r.message}</p>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {r.overdue && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">Overdue</span>}
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">{r.status}</span>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-stone-400 mt-1">{r.type_name ? `${r.type_name} · ` : ''}{new Date(r.created_at).toLocaleDateString()}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Outreach */}
+          <SectionCard
+            id="outreach"
+            title="Outreach & Local Partnerships"
+            count={current.outreach_snapshot?.total ?? 0}
+          >
+            {(current.outreach_snapshot?.total ?? 0) === 0 ? (
+              <p className="text-sm text-stone-400">No outreach logged this week.</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-4">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-stone-800">{current.outreach_snapshot.total}</p>
+                    <p className="text-xs text-stone-400">Total</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-emerald-700">{current.outreach_snapshot.positive_count}</p>
+                    <p className="text-xs text-stone-400">Positive outcomes</p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {current.outreach_snapshot.entries.map((o: any) => (
+                    <div key={o.id} className={`rounded-lg p-3 border text-sm ${o.positive ? "border-emerald-200 bg-emerald-50/40" : "border-stone-100"}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-stone-800 font-medium">{o.brand_or_creator}</p>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 text-stone-500">{o.status}</span>
+                      </div>
+                      {o.platform && <p className="text-xs text-stone-400 mt-0.5">via {o.platform}{o.date_contacted ? ` · ${o.date_contacted}` : ''}</p>}
+                      {o.notes && <p className="text-xs text-stone-500 mt-1 italic">{o.notes}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Events */}
+          <SectionCard
+            id="events"
+            title="Events"
+            count={`${current.events_snapshot?.upcoming?.length ?? 0} upcoming`}
+            linkPage="director_calendar"
+          >
+            {(current.events_snapshot?.this_week ?? []).length > 0 && (
+              <div className="mb-3">
+                <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">Added This Week</p>
+                <div className="flex flex-col gap-1.5">
+                  {current.events_snapshot.this_week.map((e: any) => (
+                    <div key={e.id} className="text-sm text-stone-700 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-stone-400 flex-shrink-0" />
+                      {e.title}{e.date ? ` — ${e.date}` : ''}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {(current.events_snapshot?.upcoming ?? []).length === 0 ? (
+              <p className="text-sm text-stone-400">No upcoming events in the next 14 days.</p>
+            ) : (
+              <div>
+                <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">Next 14 Days</p>
+                <div className="flex flex-col gap-1.5">
+                  {current.events_snapshot.upcoming.map((e: any) => (
+                    <div key={e.id} className="flex items-center gap-3 text-sm">
+                      <span className="text-xs font-mono text-stone-400 w-24 flex-shrink-0">{e.date}</span>
+                      <span className="text-stone-700">{e.title}</span>
+                      {e.location && <span className="text-xs text-stone-400">· {e.location}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Report Submissions */}
+          <SectionCard
+            id="submissions"
+            title="Weekly Report Submissions"
+            count={`${current.report_submissions_snapshot?.submitted?.length ?? 0} / ${current.report_submissions_snapshot?.total_interns ?? 0}`}
+            flagCount={current.report_submissions_snapshot?.missing?.length ?? 0}
+          >
+            <div className="flex flex-col gap-3">
+              {(current.report_submissions_snapshot?.submitted ?? []).length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-emerald-600 uppercase tracking-widest mb-1.5">Submitted</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {current.report_submissions_snapshot.submitted.map((name: string) => (
+                      <span key={name} className="text-xs px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">{name}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(current.report_submissions_snapshot?.missing ?? []).length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-red-600 uppercase tracking-widest mb-1.5">Missing</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {current.report_submissions_snapshot.missing.map((name: string) => (
+                      <span key={name} className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-700 border border-red-100">{name}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(current.report_submissions_snapshot?.missing ?? []).length === 0 &&
+               (current.report_submissions_snapshot?.submitted ?? []).length === 0 && (
+                <p className="text-sm text-stone-400">No submission data yet.</p>
+              )}
+            </div>
+          </SectionCard>
+
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Creator Weekly Brief + Plan page ───────────────────────────────────────────
+function CreatorWeeklyBriefPage({ profile, briefs, weeklyPlans, setWeeklyPlans, sb }: {
+  profile: UGCCreatorProfile; briefs: UGCBrief[]; weeklyPlans: WeeklyPlan[];
+  setWeeklyPlans: (p: WeeklyPlan[]) => void; sb: any;
+}) {
+  const [tab, setTab] = useState<"brief" | "plan">("brief");
+  const currentWeek = getMondayOfWeek(new Date());
+  const currentBrief = briefs.find(b => b.week_date === currentWeek) ?? briefs[0] ?? null;
+  const myPlan = weeklyPlans.find(p => p.week_date === currentWeek) ?? weeklyPlans[0] ?? null;
+
+  const DAYS: { key: keyof WeeklyPlan; label: string }[] = [
+    { key: "monday", label: "Monday" }, { key: "tuesday", label: "Tuesday" },
+    { key: "wednesday", label: "Wednesday" }, { key: "thursday", label: "Thursday" },
+    { key: "friday", label: "Friday" }, { key: "saturday", label: "Saturday" },
+    { key: "sunday", label: "Sunday" },
+  ];
+
+  async function toggleDay(day: string) {
+    if (!myPlan) return;
+    const current: string[] = Array.isArray(myPlan.completed_days) ? myPlan.completed_days : [];
+    const next = current.includes(day) ? current.filter(d => d !== day) : [...current, day];
+    await sb.from("weekly_plans").update({ completed_days: next }).eq("id", myPlan.id);
+    setWeeklyPlans(weeklyPlans.map(p => p.id === myPlan.id ? { ...p, completed_days: next } : p));
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit">
+        <button onClick={() => setTab("brief")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "brief" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>This Week's Brief</button>
+        <button onClick={() => setTab("plan")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "plan" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>My Content Plan</button>
+      </div>
+
+      {tab === "brief" && (
+        <div className="flex flex-col gap-4">
+          {!currentBrief ? (
+            <ES icon={<FileText size={24}/>} message="No brief published for this week yet. Check back Monday!" />
+          ) : (
+            <div className="flex flex-col gap-4">
+              <div>
+                <h1 className="text-xl font-bold text-stone-800">Weekly Brief</h1>
+                <p className="text-sm text-stone-400 mt-0.5">Week of {currentBrief.week_date}</p>
+              </div>
+              {currentBrief.hooks && (
+                <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Hooks This Week</p>
+                  <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{currentBrief.hooks}</p>
+                </div>
+              )}
+              {currentBrief.format_recs && (
+                <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Format Recommendations</p>
+                  <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{currentBrief.format_recs}</p>
+                </div>
+              )}
+              {currentBrief.brand_guidelines && (
+                <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Brand Guidelines</p>
+                  <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{currentBrief.brand_guidelines}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "plan" && (
+        <div className="flex flex-col gap-4">
+          {!myPlan ? (
+            <ES icon={<CalendarDays size={24}/>} message="Your content plan for this week hasn't been generated yet. It'll be ready Monday morning." />
+          ) : myPlan.status === "draft" ? (
+            <ES icon={<CalendarDays size={24}/>} message="Your plan is being reviewed by the team. It'll appear here once approved." />
+          ) : (
+            <>
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <h1 className="text-xl font-bold text-stone-800">My Content Plan</h1>
+                  <p className="text-sm text-stone-400 mt-0.5">Week of {myPlan.week_date}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <PhaseBadge phase={myPlan.phase} />
+                  <span className="text-xs text-stone-400">{(Array.isArray(myPlan.completed_days) ? myPlan.completed_days : []).length}/7 days done</span>
+                </div>
+              </div>
+
+              {myPlan.week_goal && (
+                <div className="bg-stone-50 rounded-xl p-4 border border-stone-200/60">
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-1">Week Goal</p>
+                  <p className="text-sm text-stone-700">{myPlan.week_goal}</p>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2">
+                {DAYS.map(({ key, label }) => {
+                  const d = myPlan[key] as DayPlan | undefined;
+                  if (!d) return null;
+                  const completed = (Array.isArray(myPlan.completed_days) ? myPlan.completed_days : []).includes(String(key));
+                  return (
+                    <div
+                      key={String(key)}
+                      className={`bg-white border rounded-xl p-4 transition-all ${completed ? "border-emerald-200 bg-emerald-50/40" : "border-stone-200/60"}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <button
+                          onClick={() => toggleDay(String(key))}
+                          className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${completed ? "border-emerald-500 bg-emerald-500" : "border-stone-300 hover:border-stone-400"}`}
+                        >
+                          {completed && <span className="text-white text-[10px] font-bold">✓</span>}
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-1">{label}</p>
+                          <p className={`text-sm leading-snug mb-1.5 ${completed ? "text-stone-400 line-through" : "text-stone-800"}`}>{d.hook}</p>
+                          <div className="flex items-center gap-3 flex-wrap">
+                            {d.format && <span className="text-xs text-stone-400">{d.format}</span>}
+                            {d.postTime && <span className="text-xs text-stone-400">· {d.postTime}</span>}
+                          </div>
+                          {d.note && <p className="text-xs text-stone-500 italic mt-1.5">{d.note}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {(myPlan.ab_test || myPlan.weekly_reminder) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {myPlan.ab_test && (
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                      <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">A/B Test This Week</p>
+                      <p className="text-sm text-blue-800">{myPlan.ab_test}</p>
+                    </div>
+                  )}
+                  {myPlan.weekly_reminder && (
+                    <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+                      <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">Weekly Reminder</p>
+                      <p className="text-sm text-amber-800">{myPlan.weekly_reminder}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const router = useRouter();
@@ -5172,6 +6715,10 @@ export default function DashboardPage() {
   const [ugcResources, setUGCResources] = useState<UGCResource[]>([]);
   const [savedHooks, setSavedHooks] = useState<SavedHook[]>([]);
   const [briefComments, setBriefComments] = useState<BriefComment[]>([]);
+  const [weeklyPlans, setWeeklyPlans] = useState<WeeklyPlan[]>([]);
+  const [wisconsinReports, setWisconsinReports] = useState<WisconsinReport[]>([]);
+  const [carolineSavedIdeas, setCarolineSavedIdeas] = useState<CarolineSavedIdea[]>([]);
+  const [carolineHookBank, setCarolineHookBank] = useState<CarolineHook[]>([]);
 
   useEffect(() => {
     async function init() {
@@ -5264,6 +6811,27 @@ export default function DashboardPage() {
           const { data: bcD } = await supabase.from("brief_comments").select("*").order("created_at", { ascending: false });
           setBriefComments((bcD || []) as BriefComment[]);
         }
+
+        // Wisconsin reports + content studio (for director)
+        if (prof.role === "director") {
+          const { data: wrD } = await supabase.from("wisconsin_reports").select("*").order("week_date", { ascending: false });
+          setWisconsinReports((wrD || []) as WisconsinReport[]);
+          const [{ data: siD }, { data: hkD }] = await Promise.all([
+            supabase.from("caroline_saved_ideas").select("*").order("saved_at", { ascending: false }),
+            supabase.from("caroline_hook_bank").select("*").order("generated_at", { ascending: false }),
+          ]);
+          setCarolineSavedIdeas((siD || []) as CarolineSavedIdea[]);
+          setCarolineHookBank((hkD || []) as CarolineHook[]);
+        }
+
+        // Weekly plans
+        if (prof.role === "admin") {
+          const { data: wpD } = await supabase.from("weekly_plans").select("*").order("created_at", { ascending: false });
+          setWeeklyPlans((wpD || []) as WeeklyPlan[]);
+        } else if (prof.role === "ugc_creator") {
+          const { data: wpD } = await supabase.from("weekly_plans").select("*").eq("creator_id", prof.id).order("week_date", { ascending: false });
+          setWeeklyPlans((wpD || []) as WeeklyPlan[]);
+        }
       }
 
       setLoading(false);
@@ -5321,6 +6889,7 @@ export default function DashboardPage() {
     { id: "ugc_dashboard",     icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
     { id: "ugc_submit",        icon: <BarChart3 size={16}/>,       label: "Submit Analytics" },
     { id: "ugc_pivots",        icon: <TrendingUp size={16}/>,      label: "My Pivots" },
+    { id: "ugc_weekly_brief",  icon: <FileText size={16}/>,        label: "Weekly Brief" },
     { id: "ugc_hook_generator", icon: <Zap size={16}/>,             label: "Hook Generator" },
     { id: "ugc_hooks",         icon: <Bookmark size={16}/>,        label: "Hook Library" },
     { id: "ugc_leaderboard",   icon: <Trophy size={16}/>,          label: "Leaderboard" },
@@ -5340,6 +6909,7 @@ export default function DashboardPage() {
     ...((isAdmin || isCreator) ? [{ id: "content", icon: <Video size={16}/>, label: "Content" }] : []),
   ];
   const pendingPivotCount = ugcPivotQueue.filter(q => q.status === "pending").length;
+  const pendingPlanCount = weeklyPlans.filter(p => p.status === "draft").length;
 
   const ADMIN_SECTIONS = [
     {
@@ -5371,7 +6941,7 @@ export default function DashboardPage() {
         { id: "ugc_creators",            icon: <Users size={16}/>,        label: "UGC Creators" },
         { id: "ugc_analytics",           icon: <BarChart3 size={16}/>,    label: "UGC Analytics" },
         { id: "ugc_pivots_hub",          icon: <Inbox size={16}/>,        label: "Pivots", badge: pendingPivotCount || null },
-        { id: "ugc_briefs_announcements",icon: <FileText size={16}/>,     label: "Briefs & Announcements" },
+        { id: "ugc_briefs_announcements",icon: <FileText size={16}/>,     label: "Briefs & Announcements", badge: pendingPlanCount || null },
         { id: "ugc_resources",           icon: <FolderOpen size={16}/>,   label: "UGC Resources" },
         { id: "ugc_qa",                  icon: <MessageCircle size={16}/>,label: "Creator Q&A" },
         { id: "ugc_hook_generator",      icon: <Zap size={16}/>,          label: "Hook Generator" },
@@ -5392,9 +6962,15 @@ export default function DashboardPage() {
     {
       label: "CONTENT LAB",
       items: [
-        { id: "director_analytics", icon: <BarChart3 size={16}/>,  label: "Analytics Overview" },
-        { id: "director_brief",     icon: <FileText size={16}/>,   label: "Weekly Brief" },
-        { id: "director_hooks",     icon: <Zap size={16}/>,        label: "Hook Generator" },
+        { id: "director_analytics",        icon: <BarChart3 size={16}/>,  label: "Analytics Overview" },
+        { id: "director_wisconsin_report", icon: <FileText size={16}/>,   label: "Wisconsin Report" },
+        { id: "director_hooks",            icon: <Zap size={16}/>,        label: "Hook Generator" },
+      ],
+    },
+    {
+      label: "MY CONTENT",
+      items: [
+        { id: "director_content_studio", icon: <Video size={16}/>, label: "Content Studio" },
       ],
     },
   ];
@@ -5495,7 +7071,8 @@ export default function DashboardPage() {
       case "ugc_qa":            return (isAdmin || isUGC) ? <UGCQAPage profile={p as UGCCreatorProfile} questions={ugcQuestions} setQuestions={setUGCQuestions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_announcements": return isAdmin ? <UGCAnnouncementsPage profile={p as UGCCreatorProfile} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
       case "ugc_pivots_hub":            return isAdmin ? <UGCPivotsHubPage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
-      case "ugc_briefs_announcements":  return isAdmin ? <UGCBriefsAnnouncementsPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
+      case "ugc_briefs_announcements":  return isAdmin ? <UGCBriefsAnnouncementsPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_weekly_brief":          return isUGC ? <CreatorWeeklyBriefPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} sb={supabase}/> : null;
       case "ugc_history":       return (isAdmin || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
       case "ugc_resources":     return (isAdmin || isUGC) ? <UGCResourcesPage profile={p as UGCCreatorProfile} resources={ugcResources} setResources={setUGCResources} sb={supabase}/> : null;
       // Admin-only UGC pages
@@ -5507,8 +7084,10 @@ export default function DashboardPage() {
       case "director_home":      return isDirector ? <DirectorDash profile={profile!} events={events} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} ugcBriefs={ugcBriefs} smartAlerts={smartAlerts} reports={reports} outreach={outreach} ugcHooks={ugcHooks} settings={settings} setPage={setPage} sb={supabase}/> : null;
       case "director_calendar":  return isDirector ? <EventsPage profile={profile!} interns={interns} events={events} setEvents={setEvents} sb={supabase}/> : null;
       case "director_analytics": return isDirector ? <DirectorAnalyticsPage ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} reports={reports} outreach={outreach}/> : null;
-      case "director_brief":     return isDirector ? <DirectorWeeklyBriefPage profile={profile!} ugcBriefs={ugcBriefs} briefComments={briefComments} setBriefComments={setBriefComments} sb={supabase}/> : null;
-      case "director_hooks":     return isDirector ? <HookGeneratorPage profile={profile! as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
+      case "director_brief":            return isDirector ? <DirectorWeeklyBriefPage profile={profile!} ugcBriefs={ugcBriefs} briefComments={briefComments} setBriefComments={setBriefComments} sb={supabase}/> : null;
+      case "director_wisconsin_report": return isDirector ? <WisconsinReportPage profile={profile!} reports={wisconsinReports} setReports={setWisconsinReports} setPage={setPage} sb={supabase}/> : null;
+      case "director_hooks":          return isDirector ? <HookGeneratorPage profile={profile! as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
+      case "director_content_studio": return isDirector ? <ContentStudioPage savedIdeas={carolineSavedIdeas} setSavedIdeas={setCarolineSavedIdeas} hookBank={carolineHookBank} setHookBank={setCarolineHookBank} setPage={setPage} sb={supabase}/> : null;
       case "alerts": return isAdmin ? <AlertsPage alerts={smartAlerts} setAlerts={setSmartAlerts} sb={supabase}/> : null;
       default:          return null;
     }
@@ -5569,7 +7148,7 @@ export default function DashboardPage() {
           { id: "director_home",      icon: <LayoutDashboard size={20}/>, label: "Home",      badge: null },
           { id: "director_calendar",  icon: <CalendarDays size={20}/>,    label: "Calendar",  badge: null },
           { id: "director_analytics", icon: <BarChart3 size={20}/>,       label: "Analytics", badge: null },
-          { id: "director_brief",     icon: <FileText size={20}/>,        label: "Brief",     badge: null },
+          { id: "director_wisconsin_report", icon: <FileText size={20}/>, label: "Report", badge: null },
         ].map(item => (
           <button key={item.id} onClick={() => setPage(item.id)} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all ${page === item.id ? "text-stone-800" : "text-stone-400"}`}>
             {item.icon}
