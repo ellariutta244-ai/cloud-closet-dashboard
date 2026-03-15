@@ -7211,30 +7211,32 @@ function CreatorWeeklyBriefPage({ profile, briefs, setBriefs, weeklyPlans, setWe
   const [tab, setTab] = useState<"brief" | "plan">("brief");
   const currentWeek = getMondayOfWeek(new Date());
 
-  // Auto-refresh when admin posts a new brief or approves a plan
+  // Track current values in refs so the poll interval closure can compare without stale state
+  const briefsRef = useRef<UGCBrief[]>(briefs);
+  const plansRef  = useRef<WeeklyPlan[]>(weeklyPlans);
+  useEffect(() => { briefsRef.current = briefs; }, [briefs]);
+  useEffect(() => { plansRef.current  = weeklyPlans; }, [weeklyPlans]);
+
+  // Poll every 30 seconds for new briefs or newly approved plans
   useEffect(() => {
-    const briefChannel = sb
-      .channel(`brief-live-${profile.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ugc_briefs" }, async () => {
-        const { data } = await sb.from("ugc_briefs").select("*").order("week_date", { ascending: false }).limit(10);
-        if (data) setBriefs(data as UGCBrief[]);
-        setTab("brief");
-      })
-      .subscribe();
-
-    const planChannel = sb
-      .channel(`plan-live-${profile.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "weekly_plans", filter: `creator_id=eq.${profile.id}` }, async () => {
-        const { data } = await sb.from("weekly_plans").select("*").eq("creator_id", profile.id).order("week_date", { ascending: false });
-        if (data) setWeeklyPlans(data as WeeklyPlan[]);
-        setTab("plan");
-      })
-      .subscribe();
-
-    return () => {
-      sb.removeChannel(briefChannel);
-      sb.removeChannel(planChannel);
+    const poll = async () => {
+      const [{ data: newBriefs }, { data: newPlans }] = await Promise.all([
+        sb.from("ugc_briefs").select("*").order("week_date", { ascending: false }).limit(10),
+        sb.from("weekly_plans").select("*").eq("creator_id", profile.id).order("week_date", { ascending: false }),
+      ]);
+      if (newBriefs) {
+        const prevIds = briefsRef.current.map((b: UGCBrief) => b.id).join();
+        const nextIds = (newBriefs as UGCBrief[]).map(b => b.id).join();
+        if (prevIds !== nextIds) { setBriefs(newBriefs as UGCBrief[]); setTab("brief"); }
+      }
+      if (newPlans) {
+        const prevApproved = plansRef.current.filter((p: WeeklyPlan) => p.status === "approved").map(p => p.id).sort().join();
+        const nextApproved = (newPlans as WeeklyPlan[]).filter(p => p.status === "approved").map(p => p.id).sort().join();
+        if (prevApproved !== nextApproved) { setWeeklyPlans(newPlans as WeeklyPlan[]); setTab("plan"); }
+      }
     };
+    const id = setInterval(poll, 30_000);
+    return () => clearInterval(id);
   }, [profile.id]);
   const currentBrief = briefs.find(b => b.week_date === currentWeek) ?? briefs[0] ?? null;
   const myPlan = weeklyPlans.find(p => p.week_date === currentWeek) ?? weeklyPlans[0] ?? null;
