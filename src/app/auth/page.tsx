@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 
 const TAGLINE = "Your closet. Your archive. Your cloud.";
@@ -17,7 +18,6 @@ export default function AuthPage() {
   const [typingDone, setTypingDone] = useState(false);
 
   useEffect(() => {
-    // Auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) router.push('/dashboard');
     });
@@ -25,7 +25,6 @@ export default function AuthPage() {
       if (session) router.push('/dashboard');
     });
 
-    // Typing animation — starts after card fade-in (350ms delay)
     let i = 0;
     const timer = setTimeout(() => {
       const interval = setInterval(() => {
@@ -57,7 +56,24 @@ export default function AuthPage() {
 
   return (
     <>
+      {/* Jost — closest free match to Maxeville's geometric proportions */}
+      <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+      />
+      <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossOrigin="anonymous"
+      />
+      <link
+        href="https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&display=swap"
+        rel="stylesheet"
+      />
+
       <style>{`
+        .cc-root * { font-family: 'Jost', 'Arial', sans-serif; }
+
         @keyframes gradientDrift {
           0%   { background-position: 0% 50%; }
           50%  { background-position: 100% 50%; }
@@ -103,7 +119,7 @@ export default function AuthPage() {
           position: relative;
           width: 100%;
           max-width: 360px;
-          background: rgba(255, 252, 249, 0.86);
+          background: rgba(255, 252, 249, 0.88);
           backdrop-filter: blur(24px);
           -webkit-backdrop-filter: blur(24px);
           border: 1px solid rgba(255, 248, 243, 0.95);
@@ -119,56 +135,46 @@ export default function AuthPage() {
           display: flex;
           flex-direction: column;
           align-items: center;
-          margin-bottom: 20px;
-          animation: fadeIn 0.55s ease 0.2s both;
+          margin-bottom: 18px;
+          animation: fadeIn 0.6s ease 0.2s both;
         }
 
-        .cc-logo-badge {
-          width: 54px;
-          height: 54px;
-          border-radius: 15px;
-          background: linear-gradient(140deg, #7a5244 0%, #b8896e 55%, #d4a98a 100%);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 11px;
-          box-shadow: 0 5px 20px rgba(122, 82, 68, 0.32);
-          letter-spacing: -0.5px;
-        }
-
-        .cc-logo-text {
-          color: #fff;
-          font-weight: 750;
-          font-size: 17px;
-          letter-spacing: -0.5px;
+        .cc-logo-img {
+          width: 72px;
+          height: auto;
+          margin-bottom: 14px;
+          /* Tint the black logo to match brand color */
+          filter: invert(30%) sepia(20%) saturate(600%) hue-rotate(340deg) brightness(70%);
+          opacity: 0.88;
         }
 
         .cc-brand-label {
-          font-size: 10.5px;
-          letter-spacing: 0.22em;
+          font-size: 11px;
+          letter-spacing: 0.28em;
           text-transform: uppercase;
-          color: #a07862;
-          font-weight: 600;
+          color: #9a7260;
+          font-weight: 500;
         }
 
         .cc-tagline-wrap {
-          min-height: 20px;
-          margin-bottom: 26px;
+          min-height: 22px;
+          margin-bottom: 28px;
           text-align: center;
           animation: fadeIn 0.4s ease 0.5s both;
         }
 
         .cc-tagline {
-          font-size: 12.5px;
+          font-size: 13px;
           color: #987060;
           font-style: italic;
-          letter-spacing: 0.025em;
+          font-weight: 300;
+          letter-spacing: 0.04em;
         }
 
         .cc-cursor {
           display: inline-block;
           width: 1.5px;
-          height: 13px;
+          height: 12px;
           background: #c4a080;
           margin-left: 2px;
           vertical-align: middle;
@@ -191,8 +197,8 @@ export default function AuthPage() {
 
         .cc-label {
           font-size: 10px;
-          font-weight: 700;
-          letter-spacing: 0.16em;
+          font-weight: 600;
+          letter-spacing: 0.2em;
           text-transform: uppercase;
           color: #a07862;
         }
@@ -201,6 +207,8 @@ export default function AuthPage() {
           padding: 11px 15px;
           border-radius: 11px;
           font-size: 16px;
+          font-family: 'Jost', 'Arial', sans-serif;
+          font-weight: 400;
           border: 1.5px solid #ead8cc;
           background: rgba(255, 251, 248, 0.75);
           color: #3a2418;
@@ -222,15 +230,17 @@ export default function AuthPage() {
           border: 1px solid #f0cfc8;
           border-radius: 9px;
           padding: 9px 13px;
+          letter-spacing: 0.01em;
         }
 
         .cc-btn {
           margin-top: 6px;
           padding: 13px;
           border-radius: 12px;
-          font-size: 12.5px;
-          font-weight: 700;
-          letter-spacing: 0.1em;
+          font-family: 'Jost', 'Arial', sans-serif;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.22em;
           text-transform: uppercase;
           background: #7a5244;
           color: #fff;
@@ -256,15 +266,21 @@ export default function AuthPage() {
         }
       `}</style>
 
-      <div className="cc-bg">
+      <div className="cc-root cc-bg">
         <div className="cc-overlay" />
 
         <div className="cc-card">
           {/* Logo */}
           <div className="cc-logo-wrap">
-            <div className="cc-logo-badge">
-              <span className="cc-logo-text">CC</span>
-            </div>
+            <Image
+              src="/cc-logo.png"
+              alt="Cloud Closet"
+              width={72}
+              height={72}
+              className="cc-logo-img"
+              style={{ objectFit: 'contain' }}
+              priority
+            />
             <span className="cc-brand-label">Cloud Closet</span>
           </div>
 
