@@ -1825,7 +1825,7 @@ function TechProjectsPage({ profile, interns, projects, setProjects, sb }: { pro
 }
 
 // ── Content Tracker Page ───────────────────────────────────────────────────────
-function ContentPage({ profile, interns, content, setContent, sb }: { profile:Profile; interns:Profile[]; content:ContentVideo[]; setContent:(c:ContentVideo[])=>void; sb:any }) {
+function ContentPage({ profile, interns, content, setContent, ugcHooks, setUGCHooks, savedHooks, setSavedHooks, settings, sb }: { profile:Profile; interns:Profile[]; content:ContentVideo[]; setContent:(c:ContentVideo[])=>void; ugcHooks:UGCHook[]; setUGCHooks:(h:UGCHook[])=>void; savedHooks:SavedHook[]; setSavedHooks:(h:SavedHook[])=>void; settings:AppSettings; sb:any }) {
   const [view, setView] = useState("leaderboard");
   const [showC, setShowC] = useState(false);
   const [nc, setNc] = useState({title:"",tiktok_url:"",views:"",likes:"",comments:""});
@@ -1861,8 +1861,8 @@ function ContentPage({ profile, interns, content, setContent, sb }: { profile:Pr
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <SC label="Total Videos" value={pubCount}/><SC label="Total Views" value={fmtN(totalViews)}/><SC label="Total Likes" value={fmtN(totalLikes)}/><SC label="Avg Views" value={fmtN(avgViews)}/>
       </div>
-      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit">
-        {["leaderboard","all","drafts"].map(v=><button key={v} onClick={()=>setView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${view===v?"bg-white text-stone-800 shadow-sm":"text-stone-500"}`}>{v==="leaderboard"?"Creator Leaderboard":v==="all"?"All Videos":"Drafts"}</button>)}
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit flex-wrap">
+        {["leaderboard","all","drafts","hooks"].map(v=><button key={v} onClick={()=>setView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${view===v?"bg-white text-stone-800 shadow-sm":"text-stone-500"}`}>{v==="leaderboard"?"Creator Leaderboard":v==="all"?"All Videos":v==="drafts"?"Drafts":"⚡ Hook Generator"}</button>)}
       </div>
       {view==="leaderboard" && (
         <div className="flex flex-col gap-3">
@@ -1922,6 +1922,9 @@ function ContentPage({ profile, interns, content, setContent, sb }: { profile:Pr
             ))}
           </div>
         )
+      )}
+      {view==="hooks" && (
+        <HookGeneratorPage profile={profile as unknown as UGCCreatorProfile} ugcCreators={[]} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={sb}/>
       )}
       <Md open={showC} onClose={()=>setShowC(false)} title="Submit Video">
         <div className="flex flex-col gap-3">
@@ -4981,7 +4984,7 @@ export default function DashboardPage() {
       case "reports_analytics": return <ReportsAnalyticsPage profile={p} interns={interns} tasks={tasks} outreach={outreach} content={content} requests={requests} questions={questions} techProjects={techProjects} reports={reports} setReports={setReports} sb={supabase} settings={settings} addActivity={addActivity}/>;
       case "events":    return <EventsPage profile={p} interns={interns} events={events} setEvents={setEvents} sb={supabase}/>;
       case "tech":      return (isAdmin || isTech) ? <TechProjectsPage profile={p} interns={interns} projects={techProjects} setProjects={setTechProjects} sb={supabase}/> : null;
-      case "content":   return (isAdmin || isCreator) ? <ContentPage profile={p} interns={interns} content={content} setContent={setContent} sb={supabase}/> : null;
+      case "content":   return (isAdmin || isCreator) ? <ContentPage profile={p} interns={interns} content={content} setContent={setContent} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
       case "questions": return <QPg {...common} questions={questions} setQuestions={setQuestions}/>;
       case "reports":   return <RPg {...common} reports={reports} setReports={setReports} settings={settings}/>;
       case "resources": return <ResPg profile={p} resources={resources} setResources={setResources} sb={supabase}/>;
