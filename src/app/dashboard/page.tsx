@@ -171,9 +171,11 @@ function AdminDash({ interns, tasks, outreach, questions, activity, announcement
   const activeCount = interns.filter(i=>i.active!==false).length;
   const pendingPivots = ugcPivotQueue.filter(q => q.status === "pending").length;
   const currentWeek = getMondayOfWeek(new Date());
-  const submittedThisWeek = ugcSubmissions.filter(s => s.week_date === currentWeek);
-  const killRuleAlerts = ugcSubmissions.filter(s => s.week_date === currentWeek && s.total_views < 1000);
-  const scaleRuleAlerts = ugcSubmissions.filter(s => s.week_date === currentWeek && s.total_views >= 10000);
+  const activeCreatorIds = new Set(ugcCreators.filter(c => c.ugc_status !== "archived").map(c => c.id));
+  const activeSubs = ugcSubmissions.filter(s => activeCreatorIds.has(s.creator_id ?? ""));
+  const submittedThisWeek = activeSubs.filter(s => s.week_date === currentWeek);
+  const killRuleAlerts = activeSubs.filter(s => s.week_date === currentWeek && s.total_views < 1000);
+  const scaleRuleAlerts = activeSubs.filter(s => s.week_date === currentWeek && s.total_views >= 10000);
   const TEAMS = ["Tech/AI","Strategy","Events/Outreach","Design","Curation Team","Content Creation","UGC Creators"];
   const [aModal, setAModal] = useState(false);
   const [aForm, setAForm] = useState({ title:"", body:"", pinned:false, target_teams:[] as string[] });
@@ -231,7 +233,7 @@ function AdminDash({ interns, tasks, outreach, questions, activity, announcement
         <p className="text-sm font-semibold text-stone-700 mb-3">UGC Team This Week</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
           <SC label="Pending Pivots" value={pendingPivots} sub={pendingPivots > 0 ? "needs review" : "all clear"} />
-          <SC label="Submitted This Week" value={submittedThisWeek.length} sub={`of ${ugcCreators.length} creators`} />
+          <SC label="Submitted This Week" value={submittedThisWeek.length} sub={`of ${activeCreatorIds.size} creators`} />
           <SC label="Kill Rule Alerts" value={killRuleAlerts.length} sub="under 1k views" />
           <SC label="Scale Rule" value={scaleRuleAlerts.length} sub="10k+ views 🔥" />
         </div>
@@ -3337,7 +3339,7 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
       <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-5">
         <TI label="Week Date (Monday)" value={form.week_date} onChange={v => setForm({ ...form, week_date: v })} type="date" />
         {isAdmin && <Sel label="Creator" value={form.creator_id} onChange={v => setForm({ ...form, creator_id: v })}
-          options={[{ value: "", label: "— Select creator —" }, ...ugcCreators.filter(c => c.active !== false).map(c => ({ value: c.id, label: `${c.full_name}${c.tiktok_handle ? ` (@${c.tiktok_handle})` : ""}` }))]} />}
+          options={[{ value: "", label: "— Select creator —" }, ...ugcCreators.filter(c => c.ugc_status !== "archived").map(c => ({ value: c.id, label: `${c.full_name}${c.tiktok_handle ? ` (@${c.tiktok_handle})` : ""}` }))]} />}
 
         {/* Video Metadata */}
         <div className="flex flex-col gap-3">
@@ -4666,8 +4668,8 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
     setUGCCreators(ugcCreators.map(c => c.id === id ? { ...c, active: true, ugc_status: "active" } : c));
   }
 
-  const active = ugcCreators.filter(c => c.active !== false);
-  const archived = ugcCreators.filter(c => c.active === false);
+  const active = ugcCreators.filter(c => c.ugc_status !== "archived");
+  const archived = ugcCreators.filter(c => c.ugc_status === "archived");
 
   return (
     <div className="flex flex-col gap-6">
@@ -5056,16 +5058,18 @@ function UGCAnalyticsOverview({ submissions, ugcCreators, pivotQueue, smartAlert
   submissions: UGCSubmission[]; ugcCreators: UGCCreatorProfile[]; pivotQueue: UGCPivotQueue[]; smartAlerts?: SmartAlert[];
 }) {
   const currentWeek = getMondayOfWeek(new Date());
-  const thisWeekSubs = submissions.filter(s => s.week_date === currentWeek);
+  const activeCreatorIds = new Set(ugcCreators.filter(c => c.ugc_status !== "archived").map(c => c.id));
+  const activeSubs = submissions.filter(s => activeCreatorIds.has(s.creator_id ?? ""));
+  const thisWeekSubs = activeSubs.filter(s => s.week_date === currentWeek);
   const avgViews = thisWeekSubs.length > 0 ? Math.round(thisWeekSubs.reduce((s, x) => s + x.total_views, 0) / thisWeekSubs.length) : 0;
   const topPerformer = [...thisWeekSubs].sort((a, b) => b.total_views - a.total_views)[0];
   const topName = topPerformer ? ugcCreators.find(c => c.id === topPerformer.creator_id)?.full_name || "Unknown" : "—";
 
   const tierCounts = useMemo(() => {
     const m: Record<string, number> = {};
-    submissions.forEach(s => { if (s.benchmark_tier) m[s.benchmark_tier] = (m[s.benchmark_tier] || 0) + 1; });
+    activeSubs.forEach(s => { if (s.benchmark_tier) m[s.benchmark_tier] = (m[s.benchmark_tier] || 0) + 1; });
     return m;
-  }, [submissions]);
+  }, [activeSubs]);
 
   const [c1, setC1] = useState("");
   const [c2, setC2] = useState("");
@@ -5422,7 +5426,7 @@ function DirectorAnalyticsPage({ ugcSubmissions, ugcCreators, reports, outreach 
         <SC label="Views This Week" value={fmtViews(totalViewsThisWeek)} />
         <SC label="Total Views" value={fmtViews(totalViewsAllTime)} />
         <SC label="Submissions This Week" value={thisWeekSubs.length} />
-        <SC label="Active Creators" value={ugcCreators.filter(c => c.active !== false).length} />
+        <SC label="Active Creators" value={ugcCreators.filter(c => c.ugc_status !== "archived").length} />
       </div>
 
       {/* Week-over-week trend */}
