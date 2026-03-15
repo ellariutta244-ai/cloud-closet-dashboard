@@ -4643,11 +4643,17 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
   async function saveEdit() {
     if (!editTarget) return;
     setEditSaving(true);
-    await sb.from("profiles").update({
-      full_name: editForm.full_name.trim(),
-      tiktok_handle: editForm.tiktok_handle.trim() || null,
-      tiktok_url: editForm.tiktok_url.trim() || null,
-    }).eq("id", editTarget.id);
+    await fetch("/api/ugc-archive-creator", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: editTarget.id,
+        full_name: editForm.full_name.trim(),
+        tiktok_handle: editForm.tiktok_handle.trim() || null,
+        tiktok_url: editForm.tiktok_url.trim() || null,
+        updateFields: true,
+      }),
+    });
     setUGCCreators(ugcCreators.map(c => c.id === editTarget.id
       ? { ...c, full_name: editForm.full_name.trim(), tiktok_handle: editForm.tiktok_handle.trim() || undefined, tiktok_url: editForm.tiktok_url.trim() || undefined }
       : c
@@ -4693,12 +4699,20 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
 
   async function archive(id: string) {
     if (!window.confirm("Archive this creator?")) return;
-    await sb.from("profiles").update({ active: false, ugc_status: "archived" }).eq("id", id);
+    await fetch("/api/ugc-archive-creator", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, archived: true }),
+    });
     setUGCCreators(ugcCreators.map(c => c.id === id ? { ...c, active: false, ugc_status: "archived" } : c));
   }
 
   async function unarchive(id: string) {
-    await sb.from("profiles").update({ active: true, ugc_status: "active" }).eq("id", id);
+    await fetch("/api/ugc-archive-creator", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, archived: false }),
+    });
     setUGCCreators(ugcCreators.map(c => c.id === id ? { ...c, active: true, ugc_status: "active" } : c));
   }
 
