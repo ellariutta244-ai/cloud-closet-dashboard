@@ -2117,6 +2117,117 @@ function SettingsPg({ settings, setSettings, sb }: { settings:AppSettings; setSe
   const [rcSaving, setRcSaving] = useState(false);
   const [rcSaved, setRcSaved] = useState(false);
 
+  // UGC pivot system prompt
+  const DEFAULT_PIVOT_PROMPT = `You are the content strategist for Cloud Closet — a platform where real people share how they get dressed. Not influencers. Not trends. Real style, real people, real closets.
+
+Cloud Closet brand voice: confident, observational, dry but warm underneath. Think a group chat that became a formal editorial. We don't over-explain. We don't hype. We trust people to get it. Write like you're already friends with this creator — direct, specific, no fluff. Never corporate, never coach-y, never hype.
+
+Cloud Closet is not an influencer platform. It is not a trend engine. Content should speak to the universal experience of getting dressed — not one corner of fashion.
+
+YOU MUST FOLLOW THESE RULES BEFORE WRITING ANY PIVOT:
+
+RULE 1 — Only change ONE variable at a time. Never tell a creator to change their hook AND format AND length in the same week. Pick the single most important fix based on the data and focus there only.
+
+RULE 2 — Every format must be tested at least 5 times before killing it. If a creator has tested a format fewer than 5 times, never recommend killing it. Instead recommend improving one element.
+
+RULE 3 — Do not panic after one bad post. If last week was an outlier, say so directly and tell them to stay the course.
+
+RULE 4 — Never recommend deleting underperforming videos.
+
+RULE 5 — Minimum 1 video per day. If their submission shows fewer than 7 videos posted that week, flag this first before anything else.
+
+DECISION TREE — follow this exactly based on their submitted numbers:
+
+STEP 1 — Check 3-second hold rate first:
+- If under 60%: the hook is weak. Tell them to fix the hook only. Do not change format yet. Give them 3 specific replacement hooks word for word.
+
+STEP 2 — If 3-second hold is 65%+ but watch time is low:
+- The hook worked but the video loses people after. Fix: cut video 20% shorter, move the result earlier, change camera angle every 1-2 seconds, remove pauses.
+
+STEP 3 — If watch time is good but views are low:
+- Content is good but distribution did not hit. Fix: post same format again at a different time, try a trending sound, slightly adjust caption.
+
+STEP 4 — If shares are 5%+ of total views:
+- Potential breakout format. Tell them to recreate this exact format 3 times, change only the hook, post within 5 days.
+
+FORMAT KILL RULES — only recommend killing a format if ALL of these are true:
+- Tested at least 5 times
+- Average views under 2,000
+- 3-second hold under 55%
+- No shares
+
+FORMAT KEEP RULES — tell them to keep a format if ANY of these are true:
+- At least 1 video above 10,000 views
+- Shares over 4%
+- Completion rate over 30%
+
+BENCHMARK TIERS:
+- Under 500 views by day 2: hook failed
+- 500-2,000 views: average, keep format, test 3 different hooks
+- 2,000-10,000 views: good, make 3 variations of this exact hook immediately
+- 10,000-50,000 views: strong, double down
+- 50,000+ views: viral, stop everything and figure out exactly why it worked
+
+Never say: "great job", "awesome", "keep it up", "consider trying", "you might want to", "perhaps"
+Never recommend changing more than one variable at a time.
+Never recommend killing a format tested fewer than 5 times.
+
+Always structure every pivot exactly like this:
+
+**WHAT WORKED:** (one specific thing backed by a real number from their submission)
+
+**THE MAIN ISSUE:** (the single most important fix this week, backed by their specific data)
+
+**YOUR ONE CHANGE THIS WEEK:** (exactly one variable to change — hook, length, posting time, sound, or opening frame)
+
+**YOUR 3 HOOKS FOR THIS WEEK:** (three word-for-word hooks in Cloud Closet voice)
+
+**FORMAT STATUS:** (keep, improve, or kill — include how many times they have tested this format)
+
+**THIS WEEK'S CHALLENGE:** (one specific measurable goal tied directly to their weakest metric)`;
+
+  const [pivotPrompt, setPivotPrompt] = useState(settings.ugc_pivot_system_prompt || DEFAULT_PIVOT_PROMPT);
+  const [ppSaving, setPpSaving] = useState(false);
+  const [ppSaved, setPpSaved] = useState(false);
+  const [ppTesting, setPpTesting] = useState(false);
+  const [ppTestResult, setPpTestResult] = useState<string | null>(null);
+
+  async function savePivotPrompt() {
+    setPpSaving(true);
+    await sb.from("settings").upsert({ key: "ugc_pivot_system_prompt", value: pivotPrompt }, { onConflict: "key" });
+    setSettings({ ...settings, ugc_pivot_system_prompt: pivotPrompt });
+    setPpSaving(false); setPpSaved(true); setTimeout(() => setPpSaved(false), 2000);
+  }
+
+  async function testPivotPrompt() {
+    setPpTesting(true); setPpTestResult(null);
+    const mockAnalytics = {
+      total_views: 1200, likes: 84, comments: 12, shares: 6, saves: 31,
+      followers_gained: 18, followers_lost: 5, net_follower_change: 13,
+      total_account_views: 4800, videos_posted: 5,
+      hook_text: "Here's what I wore this week", format_type: "GRWM",
+      video_length_seconds: 62, niche: "everyday styling",
+      trending_sound: false, has_cta: false,
+      avg_watch_time_seconds: 18, watch_completion_rate: 29,
+      profile_visits: 44, traffic_fyp_pct: 71, traffic_following_pct: 22, traffic_search_pct: 7,
+      comment_sentiment: "positive", best_video_link: "",
+      benchmark_tier: "average", week_date: new Date().toISOString().split("T")[0],
+    };
+    try {
+      const res = await fetch("/api/ugc-pivot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preview: true, creatorName: "Sample Creator", tiktokHandle: "samplecreator", analytics: mockAnalytics }),
+      });
+      const data = await res.json();
+      if (data.error) setPpTestResult(`Error: ${data.error}`);
+      else setPpTestResult(data.aiPivot || "No output returned.");
+    } catch (e: any) {
+      setPpTestResult(`Error: ${e.message}`);
+    }
+    setPpTesting(false);
+  }
+
   const teamCfg: ReportFieldConfig = reportConfig[rcTeam] || {...DEFAULT_REPORT_FIELDS};
 
   function setTeamCfg(cfg: ReportFieldConfig) { setReportConfig(p=>({...p,[rcTeam]:cfg})); }
@@ -2194,6 +2305,42 @@ function SettingsPg({ settings, setSettings, sb }: { settings:AppSettings; setSe
           {rcSaved && <span className="text-xs text-emerald-600 font-medium">Saved!</span>}
           <Btn onClick={saveReportConfig} disabled={rcSaving}>{rcSaving?"Saving...":"Save Report Config"}</Btn>
         </div>
+      </div>
+
+      {/* UGC Pivot System Prompt */}
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+        <div>
+          <p className="text-sm font-semibold text-stone-700 flex items-center gap-2"><TrendingUp size={15} className="text-violet-500"/>UGC Pivot System Prompt</p>
+          <p className="text-xs text-stone-400 mt-1">This is the strategy ruleset sent to Gemini AI when generating creator pivots. Edit here — changes take effect on the next submission. Use the test button to preview output with sample data.</p>
+        </div>
+        <textarea
+          value={pivotPrompt}
+          onChange={e => setPivotPrompt(e.target.value)}
+          rows={20}
+          className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-800 font-mono leading-relaxed focus:outline-none focus:border-stone-400 resize-y"
+        />
+        <div className="flex items-center justify-between gap-3">
+          <button
+            onClick={() => { if (window.confirm("Reset to default prompt? This will overwrite your changes.")) setPivotPrompt(DEFAULT_PIVOT_PROMPT); }}
+            className="text-xs text-stone-400 hover:text-stone-600 underline"
+          >Reset to default</button>
+          <div className="flex items-center gap-3">
+            {ppSaved && <span className="text-xs text-emerald-600 font-medium">Saved!</span>}
+            <Btn variant="secondary" onClick={testPivotPrompt} disabled={ppTesting}>{ppTesting ? "Testing..." : "Test with Sample Data"}</Btn>
+            <Btn onClick={savePivotPrompt} disabled={ppSaving}>{ppSaving ? "Saving..." : "Save Prompt"}</Btn>
+          </div>
+        </div>
+        {ppTestResult && (
+          <div className="border border-stone-200 rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 bg-stone-50 border-b border-stone-200">
+              <p className="text-xs font-semibold text-stone-600">Test Output — Sample Creator</p>
+              <button onClick={() => setPpTestResult(null)} className="text-stone-400 hover:text-stone-600"><X size={14}/></button>
+            </div>
+            <div className="p-4 max-h-[500px] overflow-y-auto">
+              <PivotContent text={ppTestResult} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
