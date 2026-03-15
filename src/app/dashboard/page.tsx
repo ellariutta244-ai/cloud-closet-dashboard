@@ -2556,13 +2556,13 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
 
 // ── Pivot Markdown Renderer ────────────────────────────────────────────────────
 function PivotContent({ text }: { text: string }) {
-  const sectionColors: Record<string, string> = {
-    "Performance Analysis": "border-sky-200 bg-sky-50",
-    "What's Working": "border-emerald-200 bg-emerald-50",
-    "What to Change": "border-amber-200 bg-amber-50",
-    "Hook Suggestions": "border-violet-200 bg-violet-50",
-    "Format Recommendations": "border-rose-200 bg-rose-50",
-    "Hook Variations": "border-violet-200 bg-violet-50",
+  const sectionStyles: Record<string, { border: string; bg: string }> = {
+    "Performance Analysis": { border: "#bae6fd", bg: "#f0f9ff" },
+    "What's Working":       { border: "#a7f3d0", bg: "#f0fdf4" },
+    "What to Change":       { border: "#fde68a", bg: "#fffbeb" },
+    "Hook Suggestions":     { border: "#ddd6fe", bg: "#f5f3ff" },
+    "Format Recommendations": { border: "#fecdd3", bg: "#fff1f2" },
+    "Hook Variations":      { border: "#ddd6fe", bg: "#f5f3ff" },
   };
   const sectionIcons: Record<string, string> = {
     "Performance Analysis": "📊", "What's Working": "✅",
@@ -2623,10 +2623,10 @@ function PivotContent({ text }: { text: string }) {
         const title = headerMatch?.[1]?.trim() ?? `Section ${idx + 1}`;
         const subtitle = headerMatch?.[2]?.trim() ?? '';
         const body = section.replace(/^\d+\.\s\*\*.*?\*\*.*?\n/, '').replace(/^\d+\.\s\*\*.*?\*\*/, '');
-        const colorCls = Object.entries(sectionColors).find(([k]) => title.includes(k))?.[1] ?? "border-stone-200 bg-stone-50";
+        const style = Object.entries(sectionStyles).find(([k]) => title.includes(k))?.[1] ?? { border: "#e7e5e4", bg: "#fafaf9" };
         const icon = Object.entries(sectionIcons).find(([k]) => title.includes(k))?.[1] ?? "💡";
         return (
-          <div key={idx} className={`border rounded-xl p-4 ${colorCls}`}>
+          <div key={idx} className="border rounded-xl p-4" style={{ borderColor: style.border, backgroundColor: style.bg }}>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-base">{icon}</span>
               <p className="text-sm font-bold text-stone-800">{title}</p>
