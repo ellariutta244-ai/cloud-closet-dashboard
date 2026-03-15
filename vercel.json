@@ -1,8 +1,8 @@
 {
   "crons": [
-    {
-      "path": "/api/ugc-friday-reminder",
-      "schedule": "0 9 * * 5"
-    }
+    { "path": "/api/ugc-friday-reminder", "schedule": "0 9 * * 5" },
+    { "path": "/api/ugc-alerts-cron?type=missed_submission", "schedule": "0 9 * * 5" },
+    { "path": "/api/ugc-alerts-cron?type=missed_submission", "schedule": "0 18 * * 5" },
+    { "path": "/api/ugc-alerts-cron?type=creator_inactive", "schedule": "0 10 * * *" }
   ]
 }

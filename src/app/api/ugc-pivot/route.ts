@@ -93,6 +93,21 @@ function getAdminApp() {
   return initializeApp({ credential: cert(sa) });
 }
 
+function getMondayOfWeek(d: Date): string {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  return date.toISOString().split('T')[0];
+}
+
+async function createAlertIfNew(supabase: any, creatorId: string | null, alertType: string, message: string, urgency: string, weekDate: string) {
+  const query = supabase.from('smart_alerts').select('id').eq('alert_type', alertType).eq('dismissed', false).eq('week_date', weekDate);
+  if (creatorId) { const { data } = await query.eq('creator_id', creatorId).limit(1); if ((data || []).length > 0) return; }
+  else { const { data } = await query.limit(1); if ((data || []).length > 0) return; }
+  await supabase.from('smart_alerts').insert({ creator_id: creatorId || null, alert_type: alertType, message, urgency, week_date: weekDate, dismissed: false, created_at: new Date().toISOString() });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -198,6 +213,63 @@ ACCOUNT HEALTH:
     }).select().single();
 
     if (qErr) return NextResponse.json({ error: qErr.message }, { status: 500 });
+
+    // ── Generate smart alerts ─────────────────────────────────────────────────
+    try {
+      const { data: settingsRow } = await supabase.from('settings').select('value').eq('key', 'alert_settings').single();
+      let alertSettings: Record<string, boolean> = {};
+      try { alertSettings = JSON.parse(settingsRow?.value || '{}'); } catch {}
+      const weekDate = week_date?.split('T')[0] ?? getMondayOfWeek(new Date());
+      const creatorId = analytics.creator_id ?? null;
+
+      // Viral alert (50k+)
+      if (alertSettings.viral !== false && total_views >= 50000) {
+        const msg = `${creatorName} went viral with ${total_views.toLocaleString()} views — stop everything and replicate this hook: "${hook_text || 'unknown'}"`;
+        await createAlertIfNew(supabase, creatorId, 'viral', msg, 'purple', weekDate);
+      }
+      // Scale rule (10k+)
+      else if (alertSettings.scale_rule !== false && total_views >= 10000) {
+        const msg = `${creatorName} hit ${total_views.toLocaleString()} views — scale this hook now: "${hook_text || 'unknown'}"`;
+        await createAlertIfNew(supabase, creatorId, 'scale_rule', msg, 'yellow', weekDate);
+      }
+
+      // No post alert (<7 videos)
+      if (alertSettings.no_post !== false && videos_posted != null && videos_posted < 7) {
+        const msg = `${creatorName} posted ${videos_posted} video${videos_posted === 1 ? '' : 's'} this week — minimum is 7`;
+        await createAlertIfNew(supabase, creatorId, 'no_post', msg, 'yellow', weekDate);
+      }
+
+      // Declining performance (>30% drop from previous week)
+      if (alertSettings.declining_performance !== false && creatorId) {
+        const { data: prevSubs } = await supabase.from('ugc_submissions').select('total_views, week_date').eq('creator_id', creatorId).neq('week_date', weekDate).order('week_date', { ascending: false }).limit(1);
+        const prevSub = (prevSubs || [])[0];
+        if (prevSub && prevSub.total_views > 0 && total_views < prevSub.total_views * 0.7) {
+          const drop = Math.round((1 - total_views / prevSub.total_views) * 100);
+          const msg = `${creatorName}'s views dropped ${drop}% this week (${total_views.toLocaleString()} vs ${prevSub.total_views.toLocaleString()} last week)`;
+          await createAlertIfNew(supabase, creatorId, 'declining_performance', msg, 'orange', weekDate);
+        }
+      }
+
+      // Same format alert
+      if (alertSettings.same_format !== false && format_type) {
+        const { data: sameFormatSubs } = await supabase.from('ugc_submissions').select('creator_id').eq('week_date', weekDate).eq('format_type', format_type).neq('creator_id', creatorId || '');
+        if ((sameFormatSubs || []).length >= 1) {
+          const msg = `Multiple creators are posting "${format_type}" this week — consider diversifying`;
+          await createAlertIfNew(supabase, null, 'same_format', msg, 'yellow', weekDate);
+        }
+      }
+
+      // Missed streak (under 1,000 views for 3+ consecutive weeks)
+      if (alertSettings.missed_streak !== false && creatorId) {
+        const { data: recentSubs } = await supabase.from('ugc_submissions').select('total_views, week_date').eq('creator_id', creatorId).order('week_date', { ascending: false }).limit(3);
+        if (recentSubs && recentSubs.length >= 3 && recentSubs.every((s: any) => s.total_views < 1000)) {
+          const msg = `${creatorName} has been under 1,000 views for ${recentSubs.length} weeks in a row — immediate pivot needed`;
+          await createAlertIfNew(supabase, creatorId, 'missed_streak', msg, 'red', weekDate);
+        }
+      }
+    } catch {
+      // Alert generation failure should not block response
+    }
 
     // Send admin push notification
     try {

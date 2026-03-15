@@ -12,7 +12,7 @@ import {
   Loader2, Menu, CalendarDays, Inbox, Code2, Video,
   CalendarClock, ShoppingBag, Coffee, HelpCircle, MapPin,
   Play, Trophy, ExternalLink, ArrowUpRight, MessageSquare, TrendingUp,
-  Settings as SettingsIcon, Zap, ChevronDown, ChevronUp,
+  Settings as SettingsIcon, Zap, ChevronDown, ChevronUp, AlertTriangle,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -165,7 +165,7 @@ function FileDropZone({ file, setFile }: { file:File|null; setFile:(f:File|null)
 }
 
 // ── Admin Dashboard ────────────────────────────────────────────────────────────
-function AdminDash({ interns, tasks, outreach, questions, activity, announcements, setAnnouncements, ugcPivotQueue, ugcSubmissions, ugcCreators, sb }: { interns:Profile[]; tasks:Task[]; outreach:Outreach[]; questions:Question[]; activity:Activity[]; announcements:Announcement[]; setAnnouncements:(a:Announcement[])=>void; ugcPivotQueue:UGCPivotQueue[]; ugcSubmissions:UGCSubmission[]; ugcCreators:UGCCreatorProfile[]; sb:any }) {
+function AdminDash({ interns, tasks, outreach, questions, activity, announcements, setAnnouncements, ugcPivotQueue, ugcSubmissions, ugcCreators, smartAlerts, sb }: { interns:Profile[]; tasks:Task[]; outreach:Outreach[]; questions:Question[]; activity:Activity[]; announcements:Announcement[]; setAnnouncements:(a:Announcement[])=>void; ugcPivotQueue:UGCPivotQueue[]; ugcSubmissions:UGCSubmission[]; ugcCreators:UGCCreatorProfile[]; smartAlerts:SmartAlert[]; sb:any }) {
   const completed = tasks.filter(t=>t.status==="completed").length;
   const openQ = questions.filter(q=>q.status==="open").length;
   const activeCount = interns.filter(i=>i.active!==false).length;
@@ -209,6 +209,12 @@ function AdminDash({ interns, tasks, outreach, questions, activity, announcement
 
   return (
     <div className="flex flex-col gap-6">
+      {smartAlerts.filter(a => a.urgency === "purple").map(alert => (
+        <div key={alert.id} className="border-2 rounded-xl p-4 flex items-center gap-3" style={{ borderColor: "#c4b5fd", backgroundColor: "#faf5ff" }}>
+          <span className="text-xl">🚀</span>
+          <p className="flex-1 text-sm font-semibold" style={{ color: "#7c3aed" }}>{alert.message}</p>
+        </div>
+      ))}
       <div>
         <h1 className="text-xl font-bold text-stone-800">Content Lab Overview</h1>
         <p className="text-sm text-stone-400 mt-0.5">Real-time team activity and progress</p>
@@ -2097,6 +2103,71 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
   );
 }
 
+// ── Smart Alerts Page ──────────────────────────────────────────────────────────
+function AlertsPage({ alerts, setAlerts, sb }: { alerts: SmartAlert[]; setAlerts: (a: SmartAlert[]) => void; sb: any }) {
+  async function dismiss(id: string) {
+    await sb.from("smart_alerts").update({ dismissed: true }).eq("id", id);
+    setAlerts(alerts.filter(a => a.id !== id));
+  }
+  async function dismissAll() {
+    if (!window.confirm("Dismiss all alerts?")) return;
+    await sb.from("smart_alerts").update({ dismissed: true }).in("id", alerts.map(a => a.id));
+    setAlerts([]);
+  }
+
+  const urgencyOrder = ["purple", "red", "orange", "yellow"];
+  const urgencyLabel: Record<string, string> = { purple: "🟣 Viral", red: "🔴 Urgent", orange: "🟠 Warning", yellow: "🟡 Heads Up" };
+  const urgencyStyle: Record<string, { border: string; bg: string; text: string }> = {
+    purple: { border: "#c4b5fd", bg: "#faf5ff", text: "#7c3aed" },
+    red:    { border: "#fca5a5", bg: "#fff1f2", text: "#b91c1c" },
+    orange: { border: "#fdba74", bg: "#fff7ed", text: "#c2410c" },
+    yellow: { border: "#fde68a", bg: "#fffbeb", text: "#92400e" },
+  };
+
+  const grouped = urgencyOrder.reduce((acc, u) => {
+    acc[u] = alerts.filter(a => a.urgency === u);
+    return acc;
+  }, {} as Record<string, SmartAlert[]>);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-stone-800">Alerts Center</h1>
+          <p className="text-sm text-stone-400 mt-0.5">{alerts.length} active alert{alerts.length !== 1 ? "s" : ""}</p>
+        </div>
+        {alerts.length > 0 && <Btn variant="secondary" onClick={dismissAll}>Dismiss All</Btn>}
+      </div>
+
+      {alerts.length === 0 ? (
+        <ES icon={<Bell size={24} />} message="No active alerts — all clear!" />
+      ) : (
+        urgencyOrder.map(urgency => {
+          const group = grouped[urgency];
+          if (group.length === 0) return null;
+          const s = urgencyStyle[urgency];
+          return (
+            <div key={urgency}>
+              <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">{urgencyLabel[urgency]}</p>
+              <div className="flex flex-col gap-2">
+                {group.map(alert => (
+                  <div key={alert.id} className="border rounded-xl p-4 flex items-start justify-between gap-3" style={{ borderColor: s.border, backgroundColor: s.bg }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium leading-snug" style={{ color: s.text }}>{alert.message}</p>
+                      <p className="text-xs mt-1" style={{ color: s.text, opacity: 0.6 }}>{fmt(alert.created_at)}{alert.week_date ? ` · Week of ${alert.week_date}` : ""}</p>
+                    </div>
+                    <button onClick={() => dismiss(alert.id)} className="shrink-0 p-1.5 rounded-lg hover:bg-white/60 transition-all" style={{ color: s.text }} title="Dismiss"><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 // ── Settings Page ──────────────────────────────────────────────────────────────
 function SettingsPg({ settings, setSettings, sb }: { settings:AppSettings; setSettings:(s:AppSettings)=>void; sb:any }) {
   const TEAMS = ["Tech/AI","Strategy","Events/Outreach","Design","Curation Team","Content Creation"];
@@ -2191,6 +2262,30 @@ Always structure every pivot exactly like this:
   const [ppSaved, setPpSaved] = useState(false);
   const [ppTesting, setPpTesting] = useState(false);
   const [ppTestResult, setPpTestResult] = useState<string | null>(null);
+
+  const DEFAULT_ALERT_SETTINGS = { missed_submission: true, no_post: true, declining_performance: true, missed_streak: true, scale_rule: true, viral: true, same_format: true, creator_inactive: true };
+  const ALERT_LABELS: Record<string, string> = {
+    missed_submission: "Missed Submission (Friday)",
+    no_post: "No Post Alert (under 7 videos)",
+    declining_performance: "Declining Performance (30%+ drop)",
+    missed_streak: "Missed Streak (3 weeks under 1k views)",
+    scale_rule: "Scale Rule (10k+ views)",
+    viral: "Viral Alert (50k+ views)",
+    same_format: "Same Format Alert",
+    creator_inactive: "Creator Inactive (7+ days)",
+  };
+  const [alertSettings, setAlertSettings] = useState<Record<string, boolean>>(() => {
+    try { return { ...DEFAULT_ALERT_SETTINGS, ...JSON.parse(settings.alert_settings || '{}') }; } catch { return DEFAULT_ALERT_SETTINGS; }
+  });
+  const [asSaving, setAsSaving] = useState(false);
+  const [asSaved, setAsSaved] = useState(false);
+
+  async function saveAlertSettings() {
+    setAsSaving(true);
+    await sb.from("settings").upsert({ key: "alert_settings", value: JSON.stringify(alertSettings) }, { onConflict: "key" });
+    setSettings({ ...settings, alert_settings: JSON.stringify(alertSettings) });
+    setAsSaving(false); setAsSaved(true); setTimeout(() => setAsSaved(false), 2000);
+  }
 
   async function savePivotPrompt() {
     setPpSaving(true);
@@ -2307,6 +2402,26 @@ Always structure every pivot exactly like this:
         </div>
       </div>
 
+      {/* Alert Settings */}
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+        <div>
+          <p className="text-sm font-semibold text-stone-700 flex items-center gap-2"><AlertTriangle size={15} className="text-orange-500"/>Alert Settings</p>
+          <p className="text-xs text-stone-400 mt-1">Choose which automated alerts are active. Changes take effect immediately.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {Object.entries(ALERT_LABELS).map(([key, label]) => (
+            <label key={key} className="flex items-center gap-2 cursor-pointer text-sm text-stone-700 bg-stone-50 border border-stone-100 rounded-lg px-3 py-2">
+              <input type="checkbox" checked={!!alertSettings[key]} onChange={() => setAlertSettings(prev => ({ ...prev, [key]: !prev[key] }))} className="rounded accent-stone-700" />
+              {label}
+            </label>
+          ))}
+        </div>
+        <div className="flex items-center justify-end gap-3">
+          {asSaved && <span className="text-xs text-emerald-600 font-medium">Saved!</span>}
+          <Btn onClick={saveAlertSettings} disabled={asSaving}>{asSaving ? "Saving..." : "Save Alert Settings"}</Btn>
+        </div>
+      </div>
+
       {/* UGC Pivot System Prompt */}
       <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
         <div>
@@ -2357,6 +2472,7 @@ type UGCResource = { id: string; title: string; description?: string; category?:
 type UGCQuestion = { id: string; creator_id?: string; question: string; created_at: string; ugc_qa_replies?: UGCReply[] };
 type UGCReply = { id: string; question_id: string; creator_id?: string; reply: string; created_at: string };
 type UGCCreatorProfile = Profile & { tiktok_handle?: string; ugc_status?: string };
+type SmartAlert = { id: string; creator_id?: string; alert_type: string; message: string; urgency: 'red' | 'orange' | 'yellow' | 'purple'; dismissed: boolean; week_date?: string; created_at: string; };
 
 // ── UGC Helpers ────────────────────────────────────────────────────────────────
 function BenchmarkBadge({ tier }: { tier?: string }) {
@@ -3656,9 +3772,9 @@ function UGCResourcesPage({ profile, resources, setResources, sb }: {
 }
 
 // ── UGC Creator Management (admin) ────────────────────────────────────────────
-function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions, sb }: {
+function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions, smartAlerts, sb }: {
   profile: UGCCreatorProfile; ugcCreators: UGCCreatorProfile[];
-  setUGCCreators: (c: UGCCreatorProfile[]) => void; submissions: UGCSubmission[]; sb: any;
+  setUGCCreators: (c: UGCCreatorProfile[]) => void; submissions: UGCSubmission[]; smartAlerts?: SmartAlert[]; sb: any;
 }) {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ full_name: "", email: "", tiktok_handle: "" });
@@ -3724,7 +3840,12 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
                     <Av name={c.full_name} size={36} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-stone-800">{c.full_name}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium text-stone-800">{c.full_name}</p>
+                          {(smartAlerts || []).some(a => a.creator_id === c.id && a.alert_type === 'missed_submission' && !a.dismissed) && (
+                            <span className="text-xs px-1.5 py-0.5 rounded-full font-semibold" style={{ backgroundColor: "#fca5a5", color: "#b91c1c" }}>!</span>
+                          )}
+                        </div>
                         <span style={{ width: 8, height: 8, borderRadius: "50%", background: statusDot(tier), display: "inline-block", flexShrink: 0 }} />
                       </div>
                       {c.tiktok_handle && <p className="text-xs text-stone-400">@{c.tiktok_handle}</p>}
@@ -4033,8 +4154,8 @@ function UGCPivotHistoryPage({ profile, pivots, setPivots, ugcCreators, sb }: {
 }
 
 // ── UGC Analytics Overview (admin) ────────────────────────────────────────────
-function UGCAnalyticsOverview({ submissions, ugcCreators, pivotQueue }: {
-  submissions: UGCSubmission[]; ugcCreators: UGCCreatorProfile[]; pivotQueue: UGCPivotQueue[];
+function UGCAnalyticsOverview({ submissions, ugcCreators, pivotQueue, smartAlerts }: {
+  submissions: UGCSubmission[]; ugcCreators: UGCCreatorProfile[]; pivotQueue: UGCPivotQueue[]; smartAlerts?: SmartAlert[];
 }) {
   const currentWeek = getMondayOfWeek(new Date());
   const thisWeekSubs = submissions.filter(s => s.week_date === currentWeek);
@@ -4104,6 +4225,17 @@ function UGCAnalyticsOverview({ submissions, ugcCreators, pivotQueue }: {
         {c1 && g1 && <div className="flex items-center gap-2 mt-2"><span className="w-3 h-1 bg-stone-800 rounded inline-block"/><span className="text-xs text-stone-500">{ugcCreators.find(c => c.id === c1)?.full_name}</span></div>}
         {c2 && g2 && <div className="flex items-center gap-2 mt-1"><span className="w-3 h-1 bg-violet-600 rounded inline-block"/><span className="text-xs text-stone-500">{ugcCreators.find(c => c.id === c2)?.full_name}</span></div>}
       </div>
+
+      {/* Smart Alert Warnings */}
+      {(smartAlerts || []).filter(a => ['no_post', 'declining_performance'].includes(a.alert_type)).map(alert => (
+        <div key={alert.id} className="border rounded-xl p-3 flex items-start gap-2" style={{
+          borderColor: alert.urgency === 'orange' ? '#fdba74' : '#fde68a',
+          backgroundColor: alert.urgency === 'orange' ? '#fff7ed' : '#fffbeb',
+        }}>
+          <span className="text-sm">{alert.urgency === 'orange' ? '📉' : '⚠️'}</span>
+          <p className="text-sm font-medium" style={{ color: alert.urgency === 'orange' ? '#c2410c' : '#92400e' }}>{alert.message}</p>
+        </div>
+      ))}
 
       <div className="bg-white border border-stone-200/60 rounded-xl p-5 overflow-x-auto">
         <p className="text-sm font-semibold text-stone-700 mb-4">All Submissions</p>
@@ -4241,6 +4373,7 @@ export default function DashboardPage() {
   const [ugcBriefs, setUGCBriefs] = useState<UGCBrief[]>([]);
   const [ugcAnnouncements, setUGCAnnouncements] = useState<UGCAnnouncement[]>([]);
   const [ugcQuestions, setUGCQuestions] = useState<UGCQuestion[]>([]);
+  const [smartAlerts, setSmartAlerts] = useState<SmartAlert[]>([]);
   const [ugcCreators, setUGCCreators] = useState<UGCCreatorProfile[]>([]);
   const [ugcResources, setUGCResources] = useState<UGCResource[]>([]);
 
@@ -4251,6 +4384,7 @@ export default function DashboardPage() {
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
       if (!prof) { router.push("/auth"); return; }
       setProfile(prof as Profile);
+      if (prof?.id) supabase.from("profiles").update({ last_seen_at: new Date().toISOString() }).eq("id", prof.id).then(() => {});
       if (prof.role === "ugc_creator") setPage("ugc_dashboard");
       const [
         { data: iD }, { data: tD }, { data: oD }, { data: qD },
@@ -4294,7 +4428,7 @@ export default function DashboardPage() {
         const [
           { data: ugcCrD }, { data: ugcSubD }, { data: ugcPqD }, { data: ugcPvD },
           { data: ugcHkD }, { data: ugcBrD }, { data: ugcAnD }, { data: ugcQsD },
-          { data: ugcResD },
+          { data: ugcResD }, { data: alertsD },
         ] = await Promise.all([
           supabase.from("profiles").select("*").eq("role", "ugc_creator").order("full_name"),
           prof.role === "admin"
@@ -4311,6 +4445,7 @@ export default function DashboardPage() {
           supabase.from("ugc_announcements").select("*").order("pinned", { ascending: false }),
           supabase.from("ugc_qa").select("*, ugc_qa_replies(*)").order("created_at", { ascending: false }),
           supabase.from("ugc_resources").select("*").order("created_at", { ascending: false }),
+          supabase.from("smart_alerts").select("*").eq("dismissed", false).order("created_at", { ascending: false }),
         ]);
         setUGCCreators((ugcCrD || []) as UGCCreatorProfile[]);
         setUGCSubmissions((ugcSubD || []) as UGCSubmission[]);
@@ -4321,6 +4456,7 @@ export default function DashboardPage() {
         setUGCAnnouncements((ugcAnD || []) as UGCAnnouncement[]);
         setUGCQuestions((ugcQsD || []) as UGCQuestion[]);
         setUGCResources((ugcResD || []) as UGCResource[]);
+        setSmartAlerts((alertsD || []) as SmartAlert[]);
       }
 
       setLoading(false);
@@ -4370,6 +4506,7 @@ export default function DashboardPage() {
   const isTech = profile.team === "Tech/AI";
   const isCreator = profile.team === "Content Creation";
   const openQCount = questions.filter(q => q.status === "open").length;
+  const activeAlertCount = smartAlerts.filter(a => !a.dismissed).length;
 
   const NAV = isUGC ? [
     { id: "ugc_dashboard",     icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
@@ -4401,6 +4538,7 @@ export default function DashboardPage() {
         { id: "dashboard",     icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
         { id: "settings",      icon: <SettingsIcon size={16}/>,    label: "Settings" },
         { id: "notifications", icon: <Bell size={16}/>,            label: "Push Notifications" },
+        { id: "alerts", icon: <AlertTriangle size={16}/>, label: "Alerts Center", badge: activeAlertCount || null },
       ],
     },
     {
@@ -4492,7 +4630,7 @@ export default function DashboardPage() {
     const common = { profile: p, interns, sb: supabase, addActivity };
     switch (page) {
       case "dashboard": return isAdmin
-        ? <AdminDash interns={interns} tasks={tasks} outreach={outreach} questions={questions} activity={activity} announcements={announcements} setAnnouncements={setAnnouncements} ugcPivotQueue={ugcPivotQueue} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} sb={supabase}/>
+        ? <AdminDash interns={interns} tasks={tasks} outreach={outreach} questions={questions} activity={activity} announcements={announcements} setAnnouncements={setAnnouncements} ugcPivotQueue={ugcPivotQueue} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} smartAlerts={smartAlerts} sb={supabase}/>
         : <InternDash profile={p} tasks={tasks} outreach={outreach} announcements={announcements} setPage={setPage} requests={requests}/>;
       case "tasks":     return <TasksPg {...common} tasks={tasks} setTasks={setTasks}/>;
       case "outreach":  return <OutPg {...common} outreach={outreach} setOutreach={setOutreach}/>;
@@ -4524,11 +4662,12 @@ export default function DashboardPage() {
       case "ugc_history":       return (isAdmin || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
       case "ugc_resources":     return (isAdmin || isUGC) ? <UGCResourcesPage profile={p as UGCCreatorProfile} resources={ugcResources} setResources={setUGCResources} sb={supabase}/> : null;
       // Admin-only UGC pages
-      case "ugc_creators":      return isAdmin ? <UGCCreatorMgmtPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} sb={supabase}/> : null;
+      case "ugc_creators":      return isAdmin ? <UGCCreatorMgmtPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} smartAlerts={smartAlerts} sb={supabase}/> : null;
       case "ugc_pivot_queue":   return isAdmin ? <UGCPivotQueuePage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} ugcCreators={ugcCreators} sb={supabase}/> : null;
-      case "ugc_analytics":     return isAdmin ? <UGCAnalyticsOverview submissions={ugcSubmissions} ugcCreators={ugcCreators} pivotQueue={ugcPivotQueue}/> : null;
+      case "ugc_analytics":     return isAdmin ? <UGCAnalyticsOverview submissions={ugcSubmissions} ugcCreators={ugcCreators} pivotQueue={ugcPivotQueue} smartAlerts={smartAlerts}/> : null;
       case "ugc_pivot_history": return isAdmin ? <UGCPivotHistoryPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_brief":         return isAdmin ? <UGCBriefPage briefs={ugcBriefs} setBriefs={setUGCBriefs} sb={supabase}/> : null;
+      case "alerts": return isAdmin ? <AlertsPage alerts={smartAlerts} setAlerts={setSmartAlerts} sb={supabase}/> : null;
       default:          return null;
     }
   }
