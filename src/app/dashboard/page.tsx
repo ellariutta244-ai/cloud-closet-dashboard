@@ -1966,11 +1966,22 @@ function ContentPage({ profile, interns, content, setContent, sb }: { profile:Pr
 }
 
 // ── Push Notifications Page ────────────────────────────────────────────────────
-function NotificationPg({ interns }: { interns: Profile[] }) {
-  const TEAMS = ["All Interns","Tech/AI","Strategy","Events/Outreach","Design","Curation Team","Content Creation"];
-  const [form, setForm] = useState({ title:"", body:"", team:"All Interns" });
+function NotificationPg({ interns, ugcCreators }: { interns: Profile[]; ugcCreators: UGCCreatorProfile[] }) {
+  const TARGETS = [
+    { label: "All Interns", team: undefined, role: undefined },
+    { label: "Tech/AI", team: "Tech/AI", role: undefined },
+    { label: "Strategy", team: "Strategy", role: undefined },
+    { label: "Events/Outreach", team: "Events/Outreach", role: undefined },
+    { label: "Design", team: "Design", role: undefined },
+    { label: "Curation Team", team: "Curation Team", role: undefined },
+    { label: "Content Creation", team: "Content Creation", role: undefined },
+    { label: "UGC Creators", team: undefined, role: "ugc_creator" },
+  ];
+  const [form, setForm] = useState({ title: "", body: "", targetLabel: "All Interns" });
   const [sending, setSending] = useState(false);
-  const [result, setResult] = useState<{ok:boolean;sent?:number;error?:string}|null>(null);
+  const [result, setResult] = useState<{ ok: boolean; sent?: number; error?: string } | null>(null);
+
+  const selectedTarget = TARGETS.find(t => t.label === form.targetLabel) ?? TARGETS[0];
 
   async function send() {
     if (!form.title.trim() || !form.body.trim()) return;
@@ -1979,7 +1990,7 @@ function NotificationPg({ interns }: { interns: Profile[] }) {
       const res = await fetch("/api/send-notification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: form.title, body: form.body, team: form.team === "All Interns" ? undefined : form.team }),
+        body: JSON.stringify({ title: form.title, body: form.body, team: selectedTarget.team, role: selectedTarget.role }),
       });
       const json = await res.json();
       setResult(json);
@@ -1991,34 +2002,129 @@ function NotificationPg({ interns }: { interns: Profile[] }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div><h1 className="text-xl font-bold text-stone-800">Push Notifications</h1><p className="text-sm text-stone-400 mt-0.5">Send a push notification to interns who have enabled alerts.</p></div>
+      <div><h1 className="text-xl font-bold text-stone-800">Push Notifications</h1><p className="text-sm text-stone-400 mt-0.5">Send a push notification to interns or UGC creators who have enabled alerts.</p></div>
       <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
-        <TI label="Title" value={form.title} onChange={v=>setForm({...form,title:v})} placeholder="e.g. New task assigned" required/>
-        <TA label="Message" value={form.body} onChange={v=>setForm({...form,body:v})} placeholder="Notification body text..." rows={3}/>
+        <TI label="Title" value={form.title} onChange={v => setForm({ ...form, title: v })} placeholder="e.g. New task assigned" required />
+        <TA label="Message" value={form.body} onChange={v => setForm({ ...form, body: v })} placeholder="Notification body text..." rows={3} />
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">Send to</label>
           <div className="flex flex-wrap gap-2">
-            {TEAMS.map(t=>(
-              <button key={t} onClick={()=>setForm({...form,team:t})} className={`text-xs px-3 py-1.5 rounded-full border transition-all ${form.team===t?"bg-stone-800 text-white border-stone-800":"border-stone-200 text-stone-500 hover:border-stone-400"}`}>{t}</button>
+            {TARGETS.map(t => (
+              <button key={t.label} onClick={() => setForm({ ...form, targetLabel: t.label })}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-all ${form.targetLabel === t.label ? "bg-stone-800 text-white border-stone-800" : "border-stone-200 text-stone-500 hover:border-stone-400"}`}>
+                {t.label}
+              </button>
             ))}
           </div>
         </div>
         {result && (
-          <div className={`text-sm px-3 py-2 rounded-lg ${result.ok?"bg-emerald-50 text-emerald-700":"bg-red-50 text-red-600"}`}>
-            {result.ok ? `Sent to ${result.sent} device${result.sent!==1?"s":""}` : `Error: ${result.error}`}
+          <div className={`text-sm px-3 py-2 rounded-lg ${result.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
+            {result.ok ? `Sent to ${result.sent} device${result.sent !== 1 ? "s" : ""}` : `Error: ${result.error}`}
           </div>
         )}
         <div className="flex justify-end">
-          <Btn onClick={send} disabled={sending||!form.title.trim()||!form.body.trim()}>
-            <Send size={14}/>{sending?"Sending...":"Send Notification"}
+          <Btn onClick={send} disabled={sending || !form.title.trim() || !form.body.trim()}>
+            <Send size={14} />{sending ? "Sending..." : "Send Notification"}
           </Btn>
         </div>
       </div>
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 flex flex-col gap-1">
-        <p className="font-semibold">Interns must allow notifications</p>
-        <p>When an intern first opens the dashboard, their browser will ask for permission. Only interns who approved will receive push notifications.</p>
-        <p className="mt-1 font-medium">{interns.length} total interns registered.</p>
+        <p className="font-semibold">Users must allow notifications</p>
+        <p>When a user first opens the dashboard, their browser will ask for permission. Only users who approved will receive push notifications.</p>
+        <p className="mt-1 font-medium">{interns.length} interns · {ugcCreators.length} UGC creators registered.</p>
       </div>
+    </div>
+  );
+}
+
+// ── Merged Wisconsin Pages ─────────────────────────────────────────────────────
+function OutreachRequestsPage({ profile, interns, outreach, setOutreach, requests, setRequests, requestTypes, setRequestTypes, sb, settings, addActivity }: {
+  profile: Profile; interns: Profile[]; outreach: Outreach[]; setOutreach: (o: Outreach[]) => void;
+  requests: Request[]; setRequests: (r: Request[]) => void; requestTypes: RequestType[];
+  setRequestTypes: (rt: RequestType[]) => void; sb: any; settings: AppSettings; addActivity: (a: string, m?: any) => void;
+}) {
+  const [tab, setTab] = useState<"outreach" | "requests">("outreach");
+  const isAdmin = profile.role === "admin";
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit">
+        <button onClick={() => setTab("outreach")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "outreach" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Outreach Log</button>
+        <button onClick={() => setTab("requests")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "requests" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Request Inbox</button>
+      </div>
+      {tab === "outreach"
+        ? <OutPg profile={profile} interns={interns} sb={sb} addActivity={addActivity} outreach={outreach} setOutreach={setOutreach} />
+        : isAdmin
+          ? <AdminRequestInbox requests={requests} setRequests={setRequests} requestTypes={requestTypes} setRequestTypes={setRequestTypes} interns={interns} sb={sb} settings={settings} />
+          : <InternRequests profile={profile} requests={requests.filter(r => r.intern_id === profile.id)} setRequests={setRequests} sb={sb} settings={settings} />
+      }
+    </div>
+  );
+}
+
+function ReportsAnalyticsPage({ profile, interns, tasks, outreach, content, requests, questions, techProjects, reports, setReports, sb, settings, addActivity }: {
+  profile: Profile; interns: Profile[]; tasks: Task[]; outreach: Outreach[]; content: ContentVideo[];
+  requests: Request[]; questions: Question[]; techProjects: TechProject[];
+  reports: Report[]; setReports: (r: Report[]) => void; sb: any; settings: AppSettings; addActivity: (a: string, m?: any) => void;
+}) {
+  const [tab, setTab] = useState<"reports" | "analytics">("reports");
+  const isAdmin = profile.role === "admin";
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit">
+        <button onClick={() => setTab("reports")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "reports" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Weekly Report</button>
+        {isAdmin && <button onClick={() => setTab("analytics")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "analytics" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Analytics</button>}
+      </div>
+      {tab === "reports"
+        ? <RPg profile={profile} interns={interns} sb={sb} addActivity={addActivity} reports={reports} setReports={setReports} settings={settings} />
+        : <AnPg interns={interns} tasks={tasks} outreach={outreach} content={content} requests={requests} questions={questions} techProjects={techProjects} />
+      }
+    </div>
+  );
+}
+
+// ── Merged UGC Pages ───────────────────────────────────────────────────────────
+function UGCPivotsHubPage({ profile, pivotQueue, setPivotQueue, pivots, setPivots, ugcCreators, sb }: {
+  profile: UGCCreatorProfile; pivotQueue: UGCPivotQueue[]; setPivotQueue: (q: UGCPivotQueue[]) => void;
+  pivots: UGCPivot[]; setPivots: (p: UGCPivot[]) => void; ugcCreators: UGCCreatorProfile[]; sb: any;
+}) {
+  const [tab, setTab] = useState<"queue" | "history">("queue");
+  const isAdmin = profile.role === "admin";
+  const pendingCount = pivotQueue.filter(q => q.status === "pending").length;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit">
+        <button onClick={() => setTab("queue")} className={`text-sm px-4 py-2 rounded-lg transition-all flex items-center gap-1.5 ${tab === "queue" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>
+          Pivot Queue {pendingCount > 0 && <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">{pendingCount}</span>}
+        </button>
+        <button onClick={() => setTab("history")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "history" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Pivot History</button>
+      </div>
+      {tab === "queue"
+        ? isAdmin
+          ? <UGCPivotQueuePage profile={profile} pivotQueue={pivotQueue} setPivotQueue={setPivotQueue} ugcCreators={ugcCreators} sb={sb} />
+          : null
+        : isAdmin
+          ? <UGCPivotHistoryPage profile={profile} pivots={pivots} setPivots={setPivots} ugcCreators={ugcCreators} sb={sb} />
+          : null
+      }
+    </div>
+  );
+}
+
+function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements, setAnnouncements, sb }: {
+  profile: UGCCreatorProfile; briefs: UGCBrief[]; setBriefs: (b: UGCBrief[]) => void;
+  announcements: UGCAnnouncement[]; setAnnouncements: (a: UGCAnnouncement[]) => void; sb: any;
+}) {
+  const [tab, setTab] = useState<"briefs" | "announcements">("briefs");
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit">
+        <button onClick={() => setTab("briefs")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "briefs" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Weekly Brief</button>
+        <button onClick={() => setTab("announcements")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "announcements" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Announcements</button>
+      </div>
+      {tab === "briefs"
+        ? <UGCBriefPage briefs={briefs} setBriefs={setBriefs} sb={sb} />
+        : <UGCAnnouncementsPage profile={profile} announcements={announcements} setAnnouncements={setAnnouncements} sb={sb} />
+      }
     </div>
   );
 }
@@ -4149,31 +4255,27 @@ export default function DashboardPage() {
     {
       label: "WISCONSIN TEAM",
       items: [
-        { id: "tasks",     icon: <CheckSquare size={16}/>,  label: "All Tasks" },
-        { id: "outreach",  icon: <Mail size={16}/>,         label: "Outreach Log" },
-        { id: "requests",  icon: <Inbox size={16}/>,        label: "Request Inbox" },
-        { id: "events",    icon: <CalendarDays size={16}/>, label: "Events" },
-        { id: "questions", icon: <MessageCircle size={16}/>,label: "Questions", badge: openQCount || null },
-        { id: "reports",   icon: <FileText size={16}/>,     label: "Weekly Report" },
-        { id: "resources", icon: <FolderOpen size={16}/>,   label: "Resources" },
-        { id: "tech",      icon: <Code2 size={16}/>,        label: "Tech Projects" },
-        { id: "content",   icon: <Video size={16}/>,        label: "Content" },
-        { id: "interns",   icon: <Users size={16}/>,        label: "Intern Mgmt" },
-        { id: "analytics", icon: <BarChart3 size={16}/>,    label: "Analytics" },
+        { id: "tasks",               icon: <CheckSquare size={16}/>,  label: "All Tasks" },
+        { id: "outreach_requests",   icon: <Mail size={16}/>,         label: "Outreach & Requests" },
+        { id: "events",              icon: <CalendarDays size={16}/>, label: "Events" },
+        { id: "questions",           icon: <MessageCircle size={16}/>,label: "Questions", badge: openQCount || null },
+        { id: "reports_analytics",   icon: <FileText size={16}/>,     label: "Reports & Analytics" },
+        { id: "resources",           icon: <FolderOpen size={16}/>,   label: "Resources" },
+        { id: "tech",                icon: <Code2 size={16}/>,        label: "Tech Projects" },
+        { id: "content",             icon: <Video size={16}/>,        label: "Content" },
+        { id: "interns",             icon: <Users size={16}/>,        label: "Intern Mgmt" },
       ],
     },
     {
       label: "UGC TEAM",
       items: [
-        { id: "ugc_creators",      icon: <Users size={16}/>,        label: "UGC Creators" },
-        { id: "ugc_pivot_queue",   icon: <Inbox size={16}/>,        label: "Pivot Queue", badge: pendingPivotCount || null },
-        { id: "ugc_analytics",     icon: <BarChart3 size={16}/>,    label: "UGC Analytics" },
-        { id: "ugc_pivot_history", icon: <FileText size={16}/>,     label: "Pivot History" },
-        { id: "ugc_brief",         icon: <FileText size={16}/>,     label: "Weekly Brief" },
-        { id: "ugc_announcements", icon: <Bell size={16}/>,         label: "UGC Announcements" },
-        { id: "ugc_resources",     icon: <FolderOpen size={16}/>,   label: "UGC Resources" },
-        { id: "ugc_hooks",         icon: <Zap size={16}/>,          label: "Hook Library" },
-        { id: "ugc_leaderboard",   icon: <Trophy size={16}/>,       label: "Leaderboard" },
+        { id: "ugc_creators",            icon: <Users size={16}/>,        label: "UGC Creators" },
+        { id: "ugc_analytics",           icon: <BarChart3 size={16}/>,    label: "UGC Analytics" },
+        { id: "ugc_pivots_hub",          icon: <Inbox size={16}/>,        label: "Pivots", badge: pendingPivotCount || null },
+        { id: "ugc_briefs_announcements",icon: <FileText size={16}/>,     label: "Briefs & Announcements" },
+        { id: "ugc_resources",           icon: <FolderOpen size={16}/>,   label: "UGC Resources" },
+        { id: "ugc_hooks",               icon: <Zap size={16}/>,          label: "Hook Library" },
+        { id: "ugc_leaderboard",         icon: <Trophy size={16}/>,       label: "Leaderboard" },
       ],
     },
   ];
@@ -4232,6 +4334,8 @@ export default function DashboardPage() {
       case "requests":  return isAdmin
         ? <AdminRequestInbox requests={requests} setRequests={setRequests} requestTypes={requestTypes} setRequestTypes={setRequestTypes} interns={interns} sb={supabase} settings={settings}/>
         : <InternRequests profile={p} requests={requests.filter(r => r.intern_id === p.id)} setRequests={setRequests} sb={supabase} settings={settings}/>;
+      case "outreach_requests": return <OutreachRequestsPage profile={p} interns={interns} outreach={outreach} setOutreach={setOutreach} requests={requests} setRequests={setRequests} requestTypes={requestTypes} setRequestTypes={setRequestTypes} sb={supabase} settings={settings} addActivity={addActivity}/>;
+      case "reports_analytics": return <ReportsAnalyticsPage profile={p} interns={interns} tasks={tasks} outreach={outreach} content={content} requests={requests} questions={questions} techProjects={techProjects} reports={reports} setReports={setReports} sb={supabase} settings={settings} addActivity={addActivity}/>;
       case "events":    return <EventsPage profile={p} interns={interns} events={events} setEvents={setEvents} sb={supabase}/>;
       case "tech":      return (isAdmin || isTech) ? <TechProjectsPage profile={p} interns={interns} projects={techProjects} setProjects={setTechProjects} sb={supabase}/> : null;
       case "content":   return (isAdmin || isCreator) ? <ContentPage profile={p} interns={interns} content={content} setContent={setContent} sb={supabase}/> : null;
@@ -4240,7 +4344,7 @@ export default function DashboardPage() {
       case "resources": return <ResPg profile={p} resources={resources} setResources={setResources} sb={supabase}/>;
       case "interns":   return isAdmin ? <IntMgmt interns={interns} setInterns={setInterns} sb={supabase}/> : null;
       case "analytics": return isAdmin ? <AnPg interns={interns} tasks={tasks} outreach={outreach} content={content} requests={requests} questions={questions} techProjects={techProjects}/> : null;
-      case "notifications": return isAdmin ? <NotificationPg interns={interns}/> : null;
+      case "notifications": return isAdmin ? <NotificationPg interns={interns} ugcCreators={ugcCreators}/> : null;
       case "settings":  return isAdmin ? <SettingsPg settings={settings} setSettings={setSettings} sb={supabase}/> : null;
       // UGC Creator pages
       case "ugc_dashboard":     return (isAdmin || isUGC) ? <UGCDashboard profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} submissions={ugcSubmissions} pivots={ugcPivots} briefs={ugcBriefs} announcements={ugcAnnouncements} sb={supabase} setPage={setPage}/> : null;
@@ -4250,6 +4354,8 @@ export default function DashboardPage() {
       case "ugc_leaderboard":   return (isAdmin || isUGC) ? <UGCLeaderboardPage submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
       case "ugc_qa":            return (isAdmin || isUGC) ? <UGCQAPage profile={p as UGCCreatorProfile} questions={ugcQuestions} setQuestions={setUGCQuestions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_announcements": return isAdmin ? <UGCAnnouncementsPage profile={p as UGCCreatorProfile} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
+      case "ugc_pivots_hub":            return isAdmin ? <UGCPivotsHubPage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_briefs_announcements":  return isAdmin ? <UGCBriefsAnnouncementsPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
       case "ugc_history":       return (isAdmin || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
       case "ugc_resources":     return (isAdmin || isUGC) ? <UGCResourcesPage profile={p as UGCCreatorProfile} resources={ugcResources} setResources={setUGCResources} sb={supabase}/> : null;
       // Admin-only UGC pages

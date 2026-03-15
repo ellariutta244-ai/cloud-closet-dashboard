@@ -1,36 +1,33 @@
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 
 function getAdminApp() {
   if (getApps().length > 0) return getApps()[0];
-
   const b64 = process.env.FIREBASE_SA_BASE64;
   if (!b64) throw new Error('FIREBASE_SA_BASE64 not configured');
   const sa = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
-
   return initializeApp({ credential: cert(sa) });
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { title, body, team } = await req.json();
+    const { title, body, team, role } = await req.json();
     if (!title || !body) return NextResponse.json({ error: 'Missing title or body' }, { status: 400 });
 
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      "https://gfdurfdqrhjzxjperknw.supabase.co",
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmZHVyZmRxcmhqenhqcGVya253Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNjI3MDIsImV4cCI6MjA4ODkzODcwMn0.ciR7C4VK4vKvgqPHriiw7DmednNBBq7x_2zI1l-oAAY",
-      { cookies: { getAll: () => cookieStore.getAll(), setAll: (cs) => cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } }
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceKey) return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' }, { status: 500 });
+
+    const supabase = createClient(
+      'https://gfdurfdqrhjzxjperknw.supabase.co',
+      serviceKey,
+      { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    let query = supabase
-      .from('fcm_tokens')
-      .select('token, profiles!inner(role, team)');
-
-    if (team) query = (query as any).eq('profiles.team', team);
+    let query = supabase.from('fcm_tokens').select('token, profiles!inner(role, team)');
+    if (role) query = (query as any).eq('profiles.role', role);
+    else if (team) query = (query as any).eq('profiles.team', team);
 
     const { data: rows, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -47,17 +44,13 @@ export async function POST(req: NextRequest) {
         await messaging.send({
           token,
           webpush: {
-            notification: {
-              title,
-              body,
-              icon: '/icon-192.png',
-            },
+            notification: { title, body, icon: '/icon-192.png' },
             headers: { Urgency: 'high' },
           },
         });
         sent++;
       } catch {
-        // individual token may be stale, continue
+        // stale token, continue
       }
     }
 
