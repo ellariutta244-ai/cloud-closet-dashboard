@@ -12,7 +12,7 @@ import {
   Loader2, Menu, CalendarDays, Inbox, Code2, Video,
   CalendarClock, ShoppingBag, Coffee, HelpCircle, MapPin,
   Play, Trophy, ExternalLink, ArrowUpRight, MessageSquare, TrendingUp,
-  Settings as SettingsIcon, Zap, ChevronDown, ChevronUp, AlertTriangle,
+  Settings as SettingsIcon, Zap, ChevronDown, ChevronUp, AlertTriangle, Bookmark, Copy,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -2465,7 +2465,8 @@ Always structure every pivot exactly like this:
 type UGCSubmission = { id: string; creator_id?: string; week_date: string; total_views: number; likes: number; comments: number; shares: number; saves: number; followers_gained: number; followers_lost: number; net_follower_change: number; best_video_link?: string; benchmark_tier?: string; hook_text?: string; format_type?: string; video_length_seconds?: number; niche?: string; trending_sound?: boolean; has_cta?: boolean; avg_watch_time_seconds?: number; watch_completion_rate?: number; profile_visits?: number; traffic_fyp_pct?: number; traffic_following_pct?: number; traffic_search_pct?: number; comment_sentiment?: string; total_account_views?: number; videos_posted?: number; created_at: string };
 type UGCPivotQueue = { id: string; creator_id?: string; submission_id?: string; week_date: string; analytics_snapshot?: any; ai_pivot?: string; admin_notes?: string; example_video_link?: string; status: string; created_at: string };
 type UGCPivot = { id: string; creator_id?: string; queue_id?: string; week_date: string; ai_pivot?: string; admin_notes?: string; example_video_link?: string; created_at: string };
-type UGCHook = { id: string; hook_text: string; view_count?: number; week_date?: string; creator_id?: string; admin_notes?: string; created_at: string };
+type UGCHook = { id: string; hook_text: string; view_count?: number; week_date?: string; creator_id?: string; admin_notes?: string; pushed_to?: string; push_note?: string; video_topic?: string; format_type?: string; goal?: string; audience?: string; save_count?: number; created_at: string };
+type SavedHook = { id: string; creator_id?: string; hook_text: string; video_topic?: string; format_type?: string; goal?: string; audience?: string; saved_at: string };
 type UGCBrief = { id: string; week_date: string; hooks?: string; format_recs?: string; brand_guidelines?: string; created_at: string };
 type UGCAnnouncement = { id: string; title: string; body?: string; pinned?: boolean; created_at: string };
 type UGCResource = { id: string; title: string; description?: string; category?: string; file_url?: string; link?: string; created_at: string };
@@ -3101,6 +3102,338 @@ function UGCMyPivotsPage({ profile, pivots, submissions }: {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Hook Generator ────────────────────────────────────────────────────────────
+const HOOK_FORMULAS = ["honest observation","relatable moment","specific detail","contrast","quiet flex","the question"];
+function detectFormula(hook: string): string {
+  const h = hook.toLowerCase();
+  if (h.includes("why") || h.includes("look off") || h.includes("wrong")) return "honest observation";
+  if (h.includes("times") || h.includes("wore") || h.includes("still")) return "relatable moment";
+  if (h.includes("piece") || h.includes("changed") || h.includes("morning")) return "specific detail";
+  if (h.includes("told") || h.includes("everyone") || h.includes("but")) return "contrast";
+  if (h.includes("$") || h.includes("found") || h.includes("goes with")) return "quiet flex";
+  if (h.includes("when") || h.includes("?") || h.includes("why")) return "the question";
+  return "";
+}
+
+function HookGeneratorPage({ profile, ugcCreators, ugcHooks, setUGCHooks, savedHooks, setSavedHooks, settings, sb }: {
+  profile: UGCCreatorProfile; ugcCreators: UGCCreatorProfile[];
+  ugcHooks: UGCHook[]; setUGCHooks: (h: UGCHook[]) => void;
+  savedHooks: SavedHook[]; setSavedHooks: (h: SavedHook[]) => void;
+  settings: AppSettings; sb: any;
+}) {
+  const isAdmin = profile.role === "admin";
+  const [topic, setTopic] = useState("");
+  const [format, setFormat] = useState("talking head");
+  const [goal, setGoal] = useState("get views");
+  const [audience, setAudience] = useState("everyone");
+  const [inspiration, setInspiration] = useState("");
+  const [targetCreator, setTargetCreator] = useState("");
+  const [generatedHooks, setGeneratedHooks] = useState<string[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState("");
+  const [showFormulas, setShowFormulas] = useState(true);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+  const [tab, setTab] = useState<"generate"|"saved">("generate");
+  const [pushModal, setPushModal] = useState<{ hook: string; idx: number } | null>(null);
+  const [pushNote, setPushNote] = useState("");
+  const [pushTarget, setPushTarget] = useState("");
+  const [pushing, setPushing] = useState(false);
+  const [showLibraryConfirm, setShowLibraryConfirm] = useState<number | null>(null);
+
+  const hookOfWeek = settings.hook_of_week_text || "";
+
+  const mySavedHooks = isAdmin
+    ? savedHooks
+    : savedHooks.filter(h => h.creator_id === profile.id);
+
+  const myPushedHooks = isAdmin
+    ? []
+    : ugcHooks.filter(h => h.pushed_to === profile.id);
+
+  async function generate() {
+    if (!topic.trim()) return;
+    setGenerating(true); setGenError(""); setGeneratedHooks([]); setSavedIds(new Set());
+    try {
+      const res = await fetch("/api/ugc-hook-generator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic, format, goal, audience, inspiration: inspiration || undefined }),
+      });
+      const data = await res.json();
+      if (data.error) { setGenError(data.error); setGenerating(false); return; }
+      setGeneratedHooks(data.hooks || []);
+    } catch (e: any) { setGenError(e.message); }
+    setGenerating(false);
+  }
+
+  function copy(hook: string, idx: number) {
+    navigator.clipboard.writeText(hook);
+    setCopiedIdx(idx); setTimeout(() => setCopiedIdx(null), 1500);
+  }
+
+  async function saveHook(hook: string, idx: number) {
+    const creatorId = isAdmin && targetCreator ? targetCreator : profile.id;
+    const { data, error } = await sb.from("saved_hooks").insert({
+      creator_id: creatorId,
+      hook_text: hook,
+      video_topic: topic,
+      format_type: format,
+      goal,
+      audience,
+      saved_at: new Date().toISOString(),
+    }).select().single();
+    if (error) { console.error(error); return; }
+    setSavedHooks([data as SavedHook, ...savedHooks]);
+    setSavedIds(prev => new Set(prev).add(idx));
+    // Increment save_count on library hooks if already there
+    const existing = ugcHooks.find(h => h.hook_text === hook);
+    if (existing) {
+      const newCount = (existing.save_count || 0) + 1;
+      await sb.from("ugc_hooks").update({ save_count: newCount }).eq("id", existing.id);
+      setUGCHooks(ugcHooks.map(h => h.id === existing.id ? { ...h, save_count: newCount } : h));
+    }
+  }
+
+  async function saveToLibrary(hook: string, idx: number) {
+    const creatorId = isAdmin && targetCreator ? targetCreator : null;
+    const { data, error } = await sb.from("ugc_hooks").insert({
+      hook_text: hook, video_topic: topic, format_type: format, goal, audience,
+      creator_id: creatorId || null,
+      save_count: 0, created_at: new Date().toISOString(),
+    }).select().single();
+    if (error) { console.error(error); return; }
+    setUGCHooks([data as UGCHook, ...ugcHooks]);
+    setShowLibraryConfirm(idx);
+    setTimeout(() => setShowLibraryConfirm(null), 2000);
+  }
+
+  async function pushToCreator() {
+    if (!pushModal || !pushTarget) return;
+    setPushing(true);
+    const { data, error } = await sb.from("ugc_hooks").insert({
+      hook_text: pushModal.hook, video_topic: topic, format_type: format, goal, audience,
+      pushed_to: pushTarget, push_note: pushNote || null,
+      creator_id: null, save_count: 0, created_at: new Date().toISOString(),
+    }).select().single();
+    setPushing(false);
+    if (error) { console.error(error); return; }
+    setUGCHooks([data as UGCHook, ...ugcHooks]);
+    setPushModal(null); setPushNote(""); setPushTarget("");
+  }
+
+  async function setHookOfWeek(hook: string) {
+    await sb.from("settings").upsert({ key: "hook_of_week_text", value: hook }, { onConflict: "key" });
+    // optimistic update handled by parent settings refresh
+    alert("Hook of the Week updated! Refresh to see it on creator dashboards.");
+  }
+
+  async function deleteSaved(id: string) {
+    await sb.from("saved_hooks").delete().eq("id", id);
+    setSavedHooks(savedHooks.filter(h => h.id !== id));
+  }
+
+  const topSaved = [...ugcHooks].filter(h => (h.save_count || 0) > 0).sort((a, b) => (b.save_count || 0) - (a.save_count || 0)).slice(0, 5);
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-xl font-bold text-stone-800">Hook Generator</h1>
+          <p className="text-sm text-stone-400 mt-0.5">Generate 10 Cloud Closet hooks instantly</p>
+        </div>
+        <div className="flex gap-1 bg-stone-100 p-1 rounded-xl">
+          {(["generate","saved"] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all capitalize ${tab===t?"bg-white shadow-sm text-stone-800":"text-stone-500 hover:text-stone-700"}`}>{t === "saved" ? `Saved (${mySavedHooks.length})` : "Generate"}</button>
+          ))}
+        </div>
+      </div>
+
+      {tab === "generate" && (
+        <>
+          {/* Hook of the Week */}
+          {hookOfWeek && (
+            <div className="border-2 rounded-xl p-4 flex items-start gap-3" style={{ borderColor: "#ddd6fe", backgroundColor: "#faf5ff" }}>
+              <span className="text-lg">⭐</span>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "#7c3aed" }}>Hook of the Week</p>
+                <p className="text-sm font-medium text-stone-800">{hookOfWeek}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Generator Form */}
+          <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+            {isAdmin && (
+              <Sel label="Generate for creator (optional)" value={targetCreator} onChange={setTargetCreator}
+                options={[{ value: "", label: "— General / All Creators —" }, ...ugcCreators.map(c => ({ value: c.id, label: `${c.full_name}${c.tiktok_handle ? ` @${c.tiktok_handle}` : ""}` }))]} />
+            )}
+            <TI label="What is this video about?" value={topic} onChange={setTopic} placeholder="e.g. styling the same white tee 5 ways" required />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Sel label="Format" value={format} onChange={setFormat} options={[
+                { value: "talking head", label: "Talking Head" },
+                { value: "voiceover", label: "Voiceover" },
+                { value: "POV", label: "POV" },
+                { value: "transition", label: "Transition" },
+                { value: "other", label: "Other" },
+              ]} />
+              <Sel label="Goal" value={goal} onChange={setGoal} options={[
+                { value: "get views", label: "Get Views" },
+                { value: "get saves", label: "Get Saves" },
+                { value: "get shares", label: "Get Shares" },
+                { value: "get follows", label: "Get Follows" },
+              ]} />
+              <Sel label="Audience" value={audience} onChange={setAudience} options={[
+                { value: "everyone", label: "Everyone" },
+                { value: "fashion lovers", label: "Fashion Lovers" },
+                { value: "college women", label: "College Women" },
+                { value: "thrifters", label: "Thrifters" },
+                { value: "minimalists", label: "Minimalists" },
+                { value: "maximalists", label: "Maximalists" },
+              ]} />
+            </div>
+            <TI label="Inspiration hook (optional — paste one that worked before)" value={inspiration} onChange={setInspiration} placeholder="e.g. This is why your outfits look off" />
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 text-xs text-stone-500 cursor-pointer">
+                <input type="checkbox" checked={showFormulas} onChange={e => setShowFormulas(e.target.checked)} className="rounded accent-stone-700" />
+                Show formula tags
+              </label>
+              <Btn onClick={generate} disabled={generating || !topic.trim()}>
+                {generating ? "Generating..." : generatedHooks.length > 0 ? "↺ Regenerate" : "Generate Hooks"}
+              </Btn>
+            </div>
+            {genError && <p className="text-xs text-red-500">{genError}</p>}
+          </div>
+
+          {/* Generated Hooks */}
+          {generatedHooks.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Generated Hooks</p>
+              {generatedHooks.map((hook, idx) => {
+                const formula = showFormulas ? detectFormula(hook) : "";
+                const isSaved = savedIds.has(idx);
+                const isCopied = copiedIdx === idx;
+                const isLibrarySaved = showLibraryConfirm === idx;
+                return (
+                  <div key={idx} className="bg-white border border-stone-200/60 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="text-stone-300 text-xs font-bold mt-0.5 shrink-0 w-5">{idx + 1}.</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-stone-800 leading-snug">{hook}</p>
+                        {formula && <span className="text-[10px] text-stone-400 mt-1 inline-block capitalize">{formula}</span>}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                        <button onClick={() => copy(hook, idx)} className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all ${isCopied ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "border-stone-200 text-stone-500 hover:border-stone-400 hover:text-stone-700"}`}>
+                          {isCopied ? "Copied!" : <><Copy size={11} className="inline mr-1"/>Copy</>}
+                        </button>
+                        <button onClick={() => saveHook(hook, idx)} disabled={isSaved} className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all ${isSaved ? "bg-violet-50 border-violet-200 text-violet-600" : "border-stone-200 text-stone-500 hover:border-stone-400 hover:text-stone-700"}`}>
+                          {isSaved ? "Saved ✓" : <><Bookmark size={11} className="inline mr-1"/>Save</>}
+                        </button>
+                        {isAdmin && (
+                          <>
+                            <button onClick={() => { setPushModal({ hook, idx }); setPushTarget(targetCreator); }} className="text-xs px-2.5 py-1.5 rounded-lg border border-stone-200 text-stone-500 hover:border-stone-400 hover:text-stone-700 transition-all">
+                              <Send size={11} className="inline mr-1"/>Push
+                            </button>
+                            <button onClick={() => saveToLibrary(hook, idx)} className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all ${isLibrarySaved ? "bg-amber-50 border-amber-200 text-amber-600" : "border-stone-200 text-stone-500 hover:border-stone-400 hover:text-stone-700"}`}>
+                              {isLibrarySaved ? "Added ✓" : <><Zap size={11} className="inline mr-1"/>Library</>}
+                            </button>
+                            <button onClick={() => setHookOfWeek(hook)} className="text-xs px-2.5 py-1.5 rounded-lg border border-stone-200 text-stone-500 hover:border-violet-300 hover:text-violet-600 transition-all" title="Set as Hook of the Week">⭐</button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Top 5 Most Saved (admin only) */}
+          {isAdmin && topSaved.length > 0 && (
+            <div className="bg-white border border-stone-200/60 rounded-xl p-4">
+              <p className="text-sm font-semibold text-stone-700 mb-3">🔥 Most Saved Hooks</p>
+              <div className="flex flex-col gap-2">
+                {topSaved.map(h => (
+                  <div key={h.id} className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-amber-500 w-5">{h.save_count}</span>
+                    <p className="text-sm text-stone-700 flex-1 truncate">{h.hook_text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Hooks pushed to this creator */}
+          {!isAdmin && myPushedHooks.length > 0 && (
+            <div className="bg-white border border-stone-200/60 rounded-xl p-4">
+              <p className="text-sm font-semibold text-stone-700 mb-3">Hooks from your team</p>
+              <div className="flex flex-col gap-2">
+                {myPushedHooks.map(h => (
+                  <div key={h.id} className="border border-stone-100 rounded-xl p-3">
+                    <p className="text-sm font-medium text-stone-800">{h.hook_text}</p>
+                    {h.push_note && <p className="text-xs text-violet-600 mt-1 italic">"{h.push_note}"</p>}
+                    <div className="flex items-center gap-3 mt-2">
+                      {h.video_topic && <span className="text-xs text-stone-400">{h.video_topic}</span>}
+                      <button onClick={() => copy(h.hook_text, -1)} className="text-xs text-stone-400 hover:text-stone-600"><Copy size={11} className="inline mr-0.5"/>Copy</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === "saved" && (
+        <div className="flex flex-col gap-3">
+          {mySavedHooks.length === 0 ? (
+            <ES icon={<Bookmark size={24} />} message="No saved hooks yet — generate some and save your favorites" />
+          ) : (
+            mySavedHooks.map(h => (
+              <div key={h.id} className="bg-white border border-stone-200/60 rounded-xl p-4 group">
+                <div className="flex items-start gap-3">
+                  <Bookmark size={14} className="text-violet-400 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-stone-800">{h.hook_text}</p>
+                    <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                      {h.video_topic && <span className="text-xs text-stone-400">{h.video_topic}</span>}
+                      {h.format_type && <span className="text-xs text-stone-400">{h.format_type}</span>}
+                      {h.goal && <span className="text-xs text-stone-400">{h.goal}</span>}
+                      <span className="text-xs text-stone-400">{fmt(h.saved_at)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                    <button onClick={() => copy(h.hook_text, -1)} className="text-xs px-2 py-1 border border-stone-200 rounded-lg text-stone-500 hover:text-stone-700"><Copy size={11}/></button>
+                    <button onClick={() => deleteSaved(h.id)} className="p-1.5 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={12}/></button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Push to Creator Modal */}
+      <Md open={!!pushModal} onClose={() => { setPushModal(null); setPushNote(""); setPushTarget(""); }} title="Push Hook to Creator">
+        {pushModal && (
+          <div className="flex flex-col gap-3">
+            <div className="bg-stone-50 rounded-xl p-3 border border-stone-200">
+              <p className="text-sm font-medium text-stone-800">"{pushModal.hook}"</p>
+            </div>
+            <Sel label="Send to creator" value={pushTarget} onChange={setPushTarget}
+              options={[{ value: "", label: "— Select creator —" }, ...ugcCreators.map(c => ({ value: c.id, label: `${c.full_name}${c.tiktok_handle ? ` @${c.tiktok_handle}` : ""}` }))]} />
+            <TA label="Note for creator (optional)" value={pushNote} onChange={setPushNote} placeholder="e.g. Try this for your next GRWM — matches your niche perfectly" />
+            <div className="flex justify-end gap-2 pt-2">
+              <Btn variant="secondary" onClick={() => { setPushModal(null); setPushNote(""); setPushTarget(""); }}>Cancel</Btn>
+              <Btn onClick={pushToCreator} disabled={!pushTarget || pushing}>{pushing ? "Pushing..." : "Push Hook"}</Btn>
+            </div>
+          </div>
+        )}
+      </Md>
     </div>
   );
 }
@@ -4376,6 +4709,7 @@ export default function DashboardPage() {
   const [smartAlerts, setSmartAlerts] = useState<SmartAlert[]>([]);
   const [ugcCreators, setUGCCreators] = useState<UGCCreatorProfile[]>([]);
   const [ugcResources, setUGCResources] = useState<UGCResource[]>([]);
+  const [savedHooks, setSavedHooks] = useState<SavedHook[]>([]);
 
   useEffect(() => {
     async function init() {
@@ -4428,7 +4762,7 @@ export default function DashboardPage() {
         const [
           { data: ugcCrD }, { data: ugcSubD }, { data: ugcPqD }, { data: ugcPvD },
           { data: ugcHkD }, { data: ugcBrD }, { data: ugcAnD }, { data: ugcQsD },
-          { data: ugcResD }, { data: alertsD },
+          { data: ugcResD }, { data: alertsD }, { data: savedHkD },
         ] = await Promise.all([
           supabase.from("profiles").select("*").eq("role", "ugc_creator").order("full_name"),
           prof.role === "admin"
@@ -4446,6 +4780,9 @@ export default function DashboardPage() {
           supabase.from("ugc_qa").select("*, ugc_qa_replies(*)").order("created_at", { ascending: false }),
           supabase.from("ugc_resources").select("*").order("created_at", { ascending: false }),
           supabase.from("smart_alerts").select("*").eq("dismissed", false).order("created_at", { ascending: false }),
+          prof.role === "admin"
+            ? supabase.from("saved_hooks").select("*").order("saved_at", { ascending: false })
+            : supabase.from("saved_hooks").select("*").eq("creator_id", prof.id).order("saved_at", { ascending: false }),
         ]);
         setUGCCreators((ugcCrD || []) as UGCCreatorProfile[]);
         setUGCSubmissions((ugcSubD || []) as UGCSubmission[]);
@@ -4457,6 +4794,7 @@ export default function DashboardPage() {
         setUGCQuestions((ugcQsD || []) as UGCQuestion[]);
         setUGCResources((ugcResD || []) as UGCResource[]);
         setSmartAlerts((alertsD || []) as SmartAlert[]);
+        setSavedHooks((savedHkD || []) as SavedHook[]);
       }
 
       setLoading(false);
@@ -4512,7 +4850,8 @@ export default function DashboardPage() {
     { id: "ugc_dashboard",     icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
     { id: "ugc_submit",        icon: <BarChart3 size={16}/>,       label: "Submit Analytics" },
     { id: "ugc_pivots",        icon: <TrendingUp size={16}/>,      label: "My Pivots" },
-    { id: "ugc_hooks",         icon: <Zap size={16}/>,             label: "Hook Library" },
+    { id: "ugc_hook_generator", icon: <Zap size={16}/>,             label: "Hook Generator" },
+    { id: "ugc_hooks",         icon: <Bookmark size={16}/>,        label: "Hook Library" },
     { id: "ugc_leaderboard",   icon: <Trophy size={16}/>,          label: "Leaderboard" },
     { id: "ugc_qa",            icon: <MessageCircle size={16}/>,   label: "Community Q&A" },
     { id: "ugc_history",       icon: <FileText size={16}/>,        label: "Submission History" },
@@ -4564,7 +4903,8 @@ export default function DashboardPage() {
         { id: "ugc_briefs_announcements",icon: <FileText size={16}/>,     label: "Briefs & Announcements" },
         { id: "ugc_resources",           icon: <FolderOpen size={16}/>,   label: "UGC Resources" },
         { id: "ugc_qa",                  icon: <MessageCircle size={16}/>,label: "Creator Q&A" },
-        { id: "ugc_hooks",               icon: <Zap size={16}/>,          label: "Hook Library" },
+        { id: "ugc_hook_generator",      icon: <Zap size={16}/>,          label: "Hook Generator" },
+        { id: "ugc_hooks",               icon: <Bookmark size={16}/>,     label: "Hook Library" },
         { id: "ugc_leaderboard",         icon: <Trophy size={16}/>,       label: "Leaderboard" },
       ],
     },
@@ -4653,6 +4993,7 @@ export default function DashboardPage() {
       case "ugc_dashboard":     return (isAdmin || isUGC) ? <UGCDashboard profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} submissions={ugcSubmissions} pivots={ugcPivots} briefs={ugcBriefs} announcements={ugcAnnouncements} sb={supabase} setPage={setPage}/> : null;
       case "ugc_submit":        return (isAdmin || isUGC) ? <UGCSubmitPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_pivots":        return (isAdmin || isUGC) ? <UGCMyPivotsPage profile={p as UGCCreatorProfile} pivots={ugcPivots} submissions={ugcSubmissions}/> : null;
+      case "ugc_hook_generator": return (isAdmin || isUGC) ? <HookGeneratorPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
       case "ugc_hooks":         return (isAdmin || isUGC) ? <UGCHooksPage profile={p as UGCCreatorProfile} hooks={ugcHooks} setHooks={setUGCHooks} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_leaderboard":   return (isAdmin || isUGC) ? <UGCLeaderboardPage submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
       case "ugc_qa":            return (isAdmin || isUGC) ? <UGCQAPage profile={p as UGCCreatorProfile} questions={ugcQuestions} setQuestions={setUGCQuestions} ugcCreators={ugcCreators} sb={supabase}/> : null;
