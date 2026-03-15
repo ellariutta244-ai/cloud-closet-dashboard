@@ -2135,6 +2135,8 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
   const [editingPlan, setEditingPlan] = useState<Partial<WeeklyPlan> | null>(null);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [generatingAll, setGeneratingAll] = useState(false);
+  const [generateResult, setGenerateResult] = useState<{ generated: number; skipped: number; errors: number } | null>(null);
   const [samplePlans, setSamplePlans] = useState<WeeklyPlan[] | null>(null);
   const currentWeek = getMondayOfWeek(new Date());
 
@@ -2266,6 +2268,32 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
     setEditingPlan(null);
   }
 
+  async function generateAllPlans() {
+    const activeCreators = ugcCreators.filter(c => c.ugc_status !== "archived");
+    if (!activeCreators.length) return;
+    setGeneratingAll(true);
+    setGenerateResult(null);
+    let generated = 0, skipped = 0, errors = 0;
+    for (const creator of activeCreators) {
+      try {
+        const res = await fetch("/api/ugc-weekly-plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ creatorId: creator.id, weekDate: currentWeek, forceRegenerate: false }),
+        });
+        const json = await res.json();
+        if (json.exists) skipped++;
+        else if (json.success) generated++;
+        else errors++;
+      } catch { errors++; }
+    }
+    // Refresh plans from DB
+    const { data } = await sb.from("weekly_plans").select("*").order("week_date", { ascending: false });
+    if (data) setWeeklyPlans(data as WeeklyPlan[]);
+    setGenerateResult({ generated, skipped, errors });
+    setGeneratingAll(false);
+  }
+
   const plansForCurrentWeek = activePlans.filter(p => p.week_date === currentWeek);
 
   return (
@@ -2289,10 +2317,18 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
               <h1 className="text-xl font-bold text-stone-800">Content Plans</h1>
               <p className="text-sm text-stone-400 mt-0.5">Week of {currentWeek} · {plansForCurrentWeek.length} plan{plansForCurrentWeek.length !== 1 ? "s" : ""}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {samplePlans && (
                 <button onClick={() => { setSamplePlans(null); setSelectedPlan(null); }} className="text-xs px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all">✕ Clear sample data</button>
               )}
+              <button
+                onClick={generateAllPlans}
+                disabled={generatingAll}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 disabled:opacity-50 transition-all"
+              >
+                <RefreshCw size={12} className={generatingAll ? "animate-spin" : ""} />
+                {generatingAll ? "Generating…" : "Generate Plans"}
+              </button>
               {draftCount > 0 && (
                 <Btn onClick={approveAll}>Approve All ({draftCount})</Btn>
               )}
@@ -2303,11 +2339,29 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
               <span className="text-xs text-amber-700 font-medium">Sample data — changes won't be saved</span>
             </div>
           )}
+          {generateResult && (
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${generateResult.errors > 0 ? "bg-amber-50 border border-amber-200 text-amber-700" : "bg-emerald-50 border border-emerald-200 text-emerald-700"}`}>
+              {generateResult.generated > 0 && <span>{generateResult.generated} plan{generateResult.generated !== 1 ? "s" : ""} generated</span>}
+              {generateResult.skipped > 0 && <span>· {generateResult.skipped} already existed</span>}
+              {generateResult.errors > 0 && <span>· {generateResult.errors} error{generateResult.errors !== 1 ? "s" : ""}</span>}
+              <button onClick={() => setGenerateResult(null)} className="ml-auto text-stone-400 hover:text-stone-600">×</button>
+            </div>
+          )}
 
           {plansForCurrentWeek.length === 0 ? (
             <div className="flex flex-col items-center gap-4 py-12">
-              <ES icon={<FileText size={24}/>} message="No content plans for this week yet. They'll be generated Sunday night." />
-              <button onClick={loadSampleData} className="text-sm px-4 py-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-all">Try with sample data</button>
+              <ES icon={<FileText size={24}/>} message="No content plans for this week yet. Generate them now or they'll auto-generate Monday morning." />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={generateAllPlans}
+                  disabled={generatingAll}
+                  className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-stone-800 text-white hover:bg-stone-700 disabled:opacity-50 transition-all"
+                >
+                  <RefreshCw size={13} className={generatingAll ? "animate-spin" : ""} />
+                  {generatingAll ? "Generating…" : "Generate Plans Now"}
+                </button>
+                <button onClick={loadSampleData} className="text-sm px-4 py-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-all">Try with sample data</button>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
