@@ -165,10 +165,15 @@ function FileDropZone({ file, setFile }: { file:File|null; setFile:(f:File|null)
 }
 
 // ── Admin Dashboard ────────────────────────────────────────────────────────────
-function AdminDash({ interns, tasks, outreach, questions, activity, announcements, setAnnouncements, sb }: { interns:Profile[]; tasks:Task[]; outreach:Outreach[]; questions:Question[]; activity:Activity[]; announcements:Announcement[]; setAnnouncements:(a:Announcement[])=>void; sb:any }) {
+function AdminDash({ interns, tasks, outreach, questions, activity, announcements, setAnnouncements, ugcPivotQueue, ugcSubmissions, ugcCreators, sb }: { interns:Profile[]; tasks:Task[]; outreach:Outreach[]; questions:Question[]; activity:Activity[]; announcements:Announcement[]; setAnnouncements:(a:Announcement[])=>void; ugcPivotQueue:UGCPivotQueue[]; ugcSubmissions:UGCSubmission[]; ugcCreators:UGCCreatorProfile[]; sb:any }) {
   const completed = tasks.filter(t=>t.status==="completed").length;
   const openQ = questions.filter(q=>q.status==="open").length;
   const activeCount = interns.filter(i=>i.active!==false).length;
+  const pendingPivots = ugcPivotQueue.filter(q => q.status === "pending").length;
+  const currentWeek = getMondayOfWeek(new Date());
+  const submittedThisWeek = ugcSubmissions.filter(s => s.week_date === currentWeek);
+  const killRuleAlerts = ugcSubmissions.filter(s => s.week_date === currentWeek && s.total_views < 1000);
+  const scaleRuleAlerts = ugcSubmissions.filter(s => s.week_date === currentWeek && s.total_views >= 10000);
   const TEAMS = ["Tech/AI","Strategy","Events/Outreach","Design","Curation Team","Content Creation","UGC Creators"];
   const [aModal, setAModal] = useState(false);
   const [aForm, setAForm] = useState({ title:"", body:"", pinned:false, target_teams:[] as string[] });
@@ -213,6 +218,35 @@ function AdminDash({ interns, tasks, outreach, questions, activity, announcement
         <SC label="Tasks Completed" value={completed}/>
         <SC label="Open Questions" value={openQ}/>
         <SC label="Active Interns" value={activeCount}/>
+      </div>
+
+      {/* UGC Overview */}
+      <div className="bg-white border border-stone-200/60 rounded-xl p-4">
+        <p className="text-sm font-semibold text-stone-700 mb-3">UGC Team This Week</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+          <SC label="Pending Pivots" value={pendingPivots} sub={pendingPivots > 0 ? "needs review" : "all clear"} />
+          <SC label="Submitted This Week" value={submittedThisWeek.length} sub={`of ${ugcCreators.length} creators`} />
+          <SC label="Kill Rule Alerts" value={killRuleAlerts.length} sub="under 1k views" />
+          <SC label="Scale Rule" value={scaleRuleAlerts.length} sub="10k+ views 🔥" />
+        </div>
+        {killRuleAlerts.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-2">
+            <p className="text-xs font-semibold text-red-700 mb-1">🚨 Kill Rule Triggered</p>
+            {killRuleAlerts.map(s => {
+              const creator = ugcCreators.find(c => c.id === s.creator_id);
+              return <p key={s.id} className="text-xs text-red-600">{creator?.full_name || "Unknown"} — {s.total_views.toLocaleString()} views (pivot format + hook immediately)</p>;
+            })}
+          </div>
+        )}
+        {scaleRuleAlerts.length > 0 && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+            <p className="text-xs font-semibold text-emerald-700 mb-1">🚀 Scale Rule Triggered</p>
+            {scaleRuleAlerts.map(s => {
+              const creator = ugcCreators.find(c => c.id === s.creator_id);
+              return <p key={s.id} className="text-xs text-emerald-600">{creator?.full_name || "Unknown"} — {s.total_views.toLocaleString()} views (replicate with 3 hook variations)</p>;
+            })}
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 bg-white border border-stone-200/60 rounded-xl p-4">
@@ -2098,6 +2132,7 @@ type UGCPivot = { id: string; creator_id?: string; queue_id?: string; week_date:
 type UGCHook = { id: string; hook_text: string; view_count?: number; week_date?: string; creator_id?: string; admin_notes?: string; created_at: string };
 type UGCBrief = { id: string; week_date: string; hooks?: string; format_recs?: string; brand_guidelines?: string; created_at: string };
 type UGCAnnouncement = { id: string; title: string; body?: string; pinned?: boolean; created_at: string };
+type UGCResource = { id: string; title: string; description?: string; category?: string; file_url?: string; link?: string; created_at: string };
 type UGCQuestion = { id: string; creator_id?: string; question: string; created_at: string; ugc_qa_replies?: UGCReply[] };
 type UGCReply = { id: string; question_id: string; creator_id?: string; reply: string; created_at: string };
 type UGCCreatorProfile = Profile & { tiktok_handle?: string; ugc_status?: string };
@@ -3256,6 +3291,123 @@ function UGCSubmissionHistoryPage({ profile, submissions, ugcCreators }: {
   );
 }
 
+// ── UGC Resource Library ───────────────────────────────────────────────────────
+function UGCResourcesPage({ profile, resources, setResources, sb }: {
+  profile: UGCCreatorProfile; resources: UGCResource[];
+  setResources: (r: UGCResource[]) => void; sb: any;
+}) {
+  const isAdmin = profile.role === "admin";
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ title: "", description: "", category: "", file_url: "", link: "" });
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filterCat, setFilterCat] = useState("all");
+
+  const categories = ["all", ...Array.from(new Set(resources.map(r => r.category).filter(Boolean))) as string[]];
+  const filtered = resources.filter(r => {
+    const matchSearch = !search || r.title.toLowerCase().includes(search.toLowerCase()) || (r.description || "").toLowerCase().includes(search.toLowerCase());
+    const matchCat = filterCat === "all" || r.category === filterCat;
+    return matchSearch && matchCat;
+  });
+
+  async function save() {
+    if (!form.title.trim()) return;
+    setSaving(true);
+    const { data, error } = await sb.from("ugc_resources").insert({
+      title: form.title, description: form.description || null,
+      category: form.category || null, file_url: form.file_url || null,
+      link: form.link || null, created_at: new Date().toISOString(),
+    }).select().single();
+    setSaving(false);
+    if (error) { console.error(error); return; }
+    setResources([data as UGCResource, ...resources]);
+    setModal(false); setForm({ title: "", description: "", category: "", file_url: "", link: "" });
+  }
+
+  async function del(id: string) {
+    if (!window.confirm("Delete this resource?")) return;
+    await sb.from("ugc_resources").delete().eq("id", id);
+    setResources(resources.filter(r => r.id !== id));
+  }
+
+  const catColors: Record<string, string> = {
+    "Strategy": "#dbeafe", "Templates": "#dcfce7", "Education": "#fef9c3",
+    "Brand": "#fce7f3", "Tools": "#ede9fe",
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-stone-800">UGC Resources</h1>
+          <p className="text-xs text-stone-400 mt-0.5">Guides, templates, and tools for creators</p>
+        </div>
+        {isAdmin && <Btn onClick={() => setModal(true)}><Plus size={14} />Add Resource</Btn>}
+      </div>
+
+      <div className="flex gap-2 flex-wrap">
+        <div className="flex-1 min-w-[180px]">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search resources..." className="w-full px-3 py-2 text-sm border border-stone-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-stone-300" />
+        </div>
+        <div className="flex gap-1.5 flex-wrap">
+          {categories.map(c => (
+            <button key={c} onClick={() => setFilterCat(c)} className={`text-xs px-3 py-1.5 rounded-full border transition-all capitalize ${filterCat === c ? "bg-stone-800 text-white border-stone-800" : "border-stone-200 text-stone-500 hover:border-stone-400"}`}>{c}</button>
+          ))}
+        </div>
+      </div>
+
+      {filtered.length === 0 && <ES icon={<FolderOpen size={24} />} message="No resources yet" />}
+
+      <div className="grid grid-cols-1 gap-3">
+        {filtered.map(r => (
+          <div key={r.id} className="bg-white border border-stone-200/60 rounded-xl p-4 flex items-start justify-between gap-3 group">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <p className="text-sm font-semibold text-stone-800">{r.title}</p>
+                {r.category && (
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: catColors[r.category] || "#f3f4f6", color: "#374151" }}>{r.category}</span>
+                )}
+              </div>
+              {r.description && <p className="text-xs text-stone-500 mb-2">{r.description}</p>}
+              <div className="flex gap-3 flex-wrap">
+                {r.link && (
+                  <a href={r.link} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-600 hover:text-sky-700 flex items-center gap-1 font-medium">
+                    <ExternalLink size={11} />View Resource
+                  </a>
+                )}
+                {r.file_url && (
+                  <a href={r.file_url} target="_blank" rel="noopener noreferrer" download className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1 font-medium">
+                    <ArrowRight size={11} />Download
+                  </a>
+                )}
+              </div>
+            </div>
+            {isAdmin && (
+              <button onClick={() => del(r.id)} className="p-1.5 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                <Trash2 size={13} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <Md open={modal} onClose={() => setModal(false)} title="Add Resource">
+        <div className="flex flex-col gap-3">
+          <TI label="Title" value={form.title} onChange={v => setForm({ ...form, title: v })} required />
+          <TA label="Description (optional)" value={form.description} onChange={v => setForm({ ...form, description: v })} rows={2} />
+          <TI label="Category (e.g. Strategy, Templates, Education)" value={form.category} onChange={v => setForm({ ...form, category: v })} />
+          <TI label="Link URL (optional)" value={form.link} onChange={v => setForm({ ...form, link: v })} placeholder="https://..." />
+          <TI label="File URL (optional)" value={form.file_url} onChange={v => setForm({ ...form, file_url: v })} placeholder="https://..." />
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="secondary" onClick={() => setModal(false)}>Cancel</Btn>
+            <Btn onClick={save} disabled={!form.title.trim() || saving}>{saving ? "Saving..." : "Add Resource"}</Btn>
+          </div>
+        </div>
+      </Md>
+    </div>
+  );
+}
+
 // ── UGC Creator Management (admin) ────────────────────────────────────────────
 function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions, sb }: {
   profile: UGCCreatorProfile; ugcCreators: UGCCreatorProfile[];
@@ -3833,6 +3985,7 @@ export default function DashboardPage() {
   const [ugcAnnouncements, setUGCAnnouncements] = useState<UGCAnnouncement[]>([]);
   const [ugcQuestions, setUGCQuestions] = useState<UGCQuestion[]>([]);
   const [ugcCreators, setUGCCreators] = useState<UGCCreatorProfile[]>([]);
+  const [ugcResources, setUGCResources] = useState<UGCResource[]>([]);
 
   useEffect(() => {
     async function init() {
@@ -3884,6 +4037,7 @@ export default function DashboardPage() {
         const [
           { data: ugcCrD }, { data: ugcSubD }, { data: ugcPqD }, { data: ugcPvD },
           { data: ugcHkD }, { data: ugcBrD }, { data: ugcAnD }, { data: ugcQsD },
+          { data: ugcResD },
         ] = await Promise.all([
           supabase.from("profiles").select("*").eq("role", "ugc_creator").order("full_name"),
           prof.role === "admin"
@@ -3899,6 +4053,7 @@ export default function DashboardPage() {
           supabase.from("ugc_briefs").select("*").order("week_date", { ascending: false }).limit(10),
           supabase.from("ugc_announcements").select("*").order("pinned", { ascending: false }),
           supabase.from("ugc_qa").select("*, ugc_qa_replies(*)").order("created_at", { ascending: false }),
+          supabase.from("ugc_resources").select("*").order("created_at", { ascending: false }),
         ]);
         setUGCCreators((ugcCrD || []) as UGCCreatorProfile[]);
         setUGCSubmissions((ugcSubD || []) as UGCSubmission[]);
@@ -3908,6 +4063,7 @@ export default function DashboardPage() {
         setUGCBriefs((ugcBrD || []) as UGCBrief[]);
         setUGCAnnouncements((ugcAnD || []) as UGCAnnouncement[]);
         setUGCQuestions((ugcQsD || []) as UGCQuestion[]);
+        setUGCResources((ugcResD || []) as UGCResource[]);
       }
 
       setLoading(false);
@@ -3966,6 +4122,7 @@ export default function DashboardPage() {
     { id: "ugc_leaderboard",   icon: <Trophy size={16}/>,          label: "Leaderboard" },
     { id: "ugc_qa",            icon: <MessageCircle size={16}/>,   label: "Community Q&A" },
     { id: "ugc_history",       icon: <FileText size={16}/>,        label: "Submission History" },
+    { id: "ugc_resources",     icon: <FolderOpen size={16}/>,      label: "Resources" },
   ] : [
     { id: "dashboard", icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
     { id: "tasks",     icon: <CheckSquare size={16}/>,     label: isAdmin ? "All Tasks" : "My Tasks" },
@@ -3978,17 +4135,47 @@ export default function DashboardPage() {
     ...((isAdmin || isTech) ? [{ id: "tech", icon: <Code2 size={16}/>, label: "Tech Projects" }] : []),
     ...((isAdmin || isCreator) ? [{ id: "content", icon: <Video size={16}/>, label: "Content" }] : []),
   ];
-  const ADMIN_NAV = [
-    { id: "interns",           icon: <Users size={16}/>,        label: "Intern Mgmt" },
-    { id: "analytics",         icon: <BarChart3 size={16}/>,    label: "Analytics" },
-    { id: "notifications",     icon: <Bell size={16}/>,         label: "Push Notifications" },
-    { id: "settings",          icon: <SettingsIcon size={16}/>, label: "Settings" },
-    { id: "ugc_creators",      icon: <Users size={16}/>,        label: "UGC Creators" },
-    { id: "ugc_pivot_queue",   icon: <Inbox size={16}/>,        label: "Pivot Queue" },
-    { id: "ugc_analytics",     icon: <BarChart3 size={16}/>,    label: "UGC Analytics" },
-    { id: "ugc_pivot_history", icon: <FileText size={16}/>,     label: "Pivot History" },
-    { id: "ugc_brief",         icon: <FileText size={16}/>,     label: "Weekly Brief" },
-    { id: "ugc_announcements", icon: <Bell size={16}/>,         label: "UGC Announcements" },
+  const pendingPivotCount = ugcPivotQueue.filter(q => q.status === "pending").length;
+
+  const ADMIN_SECTIONS = [
+    {
+      label: "GENERAL",
+      items: [
+        { id: "dashboard",     icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
+        { id: "settings",      icon: <SettingsIcon size={16}/>,    label: "Settings" },
+        { id: "notifications", icon: <Bell size={16}/>,            label: "Push Notifications" },
+      ],
+    },
+    {
+      label: "WISCONSIN TEAM",
+      items: [
+        { id: "tasks",     icon: <CheckSquare size={16}/>,  label: "All Tasks" },
+        { id: "outreach",  icon: <Mail size={16}/>,         label: "Outreach Log" },
+        { id: "requests",  icon: <Inbox size={16}/>,        label: "Request Inbox" },
+        { id: "events",    icon: <CalendarDays size={16}/>, label: "Events" },
+        { id: "questions", icon: <MessageCircle size={16}/>,label: "Questions", badge: openQCount || null },
+        { id: "reports",   icon: <FileText size={16}/>,     label: "Weekly Report" },
+        { id: "resources", icon: <FolderOpen size={16}/>,   label: "Resources" },
+        { id: "tech",      icon: <Code2 size={16}/>,        label: "Tech Projects" },
+        { id: "content",   icon: <Video size={16}/>,        label: "Content" },
+        { id: "interns",   icon: <Users size={16}/>,        label: "Intern Mgmt" },
+        { id: "analytics", icon: <BarChart3 size={16}/>,    label: "Analytics" },
+      ],
+    },
+    {
+      label: "UGC TEAM",
+      items: [
+        { id: "ugc_creators",      icon: <Users size={16}/>,        label: "UGC Creators" },
+        { id: "ugc_pivot_queue",   icon: <Inbox size={16}/>,        label: "Pivot Queue", badge: pendingPivotCount || null },
+        { id: "ugc_analytics",     icon: <BarChart3 size={16}/>,    label: "UGC Analytics" },
+        { id: "ugc_pivot_history", icon: <FileText size={16}/>,     label: "Pivot History" },
+        { id: "ugc_brief",         icon: <FileText size={16}/>,     label: "Weekly Brief" },
+        { id: "ugc_announcements", icon: <Bell size={16}/>,         label: "UGC Announcements" },
+        { id: "ugc_resources",     icon: <FolderOpen size={16}/>,   label: "UGC Resources" },
+        { id: "ugc_hooks",         icon: <Zap size={16}/>,          label: "Hook Library" },
+        { id: "ugc_leaderboard",   icon: <Trophy size={16}/>,       label: "Leaderboard" },
+      ],
+    },
   ];
 
   function NavItem({ item }: { item: { id: string; icon: React.ReactNode; label: string; badge?: number | null } }) {
@@ -4009,8 +4196,16 @@ export default function DashboardPage() {
         <div><p className="text-sm font-bold text-stone-800 leading-tight">Cloud Closet</p><p className="text-xs text-stone-400">Content Lab</p></div>
       </div>
       <nav className="flex-1 p-3 flex flex-col gap-0.5 overflow-y-auto">
-        {NAV.map(item => <NavItem key={item.id} item={item}/>)}
-        {isAdmin && <><div className="my-2 border-t border-stone-100"/>{ADMIN_NAV.map(item => <NavItem key={item.id} item={item}/>)}</>}
+        {isAdmin ? (
+          ADMIN_SECTIONS.map(section => (
+            <div key={section.label} className="mb-1">
+              <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest px-3 py-2 mt-1">{section.label}</p>
+              {section.items.map(item => <NavItem key={item.id} item={item} />)}
+            </div>
+          ))
+        ) : (
+          NAV.map(item => <NavItem key={item.id} item={item} />)
+        )}
       </nav>
       <div className="p-3 border-t border-stone-100">
         <div className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-stone-50 transition-colors">
@@ -4030,7 +4225,7 @@ export default function DashboardPage() {
     const common = { profile: p, interns, sb: supabase, addActivity };
     switch (page) {
       case "dashboard": return isAdmin
-        ? <AdminDash interns={interns} tasks={tasks} outreach={outreach} questions={questions} activity={activity} announcements={announcements} setAnnouncements={setAnnouncements} sb={supabase}/>
+        ? <AdminDash interns={interns} tasks={tasks} outreach={outreach} questions={questions} activity={activity} announcements={announcements} setAnnouncements={setAnnouncements} ugcPivotQueue={ugcPivotQueue} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} sb={supabase}/>
         : <InternDash profile={p} tasks={tasks} outreach={outreach} announcements={announcements} setPage={setPage} requests={requests}/>;
       case "tasks":     return <TasksPg {...common} tasks={tasks} setTasks={setTasks}/>;
       case "outreach":  return <OutPg {...common} outreach={outreach} setOutreach={setOutreach}/>;
@@ -4056,6 +4251,7 @@ export default function DashboardPage() {
       case "ugc_qa":            return (isAdmin || isUGC) ? <UGCQAPage profile={p as UGCCreatorProfile} questions={ugcQuestions} setQuestions={setUGCQuestions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_announcements": return isAdmin ? <UGCAnnouncementsPage profile={p as UGCCreatorProfile} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
       case "ugc_history":       return (isAdmin || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
+      case "ugc_resources":     return (isAdmin || isUGC) ? <UGCResourcesPage profile={p as UGCCreatorProfile} resources={ugcResources} setResources={setUGCResources} sb={supabase}/> : null;
       // Admin-only UGC pages
       case "ugc_creators":      return isAdmin ? <UGCCreatorMgmtPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} sb={supabase}/> : null;
       case "ugc_pivot_queue":   return isAdmin ? <UGCPivotQueuePage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} ugcCreators={ugcCreators} sb={supabase}/> : null;
