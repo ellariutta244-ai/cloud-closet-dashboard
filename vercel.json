@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/ugc-friday-reminder",
+      "schedule": "0 9 * * 5"
+    }
+  ]
+}

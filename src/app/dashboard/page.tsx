@@ -12,11 +12,11 @@ import {
   Loader2, Menu, CalendarDays, Inbox, Code2, Video,
   CalendarClock, ShoppingBag, Coffee, HelpCircle, MapPin,
   Play, Trophy, ExternalLink, ArrowUpRight, MessageSquare, TrendingUp,
-  Settings as SettingsIcon,
+  Settings as SettingsIcon, Zap, ChevronDown, ChevronUp,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Role = "admin" | "intern";
+type Role = "admin" | "intern" | "ugc_creator";
 type Profile = { id: string; full_name: string; email: string; role: Role; team?: string; active?: boolean };
 type Task = { id: string; title: string; description?: string; assigned_to?: string; category?: string; priority?: string; status: string; due_date?: string; created_at: string; completed_at?: string };
 type Outreach = { id: string; intern_id?: string; brand_or_creator: string; platform?: string; contact_name?: string; date_contacted?: string; status: string; notes?: string; created_at: string };
@@ -2091,6 +2091,1420 @@ function SettingsPg({ settings, setSettings, sb }: { settings:AppSettings; setSe
   );
 }
 
+// ── UGC Types ─────────────────────────────────────────────────────────────────
+type UGCSubmission = { id: string; creator_id?: string; week_date: string; total_views: number; views_day1: number; views_day2: number; views_day3: number; likes: number; comments: number; shares: number; followers_gained: number; best_video_link?: string; benchmark_tier?: string; created_at: string };
+type UGCPivotQueue = { id: string; creator_id?: string; submission_id?: string; week_date: string; analytics_snapshot?: any; ai_pivot?: string; admin_notes?: string; example_video_link?: string; status: string; created_at: string };
+type UGCPivot = { id: string; creator_id?: string; queue_id?: string; week_date: string; ai_pivot?: string; admin_notes?: string; example_video_link?: string; created_at: string };
+type UGCHook = { id: string; hook_text: string; view_count?: number; week_date?: string; creator_id?: string; admin_notes?: string; created_at: string };
+type UGCBrief = { id: string; week_date: string; hooks?: string; format_recs?: string; brand_guidelines?: string; created_at: string };
+type UGCAnnouncement = { id: string; title: string; body?: string; pinned?: boolean; created_at: string };
+type UGCQuestion = { id: string; creator_id?: string; question: string; created_at: string; ugc_qa_replies?: UGCReply[] };
+type UGCReply = { id: string; question_id: string; creator_id?: string; reply: string; created_at: string };
+type UGCCreatorProfile = Profile & { tiktok_handle?: string; ugc_status?: string };
+
+// ── UGC Helpers ────────────────────────────────────────────────────────────────
+function BenchmarkBadge({ tier }: { tier?: string }) {
+  const map: Record<string, { v: BV; label: string }> = {
+    hook_failed: { v: "danger", label: "Hook Failed" },
+    average: { v: "warning", label: "Average" },
+    good: { v: "info", label: "Good" },
+    strong: { v: "success", label: "Strong" },
+    viral: { v: "purple", label: "Viral 🔥" },
+  };
+  const t = tier ? map[tier] : null;
+  if (!t) return null;
+  return <Bg v={t.v}>{t.label}</Bg>;
+}
+
+function calcBenchmarkTier(views_day2: number, total_views: number): string {
+  if (views_day2 < 500) return "hook_failed";
+  if (total_views < 2000) return "average";
+  if (total_views < 10000) return "good";
+  if (total_views < 50000) return "strong";
+  return "viral";
+}
+
+function fmtViews(n: number): string {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
+  if (n >= 1000) return (n / 1000).toFixed(1) + "K";
+  return n.toString();
+}
+
+function timeAgo(dt: string): string {
+  const diff = Date.now() - new Date(dt).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function getMondayOfWeek(d: Date): string {
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const mon = new Date(d.setDate(diff));
+  return mon.toISOString().split("T")[0];
+}
+
+function LineGraph({ data, labels, color = "#1C1917", height = 120 }: { data: number[]; labels?: string[]; color?: string; height?: number }) {
+  if (data.length < 2) return <div className="flex items-center justify-center h-20 text-xs text-stone-400">Not enough data</div>;
+  const W = 400;
+  const H = height;
+  const pad = { top: 10, bottom: labels ? 28 : 10, left: 10, right: 10 };
+  const iW = W - pad.left - pad.right;
+  const iH = H - pad.top - pad.bottom;
+  const minV = Math.min(...data);
+  const maxV = Math.max(...data);
+  const range = maxV - minV || 1;
+  const pts = data.map((v, i) => ({
+    x: pad.left + (i / (data.length - 1)) * iW,
+    y: pad.top + iH - ((v - minV) / range) * iH,
+    v,
+  }));
+  const poly = pts.map(p => `${p.x},${p.y}`).join(" ");
+  // Grid lines
+  const gridLines = [0, 0.5, 1].map(r => pad.top + iH * (1 - r));
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height }}>
+      {gridLines.map((y, i) => (
+        <line key={i} x1={pad.left} x2={W - pad.right} y1={y} y2={y} stroke="#E7E5E4" strokeWidth="1" />
+      ))}
+      <polyline points={poly} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+      {pts.map((p, i) => (
+        <g key={i}>
+          <circle cx={p.x} cy={p.y} r={4} fill={color} />
+          <title>{labels?.[i] ? `${labels[i]}: ` : ""}{fmtViews(p.v)} views</title>
+          <circle cx={p.x} cy={p.y} r={8} fill="transparent" />
+        </g>
+      ))}
+      {labels && pts.map((p, i) => (
+        <text key={`l${i}`} x={p.x} y={H - 4} textAnchor="middle" fontSize="9" fill="#78716C">
+          {labels[i]}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
+function TwoLineGraph({ data1, data2, labels, color1 = "#1C1917", color2 = "#7C3AED", height = 120 }: { data1: number[]; data2: number[]; labels?: string[]; color1?: string; color2?: string; height?: number }) {
+  const allData = [...data1, ...data2];
+  if (allData.length < 2) return <div className="flex items-center justify-center h-20 text-xs text-stone-400">Not enough data</div>;
+  const W = 400;
+  const H = height;
+  const pad = { top: 10, bottom: labels ? 28 : 10, left: 10, right: 10 };
+  const iW = W - pad.left - pad.right;
+  const iH = H - pad.top - pad.bottom;
+  const minV = Math.min(...allData);
+  const maxV = Math.max(...allData);
+  const range = maxV - minV || 1;
+  const toY = (v: number) => pad.top + iH - ((v - minV) / range) * iH;
+  const maxLen = Math.max(data1.length, data2.length);
+  const pts1 = data1.map((v, i) => ({ x: pad.left + (i / (maxLen - 1)) * iW, y: toY(v), v }));
+  const pts2 = data2.map((v, i) => ({ x: pad.left + (i / (maxLen - 1)) * iW, y: toY(v), v }));
+  const poly1 = pts1.map(p => `${p.x},${p.y}`).join(" ");
+  const poly2 = pts2.map(p => `${p.x},${p.y}`).join(" ");
+  const gridLines = [0, 0.5, 1].map(r => pad.top + iH * (1 - r));
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height }}>
+      {gridLines.map((y, i) => (
+        <line key={i} x1={pad.left} x2={W - pad.right} y1={y} y2={y} stroke="#E7E5E4" strokeWidth="1" />
+      ))}
+      {data1.length > 1 && <polyline points={poly1} fill="none" stroke={color1} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
+      {data2.length > 1 && <polyline points={poly2} fill="none" stroke={color2} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
+      {pts1.map((p, i) => (
+        <g key={`p1${i}`}><circle cx={p.x} cy={p.y} r={3.5} fill={color1} /><title>{labels?.[i]} · {fmtViews(p.v)}</title></g>
+      ))}
+      {pts2.map((p, i) => (
+        <g key={`p2${i}`}><circle cx={p.x} cy={p.y} r={3.5} fill={color2} /><title>{labels?.[i]} · {fmtViews(p.v)}</title></g>
+      ))}
+      {labels && pts1.map((p, i) => (
+        <text key={`l${i}`} x={p.x} y={H - 4} textAnchor="middle" fontSize="9" fill="#78716C">{labels[i]}</text>
+      ))}
+    </svg>
+  );
+}
+
+// ── UGC Dashboard ──────────────────────────────────────────────────────────────
+function UGCDashboard({ profile, ugcCreators, submissions, pivots, briefs, announcements, sb, setPage }: {
+  profile: UGCCreatorProfile; ugcCreators: UGCCreatorProfile[]; submissions: UGCSubmission[];
+  pivots: UGCPivot[]; briefs: UGCBrief[]; announcements: UGCAnnouncement[];
+  sb: any; setPage: (p: string) => void;
+}) {
+  const isAdmin = profile.role === "admin";
+  const mySubmissions = isAdmin ? submissions : submissions.filter(s => s.creator_id === profile.id);
+  const myPivots = isAdmin ? pivots : pivots.filter(p => p.creator_id === profile.id);
+  const pinned = announcements.filter(a => a.pinned);
+  const currentWeek = getMondayOfWeek(new Date());
+  const hasSubmittedThisWeek = mySubmissions.some(s => s.week_date === currentWeek);
+  const latestBrief = briefs[0];
+  const latestPivot = myPivots[0];
+
+  // Views stats
+  const thisWeekSubs = mySubmissions.filter(s => s.week_date === currentWeek);
+  const lastWeek = new Date(); lastWeek.setDate(lastWeek.getDate() - 7);
+  const lastWeekStr = getMondayOfWeek(lastWeek);
+  const lastWeekSubs = mySubmissions.filter(s => s.week_date === lastWeekStr);
+  const thisViews = thisWeekSubs.reduce((s, x) => s + x.total_views, 0);
+  const lastViews = lastWeekSubs.reduce((s, x) => s + x.total_views, 0);
+  const viewsDiff = lastViews > 0 ? Math.round(((thisViews - lastViews) / lastViews) * 100) : 0;
+  const first = profile.full_name?.split(" ")[0] || "there";
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-stone-800">Hey {first} 👋</h1>
+          <p className="text-sm text-stone-400 mt-0.5">Your UGC creator dashboard</p>
+        </div>
+        {!hasSubmittedThisWeek && (
+          <Btn onClick={() => setPage("ugc_submit")}><BarChart3 size={14}/>Submit Analytics</Btn>
+        )}
+      </div>
+
+      {pinned.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200/60 rounded-xl p-4">
+          <p className="text-xs font-semibold text-amber-700 uppercase tracking-widest mb-2">📌 Announcements</p>
+          <div className="flex flex-col gap-2">
+            {pinned.map(a => (
+              <div key={a.id}>
+                <p className="text-sm font-medium text-amber-800">{a.title}</p>
+                {a.body && <p className="text-xs text-amber-700 mt-0.5">{a.body}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <SC label="Views This Week" value={fmtViews(thisViews)} sub={lastViews > 0 ? `${viewsDiff > 0 ? "+" : ""}${viewsDiff}% vs last week` : undefined} />
+        <SC label="Total Submissions" value={mySubmissions.length} />
+      </div>
+
+      {!hasSubmittedThisWeek && (
+        <div className="bg-sky-50 border border-sky-200/60 rounded-xl p-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-sky-800">Submit your analytics for this week</p>
+            <p className="text-xs text-sky-600 mt-0.5">Week of {currentWeek}</p>
+          </div>
+          <Btn onClick={() => setPage("ugc_submit")}><ArrowRight size={14}/>Submit Now</Btn>
+        </div>
+      )}
+
+      {latestBrief && (
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Current Weekly Brief — {latestBrief.week_date}</p>
+          <div className="flex flex-col gap-3">
+            {latestBrief.hooks && <div><p className="text-xs text-stone-400 uppercase tracking-widest mb-1">Hooks</p><p className="text-sm text-stone-700 whitespace-pre-wrap">{latestBrief.hooks}</p></div>}
+            {latestBrief.format_recs && <div><p className="text-xs text-stone-400 uppercase tracking-widest mb-1">Format Recs</p><p className="text-sm text-stone-700 whitespace-pre-wrap">{latestBrief.format_recs}</p></div>}
+            {latestBrief.brand_guidelines && <div><p className="text-xs text-stone-400 uppercase tracking-widest mb-1">Brand Guidelines</p><p className="text-sm text-stone-700 whitespace-pre-wrap">{latestBrief.brand_guidelines}</p></div>}
+          </div>
+        </div>
+      )}
+
+      {latestPivot && (
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Latest Pivot</p>
+            <span className="text-xs text-stone-400">{latestPivot.week_date}</span>
+          </div>
+          <p className="text-sm text-stone-700 line-clamp-4 whitespace-pre-wrap">{latestPivot.ai_pivot}</p>
+          {latestPivot.admin_notes && <p className="text-xs text-stone-500 mt-2 italic">Admin: {latestPivot.admin_notes}</p>}
+          <button onClick={() => setPage("ugc_pivots")} className="text-xs text-stone-500 hover:text-stone-700 mt-2 flex items-center gap-1">View all pivots<ChevronRight size={12}/></button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── UGC Submit Page ────────────────────────────────────────────────────────────
+function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }: {
+  profile: UGCCreatorProfile; submissions: UGCSubmission[];
+  setSubmissions: (s: UGCSubmission[]) => void; ugcCreators: UGCCreatorProfile[]; sb: any;
+}) {
+  const isAdmin = profile.role === "admin";
+  const currentWeek = getMondayOfWeek(new Date());
+  const [form, setForm] = useState({
+    week_date: currentWeek,
+    total_views: "", views_day1: "", views_day2: "", views_day3: "",
+    likes: "", comments: "", shares: "", followers_gained: "",
+    best_video_link: "",
+    creator_id: isAdmin ? "" : profile.id,
+  });
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<"idle" | "generating" | "success" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const selectedCreator = isAdmin
+    ? ugcCreators.find(c => c.id === form.creator_id) || null
+    : (profile as UGCCreatorProfile);
+
+  async function submit() {
+    if (!form.week_date || (isAdmin && !form.creator_id)) return;
+    setLoading(true); setStatus("generating"); setErrorMsg("");
+
+    const v2 = parseInt(form.views_day2) || 0;
+    const tv = parseInt(form.total_views) || 0;
+    const tier = calcBenchmarkTier(v2, tv);
+
+    const submissionData = {
+      creator_id: form.creator_id || profile.id,
+      week_date: form.week_date,
+      total_views: tv,
+      views_day1: parseInt(form.views_day1) || 0,
+      views_day2: v2,
+      views_day3: parseInt(form.views_day3) || 0,
+      likes: parseInt(form.likes) || 0,
+      comments: parseInt(form.comments) || 0,
+      shares: parseInt(form.shares) || 0,
+      followers_gained: parseInt(form.followers_gained) || 0,
+      best_video_link: form.best_video_link || null,
+      benchmark_tier: tier,
+      created_at: new Date().toISOString(),
+    };
+
+    const { data: sub, error: subErr } = await sb.from("ugc_submissions").insert(submissionData).select().single();
+    if (subErr) { setStatus("error"); setErrorMsg(subErr.message); setLoading(false); return; }
+    setSubmissions([sub as UGCSubmission, ...submissions]);
+
+    const creatorName = selectedCreator?.full_name || profile.full_name;
+    const tiktokHandle = selectedCreator?.tiktok_handle || "";
+
+    // Fire and forget — AI pivot
+    try {
+      await fetch("/api/ugc-pivot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submissionId: sub.id,
+          creatorName,
+          tiktokHandle,
+          analytics: { ...submissionData, benchmark_tier: tier },
+        }),
+      });
+    } catch (e) { console.error("pivot api error", e); }
+
+    // Google Sheets sync
+    try {
+      await fetch("/api/ugc-sheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          creatorName,
+          tiktokHandle,
+          weekDate: form.week_date,
+          totalViews: tv,
+          viewsDay1: parseInt(form.views_day1) || 0,
+          viewsDay2: v2,
+          viewsDay3: parseInt(form.views_day3) || 0,
+          likes: parseInt(form.likes) || 0,
+          comments: parseInt(form.comments) || 0,
+          shares: parseInt(form.shares) || 0,
+          followersGained: parseInt(form.followers_gained) || 0,
+          bestVideoLink: form.best_video_link,
+          benchmarkTier: tier,
+        }),
+      });
+    } catch (e) { console.error("sheets api error", e); }
+
+    setStatus("success");
+    setLoading(false);
+  }
+
+  if (status === "success") {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+        <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center"><CheckCircle2 size={28} className="text-emerald-600"/></div>
+        <h2 className="text-lg font-bold text-stone-800">Analytics Submitted!</h2>
+        <p className="text-sm text-stone-500 max-w-sm">Your pivot strategy will appear after admin review. Check back in your Pivots page.</p>
+        <Btn onClick={() => setStatus("idle")}>Submit Another</Btn>
+      </div>
+    );
+  }
+
+  const ni = (field: string, label: string) => (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">{label}</label>
+      <input type="number" min="0" value={(form as any)[field]} onChange={e => setForm({ ...form, [field]: e.target.value })}
+        className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-800 focus:outline-none focus:border-stone-400" />
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-xl font-bold text-stone-800">Submit Weekly Analytics</h1>
+        <p className="text-sm text-stone-400 mt-0.5">Your data will be used to generate a personalized pivot strategy.</p>
+      </div>
+
+      {status === "error" && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-600">{errorMsg || "Something went wrong."}</div>
+      )}
+
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+        <TI label="Week Date (Monday)" value={form.week_date} onChange={v => setForm({ ...form, week_date: v })} type="date" />
+
+        {isAdmin && (
+          <Sel label="Creator" value={form.creator_id} onChange={v => setForm({ ...form, creator_id: v })}
+            options={[{ value: "", label: "— Select creator —" }, ...ugcCreators.filter(c => c.active !== false).map(c => ({ value: c.id, label: `${c.full_name}${c.tiktok_handle ? ` (@${c.tiktok_handle})` : ""}` }))]} />
+        )}
+
+        <div>
+          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">Views Breakdown</p>
+          <div className="grid grid-cols-2 gap-3">
+            {ni("total_views", "Total Views")}
+            {ni("views_day1", "Views Day 1")}
+            {ni("views_day2", "Views Day 2")}
+            {ni("views_day3", "Views Day 3")}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-2">Engagement</p>
+          <div className="grid grid-cols-2 gap-3">
+            {ni("likes", "Likes")}
+            {ni("comments", "Comments")}
+            {ni("shares", "Shares")}
+            {ni("followers_gained", "Followers Gained")}
+          </div>
+        </div>
+
+        <TI label="Best Video Link (optional)" value={form.best_video_link} onChange={v => setForm({ ...form, best_video_link: v })} placeholder="https://tiktok.com/..." />
+
+        {form.views_day2 && (
+          <div className="flex items-center gap-2 py-2 px-3 bg-stone-50 rounded-lg">
+            <span className="text-xs text-stone-500">Benchmark tier:</span>
+            <BenchmarkBadge tier={calcBenchmarkTier(parseInt(form.views_day2) || 0, parseInt(form.total_views) || 0)} />
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2 border-t border-stone-100">
+          <Btn onClick={submit} disabled={loading || !form.week_date || (isAdmin && !form.creator_id)}>
+            {loading ? <><Loader2 size={14} className="animate-spin"/>Generating pivot strategy...</> : <><Send size={14}/>Submit Analytics</>}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── UGC My Pivots ─────────────────────────────────────────────────────────────
+function UGCMyPivotsPage({ profile, pivots, submissions }: {
+  profile: UGCCreatorProfile; pivots: UGCPivot[]; submissions: UGCSubmission[];
+}) {
+  const isAdmin = profile.role === "admin";
+  const myPivots = isAdmin ? pivots : pivots.filter(p => p.creator_id === profile.id);
+  const mySubmissions = isAdmin ? submissions : submissions.filter(s => s.creator_id === profile.id);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const sorted = [...mySubmissions].sort((a, b) => new Date(a.week_date).getTime() - new Date(b.week_date).getTime());
+  const graphData = sorted.map(s => s.total_views);
+  const graphLabels = sorted.map(s => s.week_date.slice(5));
+
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-xl font-bold text-stone-800">My Pivots</h1>
+
+      {sorted.length >= 2 && (
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Views Over Time</p>
+          <LineGraph data={graphData} labels={graphLabels} height={140} />
+        </div>
+      )}
+
+      {myPivots.length === 0 ? (
+        <ES icon={<TrendingUp size={24} />} message="No approved pivots yet. Submit your analytics and check back soon." />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {[...myPivots].sort((a, b) => new Date(b.week_date).getTime() - new Date(a.week_date).getTime()).map(p => {
+            const isExp = expanded === p.id;
+            const matchSub = mySubmissions.find(s => s.week_date === p.week_date);
+            return (
+              <div key={p.id} className="bg-white border border-stone-200/60 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-stone-800">Week of {p.week_date}</span>
+                    {matchSub && <BenchmarkBadge tier={matchSub.benchmark_tier} />}
+                  </div>
+                  <button onClick={() => setExpanded(isExp ? null : p.id)} className="text-stone-400 hover:text-stone-600">
+                    {isExp ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                </div>
+                <p className={`text-sm text-stone-700 whitespace-pre-wrap ${isExp ? "" : "line-clamp-3"}`}>{p.ai_pivot}</p>
+                {!isExp && p.ai_pivot && p.ai_pivot.length > 200 && (
+                  <button onClick={() => setExpanded(p.id)} className="text-xs text-stone-400 hover:text-stone-600 mt-1">Read more</button>
+                )}
+                {p.admin_notes && <p className="text-xs text-stone-500 mt-3 p-2 bg-stone-50 rounded-lg italic">Admin note: {p.admin_notes}</p>}
+                {p.example_video_link && (
+                  <a href={p.example_video_link} target="_blank" rel="noopener noreferrer" className="mt-2 text-xs text-sky-600 hover:text-sky-700 flex items-center gap-1">
+                    <ExternalLink size={11} />Example video
+                  </a>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── UGC Hook Library ──────────────────────────────────────────────────────────
+function UGCHooksPage({ profile, hooks, setHooks, ugcCreators, sb }: {
+  profile: UGCCreatorProfile; hooks: UGCHook[]; setHooks: (h: UGCHook[]) => void;
+  ugcCreators: UGCCreatorProfile[]; sb: any;
+}) {
+  const isAdmin = profile.role === "admin";
+  const [search, setSearch] = useState("");
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ hook_text: "", view_count: "", week_date: "", creator_id: "", admin_notes: "" });
+  const [saving, setSaving] = useState(false);
+
+  const filtered = hooks.filter(h =>
+    h.hook_text.toLowerCase().includes(search.toLowerCase()) ||
+    (h.admin_notes || "").toLowerCase().includes(search.toLowerCase())
+  ).sort((a, b) => (b.view_count || 0) - (a.view_count || 0));
+
+  const cName = (id?: string) => ugcCreators.find(c => c.id === id)?.full_name || "";
+  const cHandle = (id?: string) => ugcCreators.find(c => c.id === id)?.tiktok_handle || "";
+
+  async function addHook() {
+    if (!form.hook_text.trim()) return;
+    setSaving(true);
+    const { data, error } = await sb.from("ugc_hooks").insert({
+      hook_text: form.hook_text,
+      view_count: parseInt(form.view_count) || 0,
+      week_date: form.week_date || null,
+      creator_id: form.creator_id || null,
+      admin_notes: form.admin_notes || null,
+      created_at: new Date().toISOString(),
+    }).select().single();
+    setSaving(false);
+    if (error) { console.error(error); return; }
+    setHooks([data as UGCHook, ...hooks]);
+    setModal(false);
+    setForm({ hook_text: "", view_count: "", week_date: "", creator_id: "", admin_notes: "" });
+  }
+
+  async function deleteHook(id: string) {
+    if (!window.confirm("Delete this hook?")) return;
+    await sb.from("ugc_hooks").delete().eq("id", id);
+    setHooks(hooks.filter(h => h.id !== id));
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <div><h1 className="text-xl font-bold text-stone-800">Hook Library</h1><p className="text-sm text-stone-400 mt-0.5">High-performing hooks sorted by views</p></div>
+        {isAdmin && <Btn onClick={() => setModal(true)}><Plus size={14} />Add Hook</Btn>}
+      </div>
+
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search hooks..."
+          className="w-full pl-8 pr-3 py-2 bg-white border border-stone-200 rounded-xl text-sm text-stone-800 focus:outline-none focus:border-stone-400" />
+      </div>
+
+      {filtered.length === 0 ? (
+        <ES icon={<Zap size={24} />} message="No hooks yet" />
+      ) : (
+        <div className="flex flex-col gap-2">
+          {filtered.map(h => (
+            <div key={h.id} className="bg-white border border-stone-200/60 rounded-xl p-4 group">
+              <div className="flex items-start gap-3">
+                <Zap size={14} className="text-amber-500 mt-1 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-stone-800">{h.hook_text}</p>
+                  <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                    {(h.view_count || 0) > 0 && <span className="text-xs text-emerald-600 font-medium">{fmtViews(h.view_count!)} views</span>}
+                    {h.week_date && <span className="text-xs text-stone-400">{h.week_date}</span>}
+                    {h.creator_id && <span className="text-xs text-stone-400">{cName(h.creator_id)}{cHandle(h.creator_id) ? ` @${cHandle(h.creator_id)}` : ""}</span>}
+                  </div>
+                  {h.admin_notes && <p className="text-xs text-stone-500 mt-1 italic">{h.admin_notes}</p>}
+                </div>
+                {isAdmin && (
+                  <button onClick={() => deleteHook(h.id)} className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Md open={modal} onClose={() => setModal(false)} title="Add Hook">
+        <div className="flex flex-col gap-3">
+          <TA label="Hook Text" value={form.hook_text} onChange={v => setForm({ ...form, hook_text: v })} rows={3} />
+          <div className="grid grid-cols-2 gap-3">
+            <TI label="View Count" value={form.view_count} onChange={v => setForm({ ...form, view_count: v })} type="number" />
+            <TI label="Week Date" value={form.week_date} onChange={v => setForm({ ...form, week_date: v })} type="date" />
+          </div>
+          <Sel label="Creator (optional)" value={form.creator_id} onChange={v => setForm({ ...form, creator_id: v })}
+            options={[{ value: "", label: "— None —" }, ...ugcCreators.map(c => ({ value: c.id, label: `${c.full_name}${c.tiktok_handle ? ` @${c.tiktok_handle}` : ""}` }))]} />
+          <TA label="Admin Notes" value={form.admin_notes} onChange={v => setForm({ ...form, admin_notes: v })} />
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="secondary" onClick={() => setModal(false)}>Cancel</Btn>
+            <Btn onClick={addHook} disabled={!form.hook_text.trim() || saving}>{saving ? "Saving..." : "Add Hook"}</Btn>
+          </div>
+        </div>
+      </Md>
+    </div>
+  );
+}
+
+// ── UGC Leaderboard ────────────────────────────────────────────────────────────
+function UGCLeaderboardPage({ submissions, ugcCreators }: {
+  submissions: UGCSubmission[]; ugcCreators: UGCCreatorProfile[];
+}) {
+  const medals = ["🥇", "🥈", "🥉"];
+  const currentWeek = getMondayOfWeek(new Date());
+
+  // Group submissions by week
+  const weeks = [...new Set(submissions.map(s => s.week_date))].sort((a, b) => b.localeCompare(a));
+
+  const rankForWeek = (weekDate: string) => {
+    const weekSubs = submissions.filter(s => s.week_date === weekDate);
+    const byCreator: Record<string, number> = {};
+    weekSubs.forEach(s => { if (s.creator_id) byCreator[s.creator_id] = (byCreator[s.creator_id] || 0) + s.total_views; });
+    return Object.entries(byCreator)
+      .map(([id, views]) => ({ creator: ugcCreators.find(c => c.id === id), views }))
+      .filter(x => x.creator)
+      .sort((a, b) => b.views - a.views);
+  };
+
+  const [openWeeks, setOpenWeeks] = useState<string[]>([]);
+  const toggleWeek = (w: string) => setOpenWeeks(prev => prev.includes(w) ? prev.filter(x => x !== w) : [...prev, w]);
+
+  if (weeks.length === 0) return (
+    <div className="flex flex-col gap-4">
+      <h1 className="text-xl font-bold text-stone-800">Leaderboard</h1>
+      <ES icon={<Trophy size={24} />} message="No submissions yet" />
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-xl font-bold text-stone-800">Leaderboard</h1>
+
+      {/* Current week */}
+      {weeks.includes(currentWeek) && (
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Trophy size={16} className="text-amber-500" />
+            <p className="text-sm font-semibold text-stone-700">This Week — {currentWeek}</p>
+          </div>
+          <div className="flex flex-col gap-3">
+            {rankForWeek(currentWeek).map((entry, i) => (
+              <div key={entry.creator!.id} className={`flex items-center gap-3 p-3 rounded-xl ${i === 0 ? "bg-amber-50 border border-amber-100" : "bg-stone-50"}`}>
+                <div className="w-8 text-center text-lg">{i < 3 ? medals[i] : <span className="text-sm font-bold text-stone-500">{i + 1}</span>}</div>
+                <Av name={entry.creator!.full_name} size={32} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-stone-800">{entry.creator!.full_name}</p>
+                  {entry.creator!.tiktok_handle && <p className="text-xs text-stone-400">@{entry.creator!.tiktok_handle}</p>}
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-stone-800">{fmtViews(entry.views)}</p>
+                  <p className="text-xs text-stone-400">views</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Past weeks */}
+      {weeks.filter(w => w !== currentWeek).map(w => {
+        const ranked = rankForWeek(w);
+        const isOpen = openWeeks.includes(w);
+        return (
+          <div key={w} className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
+            <button onClick={() => toggleWeek(w)} className="w-full flex items-center justify-between px-5 py-3 hover:bg-stone-50 transition-all">
+              <div className="flex items-center gap-2">
+                <Trophy size={14} className="text-stone-400" />
+                <span className="text-sm font-medium text-stone-700">Week of {w}</span>
+                <span className="text-xs text-stone-400">· {ranked.length} creators</span>
+              </div>
+              {isOpen ? <ChevronUp size={14} className="text-stone-400" /> : <ChevronDown size={14} className="text-stone-400" />}
+            </button>
+            {isOpen && (
+              <div className="px-5 pb-4 flex flex-col gap-2">
+                {ranked.map((entry, i) => (
+                  <div key={entry.creator!.id} className="flex items-center gap-3">
+                    <div className="w-6 text-center">{i < 3 ? medals[i] : <span className="text-xs text-stone-400">{i + 1}</span>}</div>
+                    <Av name={entry.creator!.full_name} size={24} />
+                    <span className="text-xs text-stone-700 flex-1">{entry.creator!.full_name}</span>
+                    <span className="text-xs font-semibold text-stone-600">{fmtViews(entry.views)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── UGC Q&A ───────────────────────────────────────────────────────────────────
+function UGCQAPage({ profile, questions, setQuestions, ugcCreators, sb }: {
+  profile: UGCCreatorProfile; questions: UGCQuestion[];
+  setQuestions: (q: UGCQuestion[]) => void; ugcCreators: UGCCreatorProfile[]; sb: any;
+}) {
+  const isAdmin = profile.role === "admin";
+  const [modal, setModal] = useState(false);
+  const [qText, setQText] = useState("");
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [posting, setPosting] = useState(false);
+
+  const cName = (id?: string) => {
+    if (!id) return "Unknown";
+    if (id === profile.id) return profile.full_name;
+    return ugcCreators.find(c => c.id === id)?.full_name || "Creator";
+  };
+  const cHandle = (id?: string) => ugcCreators.find(c => c.id === id)?.tiktok_handle || "";
+
+  async function postQuestion() {
+    if (!qText.trim()) return;
+    setPosting(true);
+    const { data, error } = await sb.from("ugc_qa").insert({
+      creator_id: profile.id, question: qText, created_at: new Date().toISOString(),
+    }).select().single();
+    setPosting(false);
+    if (error) { console.error(error); return; }
+    setQuestions([{ ...data as UGCQuestion, ugc_qa_replies: [] }, ...questions]);
+    setQText(""); setModal(false);
+  }
+
+  async function postReply(qId: string) {
+    const text = replyTexts[qId];
+    if (!text?.trim()) return;
+    const { data, error } = await sb.from("ugc_qa_replies").insert({
+      question_id: qId, creator_id: profile.id, reply: text, created_at: new Date().toISOString(),
+    }).select().single();
+    if (error) { console.error(error); return; }
+    setQuestions(questions.map(q => q.id === qId ? { ...q, ugc_qa_replies: [...(q.ugc_qa_replies || []), data as UGCReply] } : q));
+    setReplyTexts(prev => ({ ...prev, [qId]: "" }));
+  }
+
+  async function deleteQuestion(id: string) {
+    if (!window.confirm("Delete this question?")) return;
+    await sb.from("ugc_qa").delete().eq("id", id);
+    setQuestions(questions.filter(q => q.id !== id));
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-stone-800">Community Q&A</h1>
+        <Btn onClick={() => setModal(true)}><Plus size={14} />Ask Question</Btn>
+      </div>
+
+      {questions.length === 0 ? (
+        <ES icon={<MessageCircle size={24} />} message="No questions yet. Be the first to ask!" />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {questions.map(q => {
+            const isExp = expanded === q.id;
+            const canDel = isAdmin || q.creator_id === profile.id;
+            const repliesCount = (q.ugc_qa_replies || []).length;
+            return (
+              <div key={q.id} className="bg-white border border-stone-200/60 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <Av name={cName(q.creator_id)} size={32} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-medium text-stone-700">{cName(q.creator_id)}</span>
+                      {cHandle(q.creator_id) && <span className="text-xs text-stone-400">@{cHandle(q.creator_id)}</span>}
+                      <span className="text-xs text-stone-400">{timeAgo(q.created_at)}</span>
+                    </div>
+                    <p className="text-sm text-stone-800 mt-1">{q.question}</p>
+                    <div className="flex items-center gap-3 mt-2">
+                      {repliesCount > 0 && (
+                        <button onClick={() => setExpanded(isExp ? null : q.id)} className="text-xs text-stone-400 hover:text-stone-600 flex items-center gap-1">
+                          {repliesCount} {repliesCount === 1 ? "reply" : "replies"}
+                          {isExp ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                        </button>
+                      )}
+                      <button onClick={() => setExpanded(isExp ? null : q.id)} className="text-xs text-stone-400 hover:text-stone-600">Reply</button>
+                      {canDel && <button onClick={() => deleteQuestion(q.id)} className="text-xs text-stone-300 hover:text-red-500">Delete</button>}
+                    </div>
+                  </div>
+                </div>
+
+                {isExp && (
+                  <div className="mt-3 pl-11 flex flex-col gap-3">
+                    {(q.ugc_qa_replies || []).map(r => (
+                      <div key={r.id} className="flex items-start gap-2.5">
+                        <Av name={cName(r.creator_id)} size={24} />
+                        <div className="bg-stone-50 rounded-xl p-3 flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-medium text-stone-700">{cName(r.creator_id)}</span>
+                            <span className="text-xs text-stone-400">{timeAgo(r.created_at)}</span>
+                          </div>
+                          <p className="text-sm text-stone-700">{r.reply}</p>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex gap-2">
+                      <input
+                        value={replyTexts[q.id] || ""}
+                        onChange={e => setReplyTexts(prev => ({ ...prev, [q.id]: e.target.value }))}
+                        placeholder="Write a reply..."
+                        className="flex-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-800 focus:outline-none focus:border-stone-400"
+                      />
+                      <Btn size="sm" onClick={() => postReply(q.id)} disabled={!replyTexts[q.id]?.trim()}><Send size={13} /></Btn>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <Md open={modal} onClose={() => setModal(false)} title="Ask a Question">
+        <div className="flex flex-col gap-3">
+          <TA label="Your question" value={qText} onChange={setQText} rows={4} placeholder="Ask the community..." />
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="secondary" onClick={() => setModal(false)}>Cancel</Btn>
+            <Btn onClick={postQuestion} disabled={!qText.trim() || posting}>{posting ? "Posting..." : "Post Question"}</Btn>
+          </div>
+        </div>
+      </Md>
+    </div>
+  );
+}
+
+// ── UGC Announcements ─────────────────────────────────────────────────────────
+function UGCAnnouncementsPage({ profile, announcements, setAnnouncements, sb }: {
+  profile: UGCCreatorProfile; announcements: UGCAnnouncement[];
+  setAnnouncements: (a: UGCAnnouncement[]) => void; sb: any;
+}) {
+  const isAdmin = profile.role === "admin";
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ title: "", body: "", pinned: false });
+  const [saving, setSaving] = useState(false);
+
+  const pinned = announcements.filter(a => a.pinned);
+  const regular = announcements.filter(a => !a.pinned);
+
+  async function create() {
+    if (!form.title.trim()) return;
+    setSaving(true);
+    const { data, error } = await sb.from("ugc_announcements").insert({
+      title: form.title, body: form.body || null, pinned: form.pinned, created_at: new Date().toISOString(),
+    }).select().single();
+    setSaving(false);
+    if (error) { console.error(error); return; }
+    setAnnouncements([data as UGCAnnouncement, ...announcements]);
+    setModal(false); setForm({ title: "", body: "", pinned: false });
+  }
+
+  async function del(id: string) {
+    if (!window.confirm("Delete this announcement?")) return;
+    await sb.from("ugc_announcements").delete().eq("id", id);
+    setAnnouncements(announcements.filter(a => a.id !== id));
+  }
+
+  async function togglePin(id: string, pinned: boolean) {
+    await sb.from("ugc_announcements").update({ pinned }).eq("id", id);
+    setAnnouncements(announcements.map(a => a.id === id ? { ...a, pinned } : a));
+  }
+
+  const AnnouncementCard = ({ a }: { a: UGCAnnouncement }) => (
+    <div className="bg-white border border-stone-200/60 rounded-xl p-4 group">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            {a.pinned && <span className="text-xs">📌</span>}
+            <p className="text-sm font-medium text-stone-800">{a.title}</p>
+          </div>
+          {a.body && <p className="text-xs text-stone-500">{a.body}</p>}
+          <p className="text-xs text-stone-400 mt-1">{fmt(a.created_at)}</p>
+        </div>
+        {isAdmin && (
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+            <button onClick={() => togglePin(a.id, !a.pinned)} className="p-1.5 rounded-lg text-stone-300 hover:text-amber-500 hover:bg-amber-50 transition-all" title={a.pinned ? "Unpin" : "Pin"}>
+              <Bell size={12} />
+            </button>
+            <button onClick={() => del(a.id)} className="p-1.5 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all">
+              <Trash2 size={12} />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-stone-800">Announcements</h1>
+        {isAdmin && <Btn onClick={() => setModal(true)}><Plus size={14} />New</Btn>}
+      </div>
+
+      {pinned.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Pinned</p>
+          {pinned.map(a => <AnnouncementCard key={a.id} a={a} />)}
+        </div>
+      )}
+
+      {regular.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {pinned.length > 0 && <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Recent</p>}
+          {regular.map(a => <AnnouncementCard key={a.id} a={a} />)}
+        </div>
+      )}
+
+      {announcements.length === 0 && <ES icon={<Bell size={24} />} message="No announcements yet" />}
+
+      <Md open={modal} onClose={() => setModal(false)} title="New Announcement">
+        <div className="flex flex-col gap-3">
+          <TI label="Title" value={form.title} onChange={v => setForm({ ...form, title: v })} required />
+          <TA label="Body (optional)" value={form.body} onChange={v => setForm({ ...form, body: v })} />
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-stone-600">
+            <input type="checkbox" checked={form.pinned} onChange={e => setForm({ ...form, pinned: e.target.checked })} className="rounded" />
+            Pin this announcement
+          </label>
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="secondary" onClick={() => setModal(false)}>Cancel</Btn>
+            <Btn onClick={create} disabled={!form.title.trim() || saving}>{saving ? "Saving..." : "Publish"}</Btn>
+          </div>
+        </div>
+      </Md>
+    </div>
+  );
+}
+
+// ── UGC Creator Management (admin) ────────────────────────────────────────────
+function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions, sb }: {
+  profile: UGCCreatorProfile; ugcCreators: UGCCreatorProfile[];
+  setUGCCreators: (c: UGCCreatorProfile[]) => void; submissions: UGCSubmission[]; sb: any;
+}) {
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ full_name: "", email: "", tiktok_handle: "" });
+  const [saving, setSaving] = useState(false);
+
+  const latestTier = (creatorId: string): string | undefined => {
+    const subs = submissions.filter(s => s.creator_id === creatorId).sort((a, b) => b.week_date.localeCompare(a.week_date));
+    return subs[0]?.benchmark_tier;
+  };
+
+  const statusDot = (tier?: string): string => {
+    if (!tier) return "#D1D5DB";
+    if (["good", "strong", "viral"].includes(tier)) return "#10B981";
+    if (tier === "average") return "#F59E0B";
+    return "#EF4444";
+  };
+
+  async function addCreator() {
+    if (!form.full_name.trim() || !form.email.trim()) return;
+    setSaving(true);
+    const { data, error } = await sb.from("profiles").insert({
+      full_name: form.full_name, email: form.email,
+      tiktok_handle: form.tiktok_handle || null,
+      role: "ugc_creator", active: true, ugc_status: "active",
+    }).select().single();
+    setSaving(false);
+    if (error) { console.error(error); return; }
+    setUGCCreators([data as UGCCreatorProfile, ...ugcCreators]);
+    setModal(false); setForm({ full_name: "", email: "", tiktok_handle: "" });
+  }
+
+  async function archive(id: string) {
+    if (!window.confirm("Archive this creator?")) return;
+    await sb.from("profiles").update({ active: false, ugc_status: "archived" }).eq("id", id);
+    setUGCCreators(ugcCreators.map(c => c.id === id ? { ...c, active: false, ugc_status: "archived" } : c));
+  }
+
+  async function unarchive(id: string) {
+    await sb.from("profiles").update({ active: true, ugc_status: "active" }).eq("id", id);
+    setUGCCreators(ugcCreators.map(c => c.id === id ? { ...c, active: true, ugc_status: "active" } : c));
+  }
+
+  const active = ugcCreators.filter(c => c.active !== false);
+  const archived = ugcCreators.filter(c => c.active === false);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-stone-800">UGC Creator Management</h1>
+        <Btn onClick={() => setModal(true)}><UserPlus size={14} />Add Creator</Btn>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Active Creators ({active.length})</p>
+        {active.length === 0 ? <ES icon={<Users size={24} />} message="No active UGC creators yet" /> : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {active.map(c => {
+              const tier = latestTier(c.id);
+              return (
+                <div key={c.id} className="bg-white border border-stone-200/60 rounded-xl p-4">
+                  <div className="flex items-center gap-3">
+                    <Av name={c.full_name} size={36} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-stone-800">{c.full_name}</p>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: statusDot(tier), display: "inline-block", flexShrink: 0 }} />
+                      </div>
+                      {c.tiktok_handle && <p className="text-xs text-stone-400">@{c.tiktok_handle}</p>}
+                      <p className="text-xs text-stone-400">{c.email}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Bg v="success">Active</Bg>
+                        {tier && <BenchmarkBadge tier={tier} />}
+                      </div>
+                    </div>
+                    <button onClick={() => archive(c.id)} className="text-xs text-stone-400 hover:text-red-500 px-2 py-1 rounded-lg hover:bg-red-50 transition-all">Archive</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {archived.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Archived ({archived.length})</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {archived.map(c => (
+              <div key={c.id} className="bg-white border border-stone-100 rounded-xl p-4 opacity-60">
+                <div className="flex items-center gap-3">
+                  <Av name={c.full_name} size={32} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-stone-700">{c.full_name}</p>
+                    {c.tiktok_handle && <p className="text-xs text-stone-400">@{c.tiktok_handle}</p>}
+                    <Bg v="default">Archived</Bg>
+                  </div>
+                  <button onClick={() => unarchive(c.id)} className="text-xs text-emerald-600 hover:text-emerald-700 px-2 py-1 rounded-lg hover:bg-emerald-50 transition-all">Restore</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+        <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Creator Directory</p>
+        {active.length === 0 ? <p className="text-xs text-stone-400 italic">No active creators</p> : (
+          <div className="flex flex-col gap-2">
+            {active.map(c => (
+              <div key={c.id} className="flex items-center gap-3 py-1.5">
+                <Av name={c.full_name} size={24} />
+                <span className="text-sm text-stone-700 flex-1">{c.full_name}</span>
+                {c.tiktok_handle && <span className="text-xs text-stone-400">@{c.tiktok_handle}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <Md open={modal} onClose={() => setModal(false)} title="Add UGC Creator">
+        <div className="flex flex-col gap-3">
+          <TI label="Full Name" value={form.full_name} onChange={v => setForm({ ...form, full_name: v })} required />
+          <TI label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} type="email" required />
+          <TI label="TikTok Handle" value={form.tiktok_handle} onChange={v => setForm({ ...form, tiktok_handle: v })} placeholder="@username (without @)" />
+          <p className="text-xs text-stone-400 bg-stone-50 rounded-lg p-3">The creator will need to sign in via Supabase Auth with this email. Their profile will be created with role=ugc_creator.</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="secondary" onClick={() => setModal(false)}>Cancel</Btn>
+            <Btn onClick={addCreator} disabled={!form.full_name.trim() || !form.email.trim() || saving}>{saving ? "Saving..." : "Add Creator"}</Btn>
+          </div>
+        </div>
+      </Md>
+    </div>
+  );
+}
+
+// ── UGC Pivot Queue (admin) ────────────────────────────────────────────────────
+function UGCPivotQueuePage({ profile, pivotQueue, setPivotQueue, ugcCreators, sb }: {
+  profile: UGCCreatorProfile; pivotQueue: UGCPivotQueue[];
+  setPivotQueue: (q: UGCPivotQueue[]) => void; ugcCreators: UGCCreatorProfile[]; sb: any;
+}) {
+  const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
+  const [exampleLinks, setExampleLinks] = useState<Record<string, string>>({});
+  const [processing, setProcessing] = useState<Record<string, boolean>>({});
+
+  const cName = (id?: string) => ugcCreators.find(c => c.id === id)?.full_name || "Unknown";
+
+  const pending = pivotQueue.filter(q => q.status === "pending");
+  const approved = pivotQueue.filter(q => q.status === "approved");
+  const rejected = pivotQueue.filter(q => q.status === "rejected");
+
+  async function approve(item: UGCPivotQueue) {
+    setProcessing(prev => ({ ...prev, [item.id]: true }));
+    const notes = adminNotes[item.id] || item.admin_notes || null;
+    const exLink = exampleLinks[item.id] || item.example_video_link || null;
+
+    const { error: pivErr } = await sb.from("ugc_pivots").insert({
+      creator_id: item.creator_id,
+      queue_id: item.id,
+      week_date: item.week_date,
+      ai_pivot: item.ai_pivot,
+      admin_notes: notes,
+      example_video_link: exLink,
+      created_at: new Date().toISOString(),
+    });
+
+    if (pivErr) { console.error(pivErr); setProcessing(prev => ({ ...prev, [item.id]: false })); return; }
+
+    await sb.from("ugc_pivot_queue").update({ status: "approved", admin_notes: notes, example_video_link: exLink }).eq("id", item.id);
+    setPivotQueue(pivotQueue.map(q => q.id === item.id ? { ...q, status: "approved", admin_notes: notes || undefined, example_video_link: exLink || undefined } : q));
+    setProcessing(prev => ({ ...prev, [item.id]: false }));
+  }
+
+  async function reject(id: string) {
+    setProcessing(prev => ({ ...prev, [id]: true }));
+    await sb.from("ugc_pivot_queue").update({ status: "rejected" }).eq("id", id);
+    setPivotQueue(pivotQueue.map(q => q.id === id ? { ...q, status: "rejected" } : q));
+    setProcessing(prev => ({ ...prev, [id]: false }));
+  }
+
+  function QueueCard({ item }: { item: UGCPivotQueue }) {
+    const snap = item.analytics_snapshot as any;
+    const isPending = item.status === "pending";
+    return (
+      <div className={`bg-white border rounded-xl p-5 ${isPending ? "border-amber-200" : "border-stone-200/60"}`}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Av name={cName(item.creator_id)} size={32} />
+            <div>
+              <p className="text-sm font-semibold text-stone-800">{cName(item.creator_id)}</p>
+              <p className="text-xs text-stone-400">Week {item.week_date}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {snap?.benchmark_tier && <BenchmarkBadge tier={snap.benchmark_tier} />}
+            <Bg v={item.status === "pending" ? "warning" : item.status === "approved" ? "success" : "danger"}>{item.status}</Bg>
+          </div>
+        </div>
+
+        {snap && (
+          <div className="grid grid-cols-4 gap-2 mb-3 text-center">
+            {[["Views", snap.total_views], ["Likes", snap.likes], ["Comments", snap.comments], ["Followers+", snap.followers_gained]].map(([l, v]) => (
+              <div key={l as string} className="bg-stone-50 rounded-lg p-2">
+                <p className="text-xs text-stone-400">{l}</p>
+                <p className="text-xs font-semibold text-stone-700">{fmtViews(Number(v) || 0)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mb-3">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">AI Pivot</p>
+          <div className="max-h-48 overflow-y-auto bg-stone-50 rounded-lg p-3">
+            <p className="text-xs text-stone-700 whitespace-pre-wrap leading-relaxed">{item.ai_pivot}</p>
+          </div>
+        </div>
+
+        {isPending && (
+          <>
+            <TA label="Admin Notes (optional)" value={adminNotes[item.id] || ""} onChange={v => setAdminNotes(prev => ({ ...prev, [item.id]: v }))} rows={2} />
+            <div className="mt-2">
+              <TI label="Example Video Link (optional)" value={exampleLinks[item.id] || ""} onChange={v => setExampleLinks(prev => ({ ...prev, [item.id]: v }))} placeholder="https://tiktok.com/..." />
+            </div>
+            <div className="flex gap-2 mt-3">
+              <Btn onClick={() => approve(item)} disabled={processing[item.id]}><CheckCircle2 size={14} />Approve</Btn>
+              <Btn variant="danger" onClick={() => reject(item.id)} disabled={processing[item.id]}><X size={14} />Reject</Btn>
+            </div>
+          </>
+        )}
+
+        {item.admin_notes && !isPending && <p className="text-xs text-stone-500 mt-2 italic">Admin note: {item.admin_notes}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-stone-800">Pivot Queue</h1>
+        {pending.length > 0 && <Bg v="warning">{pending.length} pending</Bg>}
+      </div>
+
+      {pending.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Pending Review ({pending.length})</p>
+          {pending.map(item => <QueueCard key={item.id} item={item} />)}
+        </div>
+      )}
+
+      {pending.length === 0 && approved.length === 0 && rejected.length === 0 && (
+        <ES icon={<Inbox size={24} />} message="No pivot submissions yet" />
+      )}
+
+      {approved.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Recently Approved ({approved.length})</p>
+          {approved.slice(0, 5).map(item => <QueueCard key={item.id} item={item} />)}
+        </div>
+      )}
+
+      {rejected.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Rejected ({rejected.length})</p>
+          {rejected.slice(0, 3).map(item => <QueueCard key={item.id} item={item} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── UGC Pivot History (admin) ─────────────────────────────────────────────────
+function UGCPivotHistoryPage({ profile, pivots, setPivots, ugcCreators, sb }: {
+  profile: UGCCreatorProfile; pivots: UGCPivot[]; setPivots: (p: UGCPivot[]) => void;
+  ugcCreators: UGCCreatorProfile[]; sb: any;
+}) {
+  const [edits, setEdits] = useState<Record<string, Partial<UGCPivot>>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
+
+  const cName = (id?: string) => ugcCreators.find(c => c.id === id)?.full_name || "Unknown";
+
+  const byCreator = useMemo(() => {
+    const m: Record<string, UGCPivot[]> = {};
+    pivots.forEach(p => {
+      const k = p.creator_id || "unknown";
+      if (!m[k]) m[k] = [];
+      m[k].push(p);
+    });
+    return m;
+  }, [pivots]);
+
+  async function savePivot(p: UGCPivot) {
+    const e = edits[p.id] || {};
+    setSaving(prev => ({ ...prev, [p.id]: true }));
+    const upd = {
+      ai_pivot: e.ai_pivot ?? p.ai_pivot,
+      admin_notes: e.admin_notes ?? p.admin_notes,
+      example_video_link: e.example_video_link ?? p.example_video_link,
+    };
+    await sb.from("ugc_pivots").update(upd).eq("id", p.id);
+    setPivots(pivots.map(x => x.id === p.id ? { ...x, ...upd } : x));
+    setEdits(prev => { const n = { ...prev }; delete n[p.id]; return n; });
+    setSaving(prev => ({ ...prev, [p.id]: false }));
+  }
+
+  const getVal = (p: UGCPivot, field: keyof UGCPivot): string => {
+    const e = edits[p.id];
+    if (e && field in e) return (e[field] as string) || "";
+    return (p[field] as string) || "";
+  };
+
+  const setVal = (id: string, field: keyof UGCPivot, value: string) => {
+    setEdits(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+  };
+
+  if (Object.keys(byCreator).length === 0) {
+    return (
+      <div className="flex flex-col gap-4">
+        <h1 className="text-xl font-bold text-stone-800">Pivot History</h1>
+        <ES icon={<FileText size={24} />} message="No approved pivots yet" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-xl font-bold text-stone-800">Pivot History</h1>
+      {Object.entries(byCreator).map(([creatorId, cPivots]) => (
+        <div key={creatorId} className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
+          <div className="px-5 py-3 bg-stone-50 border-b border-stone-100 flex items-center gap-3">
+            <Av name={cName(creatorId)} size={28} />
+            <p className="text-sm font-semibold text-stone-800">{cName(creatorId)}</p>
+            <span className="text-xs text-stone-400">{cPivots.length} pivots</span>
+          </div>
+          <div className="divide-y divide-stone-50">
+            {[...cPivots].sort((a, b) => b.week_date.localeCompare(a.week_date)).map(p => (
+              <div key={p.id} className="p-5 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-stone-500">Week {p.week_date}</span>
+                  <Btn size="sm" onClick={() => savePivot(p)} disabled={saving[p.id] || !edits[p.id]}>
+                    {saving[p.id] ? "Saving..." : "Save"}
+                  </Btn>
+                </div>
+                <TA label="AI Pivot" value={getVal(p, "ai_pivot")} onChange={v => setVal(p.id, "ai_pivot", v)} rows={5} />
+                <TA label="Admin Notes" value={getVal(p, "admin_notes")} onChange={v => setVal(p.id, "admin_notes", v)} rows={2} />
+                <TI label="Example Video Link" value={getVal(p, "example_video_link")} onChange={v => setVal(p.id, "example_video_link", v)} placeholder="https://tiktok.com/..." />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── UGC Analytics Overview (admin) ────────────────────────────────────────────
+function UGCAnalyticsOverview({ submissions, ugcCreators, pivotQueue }: {
+  submissions: UGCSubmission[]; ugcCreators: UGCCreatorProfile[]; pivotQueue: UGCPivotQueue[];
+}) {
+  const currentWeek = getMondayOfWeek(new Date());
+  const thisWeekSubs = submissions.filter(s => s.week_date === currentWeek);
+  const avgViews = thisWeekSubs.length > 0 ? Math.round(thisWeekSubs.reduce((s, x) => s + x.total_views, 0) / thisWeekSubs.length) : 0;
+  const topPerformer = [...thisWeekSubs].sort((a, b) => b.total_views - a.total_views)[0];
+  const topName = topPerformer ? ugcCreators.find(c => c.id === topPerformer.creator_id)?.full_name || "Unknown" : "—";
+
+  const tierCounts = useMemo(() => {
+    const m: Record<string, number> = {};
+    submissions.forEach(s => { if (s.benchmark_tier) m[s.benchmark_tier] = (m[s.benchmark_tier] || 0) + 1; });
+    return m;
+  }, [submissions]);
+
+  const [c1, setC1] = useState("");
+  const [c2, setC2] = useState("");
+
+  const creatorGraphData = (creatorId: string) => {
+    const subs = submissions.filter(s => s.creator_id === creatorId)
+      .sort((a, b) => a.week_date.localeCompare(b.week_date));
+    return { data: subs.map(s => s.total_views), labels: subs.map(s => s.week_date.slice(5)) };
+  };
+
+  const g1 = c1 ? creatorGraphData(c1) : null;
+  const g2 = c2 ? creatorGraphData(c2) : null;
+
+  const creatorOptions = [
+    { value: "", label: "— Select creator —" },
+    ...ugcCreators.map(c => ({ value: c.id, label: c.full_name })),
+  ];
+
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-xl font-bold text-stone-800">UGC Analytics</h1>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <SC label="This Week Submissions" value={thisWeekSubs.length} />
+        <SC label="Avg Views This Week" value={fmtViews(avgViews)} />
+        <SC label="Top Performer" value={topName} />
+        <SC label="Pending Pivots" value={pivotQueue.filter(q => q.status === "pending").length} />
+      </div>
+
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+        <p className="text-sm font-semibold text-stone-700 mb-4">Benchmark Tier Distribution</p>
+        <div className="flex flex-wrap gap-2">
+          {[["hook_failed", "danger"], ["average", "warning"], ["good", "info"], ["strong", "success"], ["viral", "purple"]].map(([tier, v]) => (
+            <div key={tier} className="flex items-center gap-2 px-3 py-2 bg-stone-50 rounded-lg">
+              <BenchmarkBadge tier={tier} />
+              <span className="text-sm font-bold text-stone-700">{tierCounts[tier] || 0}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+        <p className="text-sm font-semibold text-stone-700 mb-4">Creator Comparison</p>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <Sel label="Creator 1" value={c1} onChange={setC1} options={creatorOptions} />
+          <Sel label="Creator 2" value={c2} onChange={setC2} options={creatorOptions} />
+        </div>
+        {g1 && g2 && g1.data.length > 0 && g2.data.length > 0 ? (
+          <TwoLineGraph data1={g1.data} data2={g2.data} labels={g1.labels} />
+        ) : g1 && g1.data.length > 0 ? (
+          <LineGraph data={g1.data} labels={g1.labels} />
+        ) : (
+          <p className="text-xs text-stone-400 italic">Select creators to compare</p>
+        )}
+        {c1 && g1 && <div className="flex items-center gap-2 mt-2"><span className="w-3 h-1 bg-stone-800 rounded inline-block"/><span className="text-xs text-stone-500">{ugcCreators.find(c => c.id === c1)?.full_name}</span></div>}
+        {c2 && g2 && <div className="flex items-center gap-2 mt-1"><span className="w-3 h-1 bg-violet-600 rounded inline-block"/><span className="text-xs text-stone-500">{ugcCreators.find(c => c.id === c2)?.full_name}</span></div>}
+      </div>
+
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5 overflow-x-auto">
+        <p className="text-sm font-semibold text-stone-700 mb-4">All Submissions</p>
+        {submissions.length === 0 ? <ES message="No submissions yet" /> : (
+          <table className="w-full text-xs">
+            <thead><tr className="border-b border-stone-100">
+              <th className="text-left py-2 pr-4 text-stone-400 font-medium">Creator</th>
+              <th className="text-left py-2 pr-4 text-stone-400 font-medium">Week</th>
+              <th className="text-center py-2 px-2 text-stone-400 font-medium">Views</th>
+              <th className="text-center py-2 px-2 text-stone-400 font-medium">Tier</th>
+            </tr></thead>
+            <tbody>
+              {[...submissions].sort((a, b) => b.week_date.localeCompare(a.week_date)).slice(0, 20).map(s => (
+                <tr key={s.id} className="border-b border-stone-50 hover:bg-stone-50">
+                  <td className="py-2 pr-4 text-stone-700">{ugcCreators.find(c => c.id === s.creator_id)?.full_name || "—"}</td>
+                  <td className="py-2 pr-4 text-stone-500">{s.week_date}</td>
+                  <td className="py-2 px-2 text-center font-semibold text-stone-700">{fmtViews(s.total_views)}</td>
+                  <td className="py-2 px-2 text-center"><BenchmarkBadge tier={s.benchmark_tier} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── UGC Brief Page (admin) ─────────────────────────────────────────────────────
+function UGCBriefPage({ briefs, setBriefs, sb }: {
+  briefs: UGCBrief[]; setBriefs: (b: UGCBrief[]) => void; sb: any;
+}) {
+  const currentWeek = getMondayOfWeek(new Date());
+  const [form, setForm] = useState({ week_date: currentWeek, hooks: "", format_recs: "", brand_guidelines: "" });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function publish() {
+    if (!form.week_date) return;
+    setSaving(true);
+    const { data, error } = await sb.from("ugc_briefs").insert({
+      week_date: form.week_date,
+      hooks: form.hooks || null,
+      format_recs: form.format_recs || null,
+      brand_guidelines: form.brand_guidelines || null,
+      created_at: new Date().toISOString(),
+    }).select().single();
+    setSaving(false);
+    if (error) { console.error(error); return; }
+    setBriefs([data as UGCBrief, ...briefs]);
+    setSaved(true); setTimeout(() => setSaved(false), 2000);
+    setForm({ week_date: currentWeek, hooks: "", format_recs: "", brand_guidelines: "" });
+  }
+
+  async function deleteBrief(id: string) {
+    if (!window.confirm("Delete this brief?")) return;
+    await sb.from("ugc_briefs").delete().eq("id", id);
+    setBriefs(briefs.filter(b => b.id !== id));
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-xl font-bold text-stone-800">Weekly Brief</h1>
+
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-4">
+        <p className="text-sm font-semibold text-stone-700">Publish New Brief</p>
+        <TI label="Week Date (Monday)" value={form.week_date} onChange={v => setForm({ ...form, week_date: v })} type="date" />
+        <TA label="Hooks" value={form.hooks} onChange={v => setForm({ ...form, hooks: v })} rows={4} placeholder="List of hooks to use this week..." />
+        <TA label="Format Recommendations" value={form.format_recs} onChange={v => setForm({ ...form, format_recs: v })} rows={3} placeholder="Video length, style, structure..." />
+        <TA label="Brand Guidelines" value={form.brand_guidelines} onChange={v => setForm({ ...form, brand_guidelines: v })} rows={3} placeholder="Colors, tone, key messages..." />
+        <div className="flex items-center justify-end gap-3 pt-2 border-t border-stone-100">
+          {saved && <span className="text-xs text-emerald-600 font-medium">Published!</span>}
+          <Btn onClick={publish} disabled={saving || !form.week_date}>{saving ? "Publishing..." : "Publish Brief"}</Btn>
+        </div>
+      </div>
+
+      {briefs.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Past Briefs</p>
+          {briefs.map(b => (
+            <div key={b.id} className="bg-white border border-stone-200/60 rounded-xl p-4 group">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold text-stone-700">Week of {b.week_date}</p>
+                <button onClick={() => deleteBrief(b.id)} className="p-1.5 rounded opacity-0 group-hover:opacity-100 text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all">
+                  <Trash2 size={12} />
+                </button>
+              </div>
+              {b.hooks && <div className="mb-2"><p className="text-xs text-stone-400 mb-0.5">Hooks</p><p className="text-xs text-stone-600 whitespace-pre-wrap">{b.hooks}</p></div>}
+              {b.format_recs && <div className="mb-2"><p className="text-xs text-stone-400 mb-0.5">Format</p><p className="text-xs text-stone-600 whitespace-pre-wrap">{b.format_recs}</p></div>}
+              {b.brand_guidelines && <div><p className="text-xs text-stone-400 mb-0.5">Brand Guidelines</p><p className="text-xs text-stone-600 whitespace-pre-wrap">{b.brand_guidelines}</p></div>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const router = useRouter();
@@ -2113,6 +3527,14 @@ export default function DashboardPage() {
   const [techProjects, setTechProjects] = useState<TechProject[]>([]);
   const [content, setContent] = useState<ContentVideo[]>([]);
   const [settings, setSettings] = useState<AppSettings>({});
+  const [ugcSubmissions, setUGCSubmissions] = useState<UGCSubmission[]>([]);
+  const [ugcPivotQueue, setUGCPivotQueue] = useState<UGCPivotQueue[]>([]);
+  const [ugcPivots, setUGCPivots] = useState<UGCPivot[]>([]);
+  const [ugcHooks, setUGCHooks] = useState<UGCHook[]>([]);
+  const [ugcBriefs, setUGCBriefs] = useState<UGCBrief[]>([]);
+  const [ugcAnnouncements, setUGCAnnouncements] = useState<UGCAnnouncement[]>([]);
+  const [ugcQuestions, setUGCQuestions] = useState<UGCQuestion[]>([]);
+  const [ugcCreators, setUGCCreators] = useState<UGCCreatorProfile[]>([]);
 
   useEffect(() => {
     async function init() {
@@ -2121,6 +3543,7 @@ export default function DashboardPage() {
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
       if (!prof) { router.push("/auth"); return; }
       setProfile(prof as Profile);
+      if (prof.role === "ugc_creator") setPage("ugc_dashboard");
       const [
         { data: iD }, { data: tD }, { data: oD }, { data: qD },
         { data: rD }, { data: resD }, { data: aD }, { data: actD },
@@ -2156,6 +3579,39 @@ export default function DashboardPage() {
       setTechProjects((tpD || []) as TechProject[]);
       setContent((ctD || []) as ContentVideo[]);
       try { setSettings(((stD||[]) as any[]).reduce((acc:AppSettings,s:any)=>({...acc,[s.key]:s.value}),{})); } catch(_) {}
+
+      // UGC data
+      const isUGCRole = prof.role === "ugc_creator" || prof.role === "admin";
+      if (isUGCRole) {
+        const [
+          { data: ugcCrD }, { data: ugcSubD }, { data: ugcPqD }, { data: ugcPvD },
+          { data: ugcHkD }, { data: ugcBrD }, { data: ugcAnD }, { data: ugcQsD },
+        ] = await Promise.all([
+          supabase.from("profiles").select("*").eq("role", "ugc_creator").order("full_name"),
+          prof.role === "admin"
+            ? supabase.from("ugc_submissions").select("*").order("created_at", { ascending: false })
+            : supabase.from("ugc_submissions").select("*").eq("creator_id", prof.id).order("created_at", { ascending: false }),
+          prof.role === "admin"
+            ? supabase.from("ugc_pivot_queue").select("*").order("created_at", { ascending: false })
+            : supabase.from("ugc_pivot_queue").select("*").eq("status", "never_show").limit(0),
+          prof.role === "admin"
+            ? supabase.from("ugc_pivots").select("*").order("created_at", { ascending: false })
+            : supabase.from("ugc_pivots").select("*").eq("creator_id", prof.id).order("created_at", { ascending: false }),
+          supabase.from("ugc_hooks").select("*").order("view_count", { ascending: false }),
+          supabase.from("ugc_briefs").select("*").order("week_date", { ascending: false }).limit(10),
+          supabase.from("ugc_announcements").select("*").order("pinned", { ascending: false }),
+          supabase.from("ugc_qa").select("*, ugc_qa_replies(*)").order("created_at", { ascending: false }),
+        ]);
+        setUGCCreators((ugcCrD || []) as UGCCreatorProfile[]);
+        setUGCSubmissions((ugcSubD || []) as UGCSubmission[]);
+        setUGCPivotQueue((ugcPqD || []) as UGCPivotQueue[]);
+        setUGCPivots((ugcPvD || []) as UGCPivot[]);
+        setUGCHooks((ugcHkD || []) as UGCHook[]);
+        setUGCBriefs((ugcBrD || []) as UGCBrief[]);
+        setUGCAnnouncements((ugcAnD || []) as UGCAnnouncement[]);
+        setUGCQuestions((ugcQsD || []) as UGCQuestion[]);
+      }
+
       setLoading(false);
     }
     init().catch(err => { console.error("[dashboard init]", err); setLoading(false); });
@@ -2199,11 +3655,20 @@ export default function DashboardPage() {
   if (!profile) return null;
 
   const isAdmin = profile.role === "admin";
+  const isUGC = profile.role === "ugc_creator";
   const isTech = profile.team === "Tech/AI";
   const isCreator = profile.team === "Content Creation";
   const openQCount = questions.filter(q => q.status === "open").length;
 
-  const NAV = [
+  const NAV = isUGC ? [
+    { id: "ugc_dashboard",     icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
+    { id: "ugc_submit",        icon: <BarChart3 size={16}/>,       label: "Submit Analytics" },
+    { id: "ugc_pivots",        icon: <TrendingUp size={16}/>,      label: "My Pivots" },
+    { id: "ugc_hooks",         icon: <Zap size={16}/>,             label: "Hook Library" },
+    { id: "ugc_leaderboard",   icon: <Trophy size={16}/>,          label: "Leaderboard" },
+    { id: "ugc_qa",            icon: <MessageCircle size={16}/>,   label: "Community Q&A" },
+    { id: "ugc_announcements", icon: <Bell size={16}/>,            label: "Announcements" },
+  ] : [
     { id: "dashboard", icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
     { id: "tasks",     icon: <CheckSquare size={16}/>,     label: isAdmin ? "All Tasks" : "My Tasks" },
     { id: "outreach",  icon: <Mail size={16}/>,            label: "Outreach Log" },
@@ -2216,10 +3681,15 @@ export default function DashboardPage() {
     ...((isAdmin || isCreator) ? [{ id: "content", icon: <Video size={16}/>, label: "Content" }] : []),
   ];
   const ADMIN_NAV = [
-    { id: "interns",       icon: <Users size={16}/>,        label: "Intern Mgmt" },
-    { id: "analytics",     icon: <BarChart3 size={16}/>,    label: "Analytics" },
-    { id: "notifications", icon: <Bell size={16}/>,         label: "Push Notifications" },
-    { id: "settings",      icon: <SettingsIcon size={16}/>, label: "Settings" },
+    { id: "interns",           icon: <Users size={16}/>,        label: "Intern Mgmt" },
+    { id: "analytics",         icon: <BarChart3 size={16}/>,    label: "Analytics" },
+    { id: "notifications",     icon: <Bell size={16}/>,         label: "Push Notifications" },
+    { id: "settings",          icon: <SettingsIcon size={16}/>, label: "Settings" },
+    { id: "ugc_creators",      icon: <Users size={16}/>,        label: "UGC Creators" },
+    { id: "ugc_pivot_queue",   icon: <Inbox size={16}/>,        label: "Pivot Queue" },
+    { id: "ugc_analytics",     icon: <BarChart3 size={16}/>,    label: "UGC Analytics" },
+    { id: "ugc_pivot_history", icon: <FileText size={16}/>,     label: "Pivot History" },
+    { id: "ugc_brief",         icon: <FileText size={16}/>,     label: "Weekly Brief" },
   ];
 
   function NavItem({ item }: { item: { id: string; icon: React.ReactNode; label: string; badge?: number | null } }) {
@@ -2248,7 +3718,7 @@ export default function DashboardPage() {
           <Av name={profile.full_name} size={32}/>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-stone-800 truncate">{profile.full_name}</p>
-            <p className="text-xs text-stone-400 capitalize">{isAdmin ? "Admin" : (profile.team || "Intern")}</p>
+            <p className="text-xs text-stone-400 capitalize">{isAdmin ? "Admin" : isUGC ? "UGC Creator" : (profile.team || "Intern")}</p>
           </div>
           <button onClick={handleSignOut} className="p-1.5 rounded-lg text-stone-300 hover:text-stone-600 hover:bg-stone-100 transition-colors" title="Sign out"><LogOut size={14}/></button>
         </div>
@@ -2278,6 +3748,20 @@ export default function DashboardPage() {
       case "analytics": return isAdmin ? <AnPg interns={interns} tasks={tasks} outreach={outreach} content={content} requests={requests} questions={questions} techProjects={techProjects}/> : null;
       case "notifications": return isAdmin ? <NotificationPg interns={interns}/> : null;
       case "settings":  return isAdmin ? <SettingsPg settings={settings} setSettings={setSettings} sb={supabase}/> : null;
+      // UGC Creator pages
+      case "ugc_dashboard":     return (isAdmin || isUGC) ? <UGCDashboard profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} submissions={ugcSubmissions} pivots={ugcPivots} briefs={ugcBriefs} announcements={ugcAnnouncements} sb={supabase} setPage={setPage}/> : null;
+      case "ugc_submit":        return (isAdmin || isUGC) ? <UGCSubmitPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_pivots":        return (isAdmin || isUGC) ? <UGCMyPivotsPage profile={p as UGCCreatorProfile} pivots={ugcPivots} submissions={ugcSubmissions}/> : null;
+      case "ugc_hooks":         return (isAdmin || isUGC) ? <UGCHooksPage profile={p as UGCCreatorProfile} hooks={ugcHooks} setHooks={setUGCHooks} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_leaderboard":   return (isAdmin || isUGC) ? <UGCLeaderboardPage submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
+      case "ugc_qa":            return (isAdmin || isUGC) ? <UGCQAPage profile={p as UGCCreatorProfile} questions={ugcQuestions} setQuestions={setUGCQuestions} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_announcements": return (isAdmin || isUGC) ? <UGCAnnouncementsPage profile={p as UGCCreatorProfile} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
+      // Admin-only UGC pages
+      case "ugc_creators":      return isAdmin ? <UGCCreatorMgmtPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} sb={supabase}/> : null;
+      case "ugc_pivot_queue":   return isAdmin ? <UGCPivotQueuePage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_analytics":     return isAdmin ? <UGCAnalyticsOverview submissions={ugcSubmissions} ugcCreators={ugcCreators} pivotQueue={ugcPivotQueue}/> : null;
+      case "ugc_pivot_history": return isAdmin ? <UGCPivotHistoryPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_brief":         return isAdmin ? <UGCBriefPage briefs={ugcBriefs} setBriefs={setUGCBriefs} sb={supabase}/> : null;
       default:          return null;
     }
   }
