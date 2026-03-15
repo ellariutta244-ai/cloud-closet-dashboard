@@ -169,7 +169,7 @@ function AdminDash({ interns, tasks, outreach, questions, activity, announcement
   const completed = tasks.filter(t=>t.status==="completed").length;
   const openQ = questions.filter(q=>q.status==="open").length;
   const activeCount = interns.filter(i=>i.active!==false).length;
-  const TEAMS = ["Tech/AI","Strategy","Events/Outreach","Design","Curation Team","Content Creation"];
+  const TEAMS = ["Tech/AI","Strategy","Events/Outreach","Design","Curation Team","Content Creation","UGC Creators"];
   const [aModal, setAModal] = useState(false);
   const [aForm, setAForm] = useState({ title:"", body:"", pinned:false, target_teams:[] as string[] });
   const [aSaving, setASaving] = useState(false);
@@ -3035,6 +3035,125 @@ function UGCAnnouncementsPage({ profile, announcements, setAnnouncements, sb }: 
   );
 }
 
+// ── UGC Submission History ─────────────────────────────────────────────────────
+function UGCSubmissionHistoryPage({ profile, submissions, ugcCreators }: {
+  profile: UGCCreatorProfile; submissions: UGCSubmission[]; ugcCreators: UGCCreatorProfile[];
+}) {
+  const isAdmin = profile.role === "admin";
+  const mySubmissions = isAdmin ? submissions : submissions.filter(s => s.creator_id === profile.id);
+  const sorted = [...mySubmissions].sort((a, b) => b.week_date.localeCompare(a.week_date));
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const creatorName = (id: string) => ugcCreators.find(c => c.id === id)?.full_name ?? "Unknown";
+
+  const tierColor = (tier?: string) => {
+    if (!tier) return "bg-stone-100 text-stone-500";
+    if (tier === "viral") return "bg-purple-100 text-purple-700";
+    if (tier === "strong") return "bg-green-100 text-green-700";
+    if (tier === "good") return "bg-sky-100 text-sky-700";
+    if (tier === "average") return "bg-amber-100 text-amber-700";
+    return "bg-red-100 text-red-700";
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-stone-800">Submission History</h1>
+          <p className="text-xs text-stone-400 mt-0.5">{sorted.length} submission{sorted.length !== 1 ? "s" : ""}</p>
+        </div>
+      </div>
+
+      {sorted.length === 0 && <ES icon={<FileText size={24} />} message="No submissions yet" />}
+
+      <div className="flex flex-col gap-3">
+        {sorted.map(s => (
+          <div key={s.id} className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
+            <button
+              className="w-full flex items-center justify-between p-4 text-left hover:bg-stone-50 transition-all"
+              onClick={() => setExpanded(expanded === s.id ? null : s.id)}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="min-w-0">
+                  {isAdmin && <p className="text-xs text-stone-400 mb-0.5">{creatorName(s.creator_id ?? "")}</p>}
+                  <p className="text-sm font-semibold text-stone-800">Week of {s.week_date}</p>
+                  <p className="text-xs text-stone-400 mt-0.5">{fmtViews(s.total_views)} views</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${tierColor(s.benchmark_tier)}`}>
+                  {s.benchmark_tier?.replace("_", " ") ?? "—"}
+                </span>
+                <ChevronRight size={14} className={`text-stone-400 transition-transform ${expanded === s.id ? "rotate-90" : ""}`} />
+              </div>
+            </button>
+
+            {expanded === s.id && (
+              <div className="border-t border-stone-100 p-4 flex flex-col gap-4">
+                {/* Video Metadata */}
+                <div>
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">Video</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    {s.hook_text && <div className="col-span-2"><span className="text-stone-400 text-xs">Hook: </span><span className="text-stone-700">"{s.hook_text}"</span></div>}
+                    {s.format_type && <div><span className="text-stone-400 text-xs">Format: </span><span className="text-stone-700">{s.format_type}</span></div>}
+                    {s.niche && <div><span className="text-stone-400 text-xs">Niche: </span><span className="text-stone-700">{s.niche}</span></div>}
+                    {s.video_length_seconds != null && <div><span className="text-stone-400 text-xs">Length: </span><span className="text-stone-700">{s.video_length_seconds}s</span></div>}
+                    <div><span className="text-stone-400 text-xs">Trending Sound: </span><span className="text-stone-700">{s.trending_sound ? "Yes" : "No"}</span></div>
+                    <div><span className="text-stone-400 text-xs">CTA: </span><span className="text-stone-700">{s.has_cta ? "Yes" : "No"}</span></div>
+                  </div>
+                </div>
+
+                {/* View Data */}
+                <div>
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">Performance</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div><span className="text-stone-400 text-xs">Total Views: </span><span className="text-stone-700">{fmtViews(s.total_views)}</span></div>
+                    {s.avg_watch_time_seconds != null && <div><span className="text-stone-400 text-xs">Avg Watch: </span><span className="text-stone-700">{s.avg_watch_time_seconds}s</span></div>}
+                    {s.watch_completion_rate != null && <div><span className="text-stone-400 text-xs">Completion: </span><span className="text-stone-700">{s.watch_completion_rate}%</span></div>}
+                    <div><span className="text-stone-400 text-xs">Profile Visits: </span><span className="text-stone-700">{s.profile_visits ?? 0}</span></div>
+                    <div><span className="text-stone-400 text-xs">FYP: </span><span className="text-stone-700">{s.traffic_fyp_pct ?? 0}%</span></div>
+                    <div><span className="text-stone-400 text-xs">Following: </span><span className="text-stone-700">{s.traffic_following_pct ?? 0}%</span></div>
+                    <div><span className="text-stone-400 text-xs">Search: </span><span className="text-stone-700">{s.traffic_search_pct ?? 0}%</span></div>
+                  </div>
+                </div>
+
+                {/* Engagement */}
+                <div>
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">Engagement</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div><span className="text-stone-400 text-xs">Likes: </span><span className="text-stone-700">{s.likes ?? 0}</span></div>
+                    <div><span className="text-stone-400 text-xs">Comments: </span><span className="text-stone-700">{s.comments ?? 0}</span></div>
+                    <div><span className="text-stone-400 text-xs">Shares: </span><span className="text-stone-700">{s.shares ?? 0}</span></div>
+                    <div><span className="text-stone-400 text-xs">Saves: </span><span className="text-stone-700">{s.saves ?? 0}</span></div>
+                    {s.comment_sentiment && <div className="col-span-2"><span className="text-stone-400 text-xs">Sentiment: </span><span className="text-stone-700 capitalize">{s.comment_sentiment}</span></div>}
+                  </div>
+                </div>
+
+                {/* Account Health */}
+                <div>
+                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">Account Health</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div><span className="text-stone-400 text-xs">Followers Gained: </span><span className="text-stone-700">{s.followers_gained ?? 0}</span></div>
+                    <div><span className="text-stone-400 text-xs">Followers Lost: </span><span className="text-stone-700">{s.followers_lost ?? 0}</span></div>
+                    <div><span className="text-stone-400 text-xs">Net Change: </span><span className={`font-medium ${(s.net_follower_change ?? 0) >= 0 ? "text-green-600" : "text-red-600"}`}>{(s.net_follower_change ?? 0) >= 0 ? "+" : ""}{s.net_follower_change ?? 0}</span></div>
+                    <div><span className="text-stone-400 text-xs">Account Views: </span><span className="text-stone-700">{fmtViews(s.total_account_views ?? 0)}</span></div>
+                    <div><span className="text-stone-400 text-xs">Videos Posted: </span><span className="text-stone-700">{s.videos_posted ?? 0}</span></div>
+                    {s.best_video_link && (
+                      <div className="col-span-2"><span className="text-stone-400 text-xs">Best Video: </span>
+                        <a href={s.best_video_link} target="_blank" rel="noreferrer" className="text-sky-600 hover:underline text-xs break-all">{s.best_video_link}</a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── UGC Creator Management (admin) ────────────────────────────────────────────
 function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions, sb }: {
   profile: UGCCreatorProfile; ugcCreators: UGCCreatorProfile[];
@@ -3183,6 +3302,14 @@ function UGCPivotQueuePage({ profile, pivotQueue, setPivotQueue, ugcCreators, sb
   const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
   const [exampleLinks, setExampleLinks] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<Record<string, boolean>>({});
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function refresh() {
+    setRefreshing(true);
+    const { data } = await sb.from("ugc_pivot_queue").select("*").order("created_at", { ascending: false });
+    setPivotQueue((data || []) as UGCPivotQueue[]);
+    setRefreshing(false);
+  }
 
   const cName = (id?: string) => ugcCreators.find(c => c.id === id)?.full_name || "Unknown";
 
@@ -3277,8 +3404,11 @@ function UGCPivotQueuePage({ profile, pivotQueue, setPivotQueue, ugcCreators, sb
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-stone-800">Pivot Queue</h1>
-        {pending.length > 0 && <Bg v="warning">{pending.length} pending</Bg>}
+        <div><h1 className="text-xl font-bold text-stone-800">Pivot Queue</h1><p className="text-sm text-stone-400 mt-0.5">AI-generated pivot strategies awaiting review.</p></div>
+        <div className="flex items-center gap-2">
+          {pending.length > 0 && <Bg v="warning">{pending.length} pending</Bg>}
+          <Btn variant="secondary" size="sm" onClick={refresh} disabled={refreshing}>{refreshing ? <Loader2 size={13} className="animate-spin"/> : "Refresh"}</Btn>
+        </div>
       </div>
 
       {pending.length > 0 && (
@@ -3725,7 +3855,7 @@ export default function DashboardPage() {
     { id: "ugc_hooks",         icon: <Zap size={16}/>,             label: "Hook Library" },
     { id: "ugc_leaderboard",   icon: <Trophy size={16}/>,          label: "Leaderboard" },
     { id: "ugc_qa",            icon: <MessageCircle size={16}/>,   label: "Community Q&A" },
-    { id: "ugc_announcements", icon: <Bell size={16}/>,            label: "Announcements" },
+    { id: "ugc_history",       icon: <FileText size={16}/>,        label: "Submission History" },
   ] : [
     { id: "dashboard", icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
     { id: "tasks",     icon: <CheckSquare size={16}/>,     label: isAdmin ? "All Tasks" : "My Tasks" },
@@ -3748,6 +3878,7 @@ export default function DashboardPage() {
     { id: "ugc_analytics",     icon: <BarChart3 size={16}/>,    label: "UGC Analytics" },
     { id: "ugc_pivot_history", icon: <FileText size={16}/>,     label: "Pivot History" },
     { id: "ugc_brief",         icon: <FileText size={16}/>,     label: "Weekly Brief" },
+    { id: "ugc_announcements", icon: <Bell size={16}/>,         label: "UGC Announcements" },
   ];
 
   function NavItem({ item }: { item: { id: string; icon: React.ReactNode; label: string; badge?: number | null } }) {
@@ -3813,7 +3944,8 @@ export default function DashboardPage() {
       case "ugc_hooks":         return (isAdmin || isUGC) ? <UGCHooksPage profile={p as UGCCreatorProfile} hooks={ugcHooks} setHooks={setUGCHooks} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_leaderboard":   return (isAdmin || isUGC) ? <UGCLeaderboardPage submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
       case "ugc_qa":            return (isAdmin || isUGC) ? <UGCQAPage profile={p as UGCCreatorProfile} questions={ugcQuestions} setQuestions={setUGCQuestions} ugcCreators={ugcCreators} sb={supabase}/> : null;
-      case "ugc_announcements": return (isAdmin || isUGC) ? <UGCAnnouncementsPage profile={p as UGCCreatorProfile} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
+      case "ugc_announcements": return isAdmin ? <UGCAnnouncementsPage profile={p as UGCCreatorProfile} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
+      case "ugc_history":       return (isAdmin || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
       // Admin-only UGC pages
       case "ugc_creators":      return isAdmin ? <UGCCreatorMgmtPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} sb={supabase}/> : null;
       case "ugc_pivot_queue":   return isAdmin ? <UGCPivotQueuePage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} ugcCreators={ugcCreators} sb={supabase}/> : null;
