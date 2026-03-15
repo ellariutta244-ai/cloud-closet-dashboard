@@ -222,14 +222,29 @@ ACCOUNT HEALTH:
       const weekDate = week_date?.split('T')[0] ?? getMondayOfWeek(new Date());
       const creatorId = analytics.creator_id ?? null;
 
+      // Helper: send push to all admins
+      async function pushAdmins(title: string, body: string) {
+        try {
+          const { data: adminTokens } = await supabase.from('fcm_tokens').select('token, profiles!inner(role)').eq('profiles.role', 'admin');
+          const tokens = (adminTokens || []).map((r: any) => r.token).filter(Boolean);
+          const app = getAdminApp();
+          const messaging = getMessaging(app);
+          for (const token of tokens) {
+            try { await messaging.send({ token, webpush: { notification: { title, body, icon: '/icon-192.png' }, headers: { Urgency: 'high' } } }); } catch {}
+          }
+        } catch {}
+      }
+
       // Viral alert (50k+)
       if (alertSettings.viral !== false && total_views >= 50000) {
         const msg = `${creatorName} went viral with ${total_views.toLocaleString()} views — stop everything and replicate this hook: "${hook_text || 'unknown'}"`;
+        await pushAdmins('🚀 VIRAL ALERT', msg);
         await createAlertIfNew(supabase, creatorId, 'viral', msg, 'purple', weekDate);
       }
       // Scale rule (10k+)
       else if (alertSettings.scale_rule !== false && total_views >= 10000) {
         const msg = `${creatorName} hit ${total_views.toLocaleString()} views — scale this hook now: "${hook_text || 'unknown'}"`;
+        await pushAdmins('📈 Scale Rule Triggered', msg);
         await createAlertIfNew(supabase, creatorId, 'scale_rule', msg, 'yellow', weekDate);
       }
 
@@ -246,6 +261,7 @@ ACCOUNT HEALTH:
         if (prevSub && prevSub.total_views > 0 && total_views < prevSub.total_views * 0.7) {
           const drop = Math.round((1 - total_views / prevSub.total_views) * 100);
           const msg = `${creatorName}'s views dropped ${drop}% this week (${total_views.toLocaleString()} vs ${prevSub.total_views.toLocaleString()} last week)`;
+          await pushAdmins('📉 Declining Performance', msg);
           await createAlertIfNew(supabase, creatorId, 'declining_performance', msg, 'orange', weekDate);
         }
       }
@@ -264,11 +280,12 @@ ACCOUNT HEALTH:
         const { data: recentSubs } = await supabase.from('ugc_submissions').select('total_views, week_date').eq('creator_id', creatorId).order('week_date', { ascending: false }).limit(3);
         if (recentSubs && recentSubs.length >= 3 && recentSubs.every((s: any) => s.total_views < 1000)) {
           const msg = `${creatorName} has been under 1,000 views for ${recentSubs.length} weeks in a row — immediate pivot needed`;
+          await pushAdmins('🚨 Missed Streak Alert', msg);
           await createAlertIfNew(supabase, creatorId, 'missed_streak', msg, 'red', weekDate);
         }
       }
-    } catch {
-      // Alert generation failure should not block response
+    } catch (alertErr) {
+      console.error('[smart_alerts] generation failed:', alertErr);
     }
 
     // Send admin push notification
