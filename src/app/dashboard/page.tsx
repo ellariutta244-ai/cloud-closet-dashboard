@@ -3638,7 +3638,7 @@ function HookGeneratorPage({ profile, ugcCreators, ugcHooks, setUGCHooks, savedH
   const [showFormulas, setShowFormulas] = useState(true);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
-  const [tab, setTab] = useState<"generate"|"saved">("generate");
+  const [tab, setTab] = useState<"generate"|"library">("generate");
   const [pushModal, setPushModal] = useState<{ hook: string; idx: number } | null>(null);
   const [pushNote, setPushNote] = useState("");
   const [pushTarget, setPushTarget] = useState("");
@@ -3747,9 +3747,8 @@ function HookGeneratorPage({ profile, ugcCreators, ugcHooks, setUGCHooks, savedH
           <p className="text-sm text-stone-400 mt-0.5">Generate 10 Cloud Closet hooks instantly</p>
         </div>
         <div className="flex gap-1 bg-stone-100 p-1 rounded-xl">
-          {(["generate","saved"] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all capitalize ${tab===t?"bg-white shadow-sm text-stone-800":"text-stone-500 hover:text-stone-700"}`}>{t === "saved" ? `Saved (${mySavedHooks.length})` : "Generate"}</button>
-          ))}
+          <button onClick={() => setTab("generate")} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${tab==="generate"?"bg-white shadow-sm text-stone-800":"text-stone-500 hover:text-stone-700"}`}>Generate</button>
+          <button onClick={() => setTab("library")} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${tab==="library"?"bg-white shadow-sm text-stone-800":"text-stone-500 hover:text-stone-700"}`}>Library {mySavedHooks.length > 0 && <span className="ml-1 text-xs bg-stone-200 text-stone-600 px-1.5 py-0.5 rounded-full">{mySavedHooks.length}</span>}</button>
         </div>
       </div>
 
@@ -3830,7 +3829,7 @@ function HookGeneratorPage({ profile, ugcCreators, ugcHooks, setUGCHooks, savedH
                         <button onClick={() => copy(hook, idx)} className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all ${isCopied ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "border-stone-200 text-stone-500 hover:border-stone-400 hover:text-stone-700"}`}>
                           {isCopied ? "Copied!" : <><Copy size={11} className="inline mr-1"/>Copy</>}
                         </button>
-                        <button onClick={() => saveHook(hook, idx)} disabled={isSaved} className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all ${isSaved ? "bg-violet-50 border-violet-200 text-violet-600" : "border-stone-200 text-stone-500 hover:border-stone-400 hover:text-stone-700"}`}>
+                        <button onClick={() => saveHook(hook, idx)} disabled={isSaved} className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all ${isSaved ? "bg-emerald-50 border-emerald-200 text-emerald-600" : "border-stone-200 text-stone-500 hover:border-stone-400 hover:text-stone-700"}`}>
                           {isSaved ? "Saved ✓" : <><Bookmark size={11} className="inline mr-1"/>Save</>}
                         </button>
                         {isAdmin && (
@@ -3888,7 +3887,7 @@ function HookGeneratorPage({ profile, ugcCreators, ugcHooks, setUGCHooks, savedH
         </>
       )}
 
-      {tab === "saved" && (
+      {tab === "library" && (
         <div className="flex flex-col gap-3">
           {mySavedHooks.length === 0 ? (
             <ES icon={<Bookmark size={24} />} message="No saved hooks yet — generate some and save your favorites" />
@@ -7084,7 +7083,6 @@ export default function DashboardPage() {
     { id: "ugc_pivots",        icon: <TrendingUp size={16}/>,      label: "My Pivots" },
     { id: "ugc_weekly_brief",  icon: <FileText size={16}/>,        label: "Weekly Brief" },
     { id: "ugc_hook_generator", icon: <Zap size={16}/>,             label: "Hook Generator" },
-    { id: "ugc_hooks",         icon: <Bookmark size={16}/>,        label: "Hook Library" },
     { id: "ugc_leaderboard",   icon: <Trophy size={16}/>,          label: "Leaderboard" },
     { id: "ugc_qa",            icon: <MessageCircle size={16}/>,   label: "Community Q&A" },
     { id: "ugc_history",       icon: <FileText size={16}/>,        label: "Submission History" },
