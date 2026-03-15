@@ -2397,12 +2397,22 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
     const tiktokHandle = selectedCreator?.tiktok_handle || "";
 
     try {
-      await fetch("/api/ugc-pivot", {
+      const pivotRes = await fetch("/api/ugc-pivot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ submissionId: sub.id, creatorName, tiktokHandle, analytics: submissionData }),
       });
-    } catch (e) { console.error("pivot api error", e); }
+      if (!pivotRes.ok) {
+        const pivotErr = await pivotRes.json().catch(() => ({}));
+        console.error("pivot api error", pivotErr);
+        setErrorMsg(`Submission saved, but pivot generation failed: ${pivotErr.error || pivotRes.status}. Check Vercel logs.`);
+        setStatus("error"); setLoading(false); return;
+      }
+    } catch (e) {
+      console.error("pivot api error", e);
+      setErrorMsg(`Submission saved, but pivot API request failed: ${String(e)}`);
+      setStatus("error"); setLoading(false); return;
+    }
 
     try {
       await fetch("/api/ugc-sheets", {
@@ -3303,10 +3313,12 @@ function UGCPivotQueuePage({ profile, pivotQueue, setPivotQueue, ugcCreators, sb
   const [exampleLinks, setExampleLinks] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<Record<string, boolean>>({});
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   async function refresh() {
-    setRefreshing(true);
-    const { data } = await sb.from("ugc_pivot_queue").select("*").order("created_at", { ascending: false });
+    setRefreshing(true); setFetchError(null);
+    const { data, error } = await sb.from("ugc_pivot_queue").select("*").order("created_at", { ascending: false });
+    if (error) setFetchError(error.message);
     setPivotQueue((data || []) as UGCPivotQueue[]);
     setRefreshing(false);
   }
@@ -3406,10 +3418,16 @@ function UGCPivotQueuePage({ profile, pivotQueue, setPivotQueue, ugcCreators, sb
       <div className="flex items-center justify-between">
         <div><h1 className="text-xl font-bold text-stone-800">Pivot Queue</h1><p className="text-sm text-stone-400 mt-0.5">AI-generated pivot strategies awaiting review.</p></div>
         <div className="flex items-center gap-2">
-          {pending.length > 0 && <Bg v="warning">{pending.length} pending</Bg>}
+              {pending.length > 0 && <Bg v="warning">{pending.length} pending</Bg>}
           <Btn variant="secondary" size="sm" onClick={refresh} disabled={refreshing}>{refreshing ? <Loader2 size={13} className="animate-spin"/> : "Refresh"}</Btn>
         </div>
       </div>
+
+      {fetchError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+          <strong>Error loading pivot queue:</strong> {fetchError}
+        </div>
+      )}
 
       {pending.length > 0 && (
         <div className="flex flex-col gap-3">
