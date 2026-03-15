@@ -5400,10 +5400,27 @@ function DirectorDash({ profile, events, ugcSubmissions, ugcCreators, ugcBriefs,
 }
 
 // ── Director Analytics ─────────────────────────────────────────────────────────
-function DirectorAnalyticsPage({ ugcSubmissions, ugcCreators, reports, outreach }: {
-  ugcSubmissions: UGCSubmission[]; ugcCreators: UGCCreatorProfile[];
-  reports: Report[]; outreach: Outreach[];
+function DirectorAnalyticsPage({ ugcSubmissions, setUGCSubmissions, ugcCreators, setUGCCreators, reports, outreach, sb }: {
+  ugcSubmissions: UGCSubmission[]; setUGCSubmissions: (s: UGCSubmission[]) => void;
+  ugcCreators: UGCCreatorProfile[]; setUGCCreators: (c: UGCCreatorProfile[]) => void;
+  reports: Report[]; outreach: Outreach[]; sb: any;
 }) {
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    async function refresh() {
+      setRefreshing(true);
+      const [{ data: subs }, { data: creators }] = await Promise.all([
+        sb.from("ugc_submissions").select("*").order("created_at", { ascending: false }),
+        sb.from("profiles").select("*").eq("role", "ugc_creator").order("full_name"),
+      ]);
+      if (subs) setUGCSubmissions(subs as UGCSubmission[]);
+      if (creators) setUGCCreators(creators as UGCCreatorProfile[]);
+      setRefreshing(false);
+    }
+    refresh();
+  }, []);
+
   const currentWeek = getMondayOfWeek(new Date());
   const thisWeekSubs = ugcSubmissions.filter(s => s.week_date === currentWeek);
   const totalViewsThisWeek = thisWeekSubs.reduce((s, x) => s + x.total_views, 0);
@@ -5439,7 +5456,10 @@ function DirectorAnalyticsPage({ ugcSubmissions, ugcCreators, reports, outreach 
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-bold text-stone-800">Analytics Overview</h1>
+      <div className="flex items-center gap-3">
+        <h1 className="text-xl font-bold text-stone-800">Analytics Overview</h1>
+        {refreshing && <Loader2 size={14} className="animate-spin text-stone-400" />}
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <SC label="Views This Week" value={fmtViews(totalViewsThisWeek)} />
@@ -7180,7 +7200,7 @@ export default function DashboardPage() {
       case "ugc_brief":         return isAdmin ? <UGCBriefPage briefs={ugcBriefs} setBriefs={setUGCBriefs} sb={supabase}/> : null;
       case "director_home":      return isDirector ? <DirectorDash profile={profile!} events={events} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} ugcBriefs={ugcBriefs} smartAlerts={smartAlerts} reports={reports} outreach={outreach} ugcHooks={ugcHooks} settings={settings} setPage={setPage} sb={supabase}/> : null;
       case "director_calendar":  return isDirector ? <EventsPage profile={profile!} interns={interns} events={events} setEvents={setEvents} sb={supabase}/> : null;
-      case "director_analytics": return isDirector ? <DirectorAnalyticsPage ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} reports={reports} outreach={outreach}/> : null;
+      case "director_analytics": return isDirector ? <DirectorAnalyticsPage ugcSubmissions={ugcSubmissions} setUGCSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} reports={reports} outreach={outreach} sb={supabase}/> : null;
       case "director_brief":            return isDirector ? <DirectorWeeklyBriefPage profile={profile!} ugcBriefs={ugcBriefs} briefComments={briefComments} setBriefComments={setBriefComments} sb={supabase}/> : null;
       case "director_wisconsin_report": return isDirector ? <WisconsinReportPage profile={profile!} reports={wisconsinReports} setReports={setWisconsinReports} setPage={setPage} sb={supabase}/> : null;
       case "director_hooks":          return isDirector ? <HookGeneratorPage profile={profile! as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
