@@ -1525,6 +1525,7 @@ function AdminRequestInbox({ requests, setRequests, requestTypes, setRequestType
 function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profile; interns:Profile[]; events:CCEvent[]; setEvents:(e:CCEvent[])=>void; sb:any }) {
   const [showC, setShowC] = useState(false);
   const [sel, setSel] = useState<CCEvent|null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [filter, setFilter] = useState("all");
   const [calMonth, setCalMonth] = useState(new Date());
   const [ne, setNe] = useState({title:"",description:"",date:"",time:"",location:"",materials:[{item:"",qty:""}] as EventMaterial[]});
@@ -1674,7 +1675,7 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
         </div>
       </Md>
       {/* Detail modal */}
-      <Md open={!!sel} onClose={()=>setSel(null)} title="Event Detail">
+      <Md open={!!sel} onClose={()=>{ setSel(null); setConfirmDelete(false); }} title="Event Detail">
         {sel && (
           <div className="flex flex-col gap-4">
             <div>
@@ -1709,9 +1710,19 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
                 {["planning","upcoming","completed","cancelled"].map(s=><button key={s} onClick={()=>updateStatus(sel.id,s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${sel.status===s?"bg-stone-800 text-white":"bg-stone-100 text-stone-600 hover:bg-stone-200"}`}>{s.charAt(0).toUpperCase()+s.slice(1)}</button>)}
               </div>
             </div>
-            {profile.role==="admin" && (
+            {(profile.role==="admin" || profile.role==="director") && (
               <div className="pt-2 border-t border-stone-100 flex justify-end">
-                <Btn variant="danger" size="sm" onClick={()=>{ if(window.confirm("Delete this event?")) deleteEvent(sel.id); }}><Trash2 size={12}/>Delete Event</Btn>
+                {confirmDelete ? (
+                  <div className="flex items-center gap-3 w-full justify-between">
+                    <p className="text-sm text-stone-600">Delete this event?</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => setConfirmDelete(false)} className="text-xs px-3 py-1.5 rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-50 transition-all">Cancel</button>
+                      <Btn variant="danger" size="sm" onClick={() => { deleteEvent(sel.id); setConfirmDelete(false); }}><Trash2 size={12}/>Yes, delete</Btn>
+                    </div>
+                  </div>
+                ) : (
+                  <Btn variant="danger" size="sm" onClick={() => setConfirmDelete(true)}><Trash2 size={12}/>Delete Event</Btn>
+                )}
               </div>
             )}
           </div>
