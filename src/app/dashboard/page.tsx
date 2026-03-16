@@ -5979,11 +5979,20 @@ function DirectorDash({ profile, events, ugcSubmissions, ugcCreators, ugcBriefs,
   const first = profile.full_name?.split(" ")[0] || "Caroline";
   const currentWeek = getMondayOfWeek(new Date());
 
-  // This week at a glance
+  // This week at a glance — fall back to most recent week if this week has no submissions yet
   const thisWeekSubs = ugcSubmissions.filter(s => s.week_date === currentWeek);
-  const totalViews = thisWeekSubs.reduce((s, x) => s + x.total_views, 0);
-  const submittedCount = new Set(thisWeekSubs.map(s => s.creator_id)).size;
-  const topSub = [...thisWeekSubs].sort((a, b) => b.total_views - a.total_views)[0];
+  const recentSubs = thisWeekSubs.length > 0
+    ? thisWeekSubs
+    : (() => {
+        const lastWeek = [...new Set(ugcSubmissions.map(s => s.week_date))].sort().reverse()[0];
+        return lastWeek ? ugcSubmissions.filter(s => s.week_date === lastWeek) : [];
+      })();
+  const recentWeekDate = recentSubs[0]?.week_date ?? currentWeek;
+  const isCurrentWeek = recentWeekDate === currentWeek;
+
+  const totalViews = recentSubs.reduce((s, x) => s + x.total_views, 0);
+  const submittedCount = new Set(recentSubs.map(s => s.creator_id)).size;
+  const topSub = [...recentSubs].sort((a, b) => b.total_views - a.total_views)[0];
   const topCreatorName = topSub ? ugcCreators.find(c => c.id === topSub.creator_id)?.full_name || "—" : "—";
 
   // Hook of the week
@@ -6022,7 +6031,10 @@ function DirectorDash({ profile, events, ugcSubmissions, ugcCreators, ugcBriefs,
 
       {/* This week at a glance */}
       <div className="bg-white border border-stone-200/60 rounded-xl p-5">
-        <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-4">This Week at a Glance</p>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">This Week at a Glance</p>
+          {!isCurrentWeek && <p className="text-xs text-stone-400 italic">showing week of {recentWeekDate}</p>}
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-stone-50 rounded-xl p-3 text-center">
             <p className="text-xs text-stone-400 mb-1">Total UGC Views</p>
