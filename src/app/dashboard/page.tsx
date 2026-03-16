@@ -5742,7 +5742,7 @@ function UGCAnalyticsOverview({ submissions, setSubmissions, ugcCreators, pivotQ
   const recentWeekDate = recentWeek[0]?.week_date ?? currentWeek;
   const isCurrentWeek = recentWeekDate === currentWeek;
 
-  const avgViews = recentWeek.length > 0 ? Math.round(recentWeek.reduce((s, x) => s + x.total_views, 0) / recentWeek.length) : 0;
+  const totalViews = recentWeek.reduce((s, x) => s + x.total_views, 0);
   const topPerformer = [...recentWeek].sort((a, b) => b.total_views - a.total_views)[0];
   const topName = topPerformer ? ugcCreators.find(c => c.id === topPerformer.creator_id)?.full_name || "Unknown" : "—";
 
@@ -5804,7 +5804,7 @@ function UGCAnalyticsOverview({ submissions, setSubmissions, ugcCreators, pivotQ
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <SC label="This Week Submissions" value={thisWeekSubs.length} />
-        <SC label="Avg Views" value={fmtViews(avgViews)} sub={isCurrentWeek ? "this week" : `week of ${recentWeekDate}`} />
+        <SC label="Total Views" value={fmtViews(totalViews)} sub={isCurrentWeek ? "this week" : `week of ${recentWeekDate}`} />
         <SC label="Top Performer" value={topName} sub={isCurrentWeek ? "this week" : `week of ${recentWeekDate}`} />
         <SC label="Pending Pivots" value={pivotQueue.filter(q => q.status === "pending").length} />
       </div>
