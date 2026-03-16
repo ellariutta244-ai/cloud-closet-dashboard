@@ -1050,6 +1050,44 @@ function ResPg({ profile, resources, setResources, sb }: { profile:Profile; reso
   );
 }
 
+// ── Intern Hub (tabbed wrapper for admin) ─────────────────────────────────────
+function InternHubPage({ profile, interns, setInterns, techProjects, setTechProjects, designProjects, setDesignProjects, content, setContent, ugcHooks, setUGCHooks, savedHooks, setSavedHooks, settings, sb }: {
+  profile: Profile; interns: Profile[]; setInterns: (i:Profile[])=>void;
+  techProjects: TechProject[]; setTechProjects: (p:TechProject[])=>void;
+  designProjects: DesignProject[]; setDesignProjects: (p:DesignProject[])=>void;
+  content: ContentVideo[]; setContent: (c:ContentVideo[])=>void;
+  ugcHooks: UGCHook[]; setUGCHooks: (h:UGCHook[])=>void;
+  savedHooks: SavedHook[]; setSavedHooks: (h:SavedHook[])=>void;
+  settings: AppSettings; sb: any;
+}) {
+  const [tab, setTab] = useState("roster");
+  const TABS = [
+    { id: "roster",  label: "Roster",           icon: <Users size={14}/> },
+    { id: "tech",    label: "Tech Projects",     icon: <Code2 size={14}/> },
+    { id: "design",  label: "Design Projects",   icon: <Palette size={14}/> },
+    { id: "content", label: "Content",           icon: <Video size={14}/> },
+  ];
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <h1 className="text-xl font-bold text-stone-800">Intern Management</h1>
+        <p className="text-sm text-stone-400 mt-0.5">Roster, projects, and content by team</p>
+      </div>
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit flex-wrap">
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${tab===t.id?"bg-white text-stone-800 shadow-sm":"text-stone-500 hover:text-stone-700"}`}>
+            {t.icon}{t.label}
+          </button>
+        ))}
+      </div>
+      {tab==="roster"  && <IntMgmt interns={interns} setInterns={setInterns} sb={sb}/>}
+      {tab==="tech"    && <TechProjectsPage profile={profile} interns={interns} projects={techProjects} setProjects={setTechProjects} sb={sb}/>}
+      {tab==="design"  && <DesignProjectsPage profile={profile} interns={interns} projects={designProjects} setProjects={setDesignProjects} sb={sb}/>}
+      {tab==="content" && <ContentPage profile={profile} interns={interns} content={content} setContent={setContent} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={sb}/>}
+    </div>
+  );
+}
+
 // ── Intern Management ──────────────────────────────────────────────────────────
 function IntMgmt({ interns, setInterns, sb }: { interns:Profile[]; setInterns:(i:Profile[])=>void; sb:any }) {
   const [modal,setModal]=useState(false);
@@ -8273,8 +8311,6 @@ export default function DashboardPage() {
         { id: "questions",           icon: <MessageCircle size={16}/>,label: "Questions", badge: openQCount || null },
         { id: "reports_analytics",   icon: <FileText size={16}/>,     label: "Reports & Analytics" },
         { id: "resources",           icon: <FolderOpen size={16}/>,   label: "Resources" },
-        { id: "tech",                icon: <Code2 size={16}/>,        label: "Tech Projects" },
-        { id: "content",             icon: <Video size={16}/>,        label: "Content" },
         { id: "interns",             icon: <Users size={16}/>,        label: "Intern Mgmt" },
       ],
     },
@@ -8403,7 +8439,7 @@ export default function DashboardPage() {
       case "questions": return <QPg {...common} questions={questions} setQuestions={setQuestions}/>;
       case "reports":   return <RPg {...common} reports={reports} setReports={setReports} settings={settings}/>;
       case "resources": return <ResPg profile={p} resources={resources} setResources={setResources} sb={supabase}/>;
-      case "interns":   return isAdmin ? <IntMgmt interns={interns} setInterns={setInterns} sb={supabase}/> : null;
+      case "interns":   return isAdmin ? <InternHubPage profile={p} interns={interns} setInterns={setInterns} techProjects={techProjects} setTechProjects={setTechProjects} designProjects={designProjects} setDesignProjects={setDesignProjects} content={content} setContent={setContent} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
       case "analytics": return isAdmin ? <AnPg interns={interns} tasks={tasks} outreach={outreach} content={content} requests={requests} questions={questions} techProjects={techProjects}/> : null;
       case "notifications": return isAdmin ? <NotificationPg interns={interns} ugcCreators={ugcCreators}/> : null;
       case "settings":  return isAdmin ? <SettingsPg settings={settings} setSettings={setSettings} sb={supabase}/> : null;
