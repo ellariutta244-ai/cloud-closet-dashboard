@@ -1581,6 +1581,8 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
     }).select().single();
     if(error){console.error(error);return;}
     setEvents([data,...events]);setShowC(false);setDateTbd(false);setEventFile(null);setNe(emptyForm);
+    const dateStr = data.date ? ` on ${data.date}` : "";
+    fetch("/api/send-notification",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"director",title:"New Event Added 📅",body:`${ne.title}${dateStr} has been added to the calendar.`})}).catch(()=>{});
   }
   async function saveEdit() {
     if (!editEv?.id) return;
@@ -1600,6 +1602,11 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
     await sb.from("events").update({status}).eq("id",id);
     setEvents(events.map(e=>e.id===id?{...e,status}:e));
     if(sel?.id===id) setSel({...sel,status});
+    if (status === "upcoming" || status === "completed") {
+      const ev = events.find(e => e.id === id);
+      const label = status === "upcoming" ? "is coming up" : "has been marked completed";
+      fetch("/api/send-notification",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"director",title:`Event Update`,body:`${ev?.title ?? "An event"} ${label}.`})}).catch(()=>{});
+    }
   }
   async function toggleMaterial(eventId:string,idx:number,fulfilled:boolean) {
     const ev=events.find(e=>e.id===eventId);
