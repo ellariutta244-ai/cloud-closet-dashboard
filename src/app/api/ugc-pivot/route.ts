@@ -143,41 +143,68 @@ export async function POST(req: NextRequest) {
       total_account_views, videos_posted,
       hook_text, format_type, video_length_seconds, niche,
       trending_sound, has_cta,
+      best_video_views, worst_video_views,
       avg_watch_time_seconds, watch_completion_rate, profile_visits,
       traffic_fyp_pct, traffic_following_pct, traffic_search_pct,
+      traffic_profile_pct, traffic_sound_pct,
+      most_active_time,
+      top_search_query_1, top_search_query_2, top_search_query_3,
       comment_sentiment, best_video_link, benchmark_tier, week_date,
     } = analytics;
 
+    const fmt = (n: any) => n != null ? Number(n).toLocaleString() : 'not submitted';
+    const pct = (n: any) => n != null && n !== 0 ? `${n}%` : 'not submitted';
+    const sec = (n: any) => n != null ? `${n}s` : 'not submitted';
+    const searchQueries = [top_search_query_1, top_search_query_2, top_search_query_3].filter(Boolean);
+
     const dataPrompt = `A UGC creator has submitted their weekly analytics. Generate their personalized pivot using the rules in your system instructions.
+
+FIELD DEFINITIONS — read before analysing the data:
+- total_views: SUM of views across ALL videos posted this week. Not one video's views.
+- best_video_views: views on their single highest-performing video only (one video).
+- worst_video_views: views on their single lowest-performing video only (one video).
+- avg_watch_time_seconds + watch_completion_rate: retention metrics for the best video only, not a weekly average.
+- videos_posted: how many videos they uploaded this week total.
+- total_account_views: TikTok account-level view count for the week (may differ slightly from total_views).
+- traffic_fyp_pct: % of views from TikTok's For You Page algorithm.
+- traffic_search_pct: % of views from TikTok Search — high % means content is keyword-discoverable.
+- top_search_queries: keywords TikTok already ranks their content for — build on these.
+- Do NOT invent numbers for fields marked "not submitted".
 
 Creator: ${creatorName || 'Sample Creator'} (@${tiktokHandle || 'unknown'})
 Week: ${week_date || 'this week'}
-Performance Tier: ${benchmark_tier || 'unknown'}
+Performance Tier: ${benchmark_tier || 'not submitted'}
 
-VIDEO METADATA:
-- Hook: "${hook_text || 'not provided'}"
-- Format: ${format_type || 'unknown'}
-- Video Length: ${video_length_seconds ? `${video_length_seconds}s` : 'unknown'}
-- Niche/Topic: ${niche || 'not specified'}
-- Trending Sound: ${trending_sound ? 'Yes' : 'No'}
-- CTA Included: ${has_cta ? 'Yes' : 'No'}
+WEEKLY TOTALS — all videos combined this week:
+- total_views = ${fmt(total_views)}  ← sum of every video's views this week
+- videos_posted = ${videos_posted ?? 'not submitted'}  ← number of videos uploaded
+- total_account_views = ${fmt(total_account_views)}  ← TikTok account-level view count
+- likes = ${fmt(likes)}  comments = ${fmt(comments)}  shares = ${fmt(shares)}  saves = ${fmt(saves)}
+- profile_visits = ${fmt(profile_visits)}
+- followers_gained = ${fmt(followers_gained)}  followers_lost = ${fmt(followers_lost)}  net = ${fmt((followers_gained ?? 0) - (followers_lost ?? 0))}
+- comment_sentiment = ${comment_sentiment ?? 'not submitted'}
 
-VIEW DATA:
-- Total Views: ${total_views?.toLocaleString() || 0}
-- Avg Watch Time: ${avg_watch_time_seconds ? `${avg_watch_time_seconds}s` : 'unknown'}
-- Watch Completion Rate: ${watch_completion_rate ? `${watch_completion_rate}%` : 'unknown'}
-- Profile Visits: ${profile_visits || 0}
-- Traffic: FYP ${traffic_fyp_pct || 0}% / Following ${traffic_following_pct || 0}% / Search ${traffic_search_pct || 0}%
+BEST PERFORMING VIDEO — single video data only, not weekly averages:
+- best_video_views = ${fmt(best_video_views)}  ← views on their #1 video
+- worst_video_views = ${fmt(worst_video_views)}  ← views on their lowest video
+- hook_text = ${hook_text ? `"${hook_text}"` : 'not submitted'}  ← opening line of best video
+- format_type = ${format_type ?? 'not submitted'}  ← video style (talking_head, voiceover, outfit_montage, pov, trending_audio, tutorial)
+- video_length_seconds = ${sec(video_length_seconds)}  ← length of best video
+- avg_watch_time_seconds = ${sec(avg_watch_time_seconds)}  ← avg time viewers watched best video
+- watch_completion_rate = ${pct(watch_completion_rate)}  ← % who watched best video to the end
+- niche = ${niche ?? 'not submitted'}  ← topic/category of best video
+- trending_sound = ${trending_sound ? 'yes' : 'no'}  ← used trending audio
+- has_cta = ${has_cta ? 'yes' : 'no'}  ← included a call to action
+- best_video_link = ${best_video_link ?? 'not submitted'}
 
-ENGAGEMENT:
-- Likes: ${likes || 0} | Comments: ${comments || 0} | Shares: ${shares || 0} | Saves: ${saves || 0}
-- Comment Sentiment: ${comment_sentiment || 'neutral'}
-
-ACCOUNT HEALTH:
-- Followers Gained: ${followers_gained || 0} | Lost: ${followers_lost || 0} | Net: ${net_follower_change || 0}
-- Total Account Views This Week: ${total_account_views || 0}
-- Videos Posted This Week: ${videos_posted || 0}
-- Best Video: ${best_video_link || 'not provided'}`;
+TRAFFIC SOURCES — where viewers found their videos:
+- For You Page (FYP) = ${pct(traffic_fyp_pct)}  ← pushed by TikTok algorithm
+- Search = ${pct(traffic_search_pct)}  ← found via keyword search
+- Following tab = ${pct(traffic_following_pct)}  ← existing followers
+- Profile = ${pct(traffic_profile_pct)}  ← visited profile directly
+- Sound/Audio = ${pct(traffic_sound_pct)}  ← discovered via audio page
+${most_active_time ? `- Most active viewer time = ${most_active_time}` : ''}
+${searchQueries.length ? `- Top search queries = ${searchQueries.map((q: string) => `"${q}"`).join(', ')}  ← TikTok already ranks their content for these` : ''}`;
 
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
