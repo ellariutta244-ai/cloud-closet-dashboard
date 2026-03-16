@@ -1700,7 +1700,16 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
       date: dbDate,
     };
     await sb.from("events").update(fields).eq("id", editEv.id);
-    const updated: CCEvent = {...editEv, ...fields, date: dbDate ?? undefined, leader_id: editEv.leader_id || undefined};
+    const updated: CCEvent = {
+      ...editEv,
+      title: fields.title,
+      description: fields.description,
+      time: fields.time,
+      location: fields.location,
+      leader_id: fields.leader_id ?? undefined,
+      team_members: fields.team_members,
+      date: dbDate ?? undefined,
+    };
     setEvents(events.map(e => e.id === editEv.id ? updated : e));
     if (sel?.id === editEv.id) setSel(updated);
     setEditEv(null);
