@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
     const dataPrompt = `A UGC creator has submitted their weekly analytics. Generate their personalized pivot using the rules in your system instructions.
 
 FIELD DEFINITIONS — read before analysing the data:
-- total_views: SUM of views across ALL videos posted this week. Not one video's views.
+- total_views: THE ONLY VIEWS METRIC — SUM of views across ALL videos posted this week. Not one video's views. There is no separate account-level view field.
 - best_video_views: views on their single highest-performing video only (one video).
 - worst_video_views: views on their single lowest-performing video only (one video).
 - avg_watch_time_seconds + watch_completion_rate: retention metrics for the best video only, not a weekly average.
@@ -177,9 +177,8 @@ Week: ${week_date || 'this week'}
 Performance Tier: ${benchmark_tier || 'not submitted'}
 
 WEEKLY TOTALS — all videos combined this week:
-- total_views = ${fmt(total_views)}  ← sum of every video's views this week
+- total_views = ${fmt(total_views)}  ← THE ONLY VIEWS METRIC — sum of every video's views this week
 - videos_posted = ${videos_posted ?? 'not submitted'}  ← number of videos uploaded
-- total_account_views = ${fmt(total_account_views)}  ← TikTok account-level view count
 - likes = ${fmt(likes)}  comments = ${fmt(comments)}  shares = ${fmt(shares)}  saves = ${fmt(saves)}
 - profile_visits = ${fmt(profile_visits)}
 - followers_gained = ${fmt(followers_gained)}  followers_lost = ${fmt(followers_lost)}  net = ${fmt((followers_gained ?? 0) - (followers_lost ?? 0))}

@@ -3312,7 +3312,7 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
     likes: "", comments: "", shares: "", saves: "", comment_sentiment: "neutral",
     // Account health
     followers_gained: "", followers_lost: "",
-    total_account_views: "", videos_posted: "",
+    videos_posted: "",
     best_video_link: "",
   };
   const [form, setForm] = useState(emptyForm);
@@ -3326,9 +3326,11 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
     + (parseFloat(form.traffic_profile_pct) || 0) + (parseFloat(form.traffic_following_pct) || 0)
     + (parseFloat(form.traffic_sound_pct) || 0);
   const trafficValid = trafficSum === 0 || Math.abs(trafficSum - 100) < 0.1;
+  const requiredFilled = form.total_views !== "" && form.videos_posted !== "" && form.likes !== "" && form.comments !== "" && form.shares !== "";
 
   async function submit() {
     if (!form.week_date || (isAdmin && !form.creator_id)) return;
+    if (!requiredFilled) { setErrorMsg("Total Views, Videos Posted, Likes, Comments, and Shares are required."); setStatus("error"); return; }
     if (!trafficValid) { setErrorMsg("Traffic source percentages must add up to 100%."); setStatus("error"); return; }
     setLoading(true); setStatus("generating"); setErrorMsg("");
 
@@ -3370,7 +3372,6 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
       followers_gained: gained,
       followers_lost: lost,
       net_follower_change: gained - lost,
-      total_account_views: parseInt(form.total_account_views) || 0,
       videos_posted: parseInt(form.videos_posted) || 0,
       best_video_link: form.best_video_link || null,
       benchmark_tier: tier,
@@ -3424,12 +3425,15 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
     );
   }
 
+  const requiredFields = ["total_views", "videos_posted", "likes", "comments", "shares"];
   const ni = (field: string, label: string, decimals = false) => (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">{label}</label>
+      <label className="text-xs font-medium text-stone-500 uppercase tracking-wide">
+        {label}{requiredFields.includes(field) && <span className="text-red-400 ml-0.5">*</span>}
+      </label>
       <input type="number" min="0" step={decimals ? "0.1" : "1"} value={(form as any)[field]}
         onChange={e => setForm({ ...form, [field]: e.target.value })}
-        className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-base text-stone-800 focus:outline-none focus:border-stone-400" />
+        className={`px-3 py-2 bg-stone-50 border rounded-lg text-base text-stone-800 focus:outline-none focus:border-stone-400 ${requiredFields.includes(field) && (form as any)[field] === "" ? "border-red-200" : "border-stone-200"}`} />
     </div>
   );
   const tog = (field: "trending_sound" | "has_cta", label: string) => (
@@ -3543,7 +3547,6 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
           <div className="grid grid-cols-2 gap-3">
             {ni("followers_gained", "Followers Gained")}
             {ni("followers_lost", "Followers Lost")}
-            {ni("total_account_views", "Total Account Views (week)")}
             {ni("videos_posted", "Videos Posted (week)")}
           </div>
           {(form.followers_gained || form.followers_lost) && (
@@ -3564,8 +3567,9 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
           </div>
         )}
 
-        <div className="flex justify-end pt-2 border-t border-stone-100">
-          <Btn onClick={submit} disabled={loading || !form.week_date || (isAdmin && !form.creator_id) || !trafficValid} className="w-full sm:w-auto justify-center">
+        <div className="flex items-center justify-between pt-2 border-t border-stone-100 gap-3 flex-wrap">
+          <p className="text-xs text-stone-400"><span className="text-red-400">*</span> Required fields</p>
+          <Btn onClick={submit} disabled={loading || !form.week_date || (isAdmin && !form.creator_id) || !trafficValid || !requiredFilled} className="w-full sm:w-auto justify-center">
             {loading ? <><Loader2 size={14} className="animate-spin"/>Generating pivot...</> : <><Send size={14}/>Submit Analytics</>}
           </Btn>
         </div>

@@ -25,9 +25,8 @@ function buildPrompt(creatorName: string, phase: string, submissions: any[]): st
         lines.push(`── WEEK OF ${s.week_date}${i === 0 ? ' [MOST RECENT]' : ''} ──`);
 
         lines.push(`WEEKLY TOTALS — these numbers cover ALL videos posted this week combined:`);
-        lines.push(`  total_views = ${fmt(s.total_views)}  ← sum of every video's views this week`);
+        lines.push(`  total_views = ${fmt(s.total_views)}  ← THE ONLY VIEWS METRIC — sum of every video's views this week. This is not one video's views.`);
         lines.push(`  videos_posted = ${s.videos_posted ?? 'not submitted'}  ← how many videos they uploaded`);
-        lines.push(`  total_account_views = ${fmt(s.total_account_views)}  ← TikTok account-level view count for the week`);
         lines.push(`  likes = ${fmt(s.likes)}  comments = ${fmt(s.comments)}  shares = ${fmt(s.shares)}  saves = ${fmt(s.saves)}`);
         lines.push(`  profile_visits = ${fmt(s.profile_visits)}`);
         lines.push(`  followers_gained = ${fmt(s.followers_gained)}  followers_lost = ${fmt(s.followers_lost)}  net = ${fmt((s.followers_gained ?? 0) - (s.followers_lost ?? 0))}`);
@@ -79,7 +78,6 @@ FIELD GLOSSARY — memorise these before reading the data:
 - best_video_views: views on their single highest-performing video only. This is one video, not an average.
 - worst_video_views: views on their single lowest-performing video only.
 - avg_watch_time_seconds + watch_completion_rate: retention metrics for the best video only, not a weekly average.
-- total_account_views: TikTok's account-level view metric, may differ slightly from total_views.
 - videos_posted: number of videos uploaded that week — use this to understand their volume output.
 - traffic_fyp_pct: percentage of views that came from TikTok's For You Page algorithm.
 - traffic_search_pct: percentage from TikTok Search — high % means content is keyword-discoverable.
