@@ -7891,7 +7891,7 @@ export default function DashboardPage() {
         { data: stD },
       ] = await Promise.all([
         supabase.from("profiles").select("*").eq("role", "intern").order("full_name"),
-        supabase.from("tasks").select("*, task_comments(*)").order("created_at", { ascending: false }),
+        supabase.from("tasks").select("*, task_comments(*)").order("created_at", { ascending: false }).then(r => r.error ? supabase.from("tasks").select("*").order("created_at", { ascending: false }) : r),
         supabase.from("outreach_logs").select("*").order("created_at", { ascending: false }),
         supabase.from("questions").select("*, question_replies(*)").order("created_at", { ascending: false }),
         supabase.from("weekly_reports").select("*").order("created_at", { ascending: false }),
