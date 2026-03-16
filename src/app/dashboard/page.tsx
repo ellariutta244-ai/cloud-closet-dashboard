@@ -3286,6 +3286,37 @@ function UGCDashboard({ profile, ugcCreators, setUGCCreators, submissions, pivot
   );
 }
 
+// ── UGC Meeting Request Page ───────────────────────────────────────────────────
+function UGCMeetingPage({ profile }: { profile: UGCCreatorProfile }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-xl font-bold text-stone-800">Book a Meeting</h1>
+        <p className="text-sm text-stone-400 mt-0.5">Schedule a 1-on-1 with Ella to talk strategy, content, or anything on your mind.</p>
+      </div>
+      <div className="bg-white border border-stone-200/60 rounded-xl p-6 flex flex-col items-center gap-5 text-center">
+        <div className="w-14 h-14 bg-stone-100 rounded-full flex items-center justify-center">
+          <CalendarClock size={26} className="text-stone-600" />
+        </div>
+        <div>
+          <p className="text-base font-semibold text-stone-800">30-Minute Meeting with Ella</p>
+          <p className="text-sm text-stone-400 mt-1">Pick a time that works for you. Use this for content check-ins, pivot questions, or anything you want to talk through.</p>
+        </div>
+        <a
+          href="https://calendly.com/ellariutta244/30min"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-stone-800 text-white text-sm font-medium rounded-xl hover:bg-stone-700 transition-colors"
+        >
+          <CalendarClock size={15} />
+          Book a Time
+          <ExternalLink size={13} className="opacity-60" />
+        </a>
+      </div>
+    </div>
+  );
+}
+
 // ── UGC Submit Page ────────────────────────────────────────────────────────────
 function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }: {
   profile: UGCCreatorProfile; submissions: UGCSubmission[];
@@ -7828,6 +7859,7 @@ export default function DashboardPage() {
     { id: "ugc_tutorials",      icon: <BookOpen size={16}/>,        label: "Tutorial Library" },
     { id: "ugc_leaderboard",    icon: <Trophy size={16}/>,          label: "Leaderboard" },
     { id: "ugc_qa",             icon: <MessageCircle size={16}/>,   label: "Community Q&A",   badge: newQACount || null },
+    { id: "ugc_meeting",        icon: <CalendarClock size={16}/>,   label: "Book a Meeting" },
     { id: "ugc_history",        icon: <FileText size={16}/>,        label: "Submission History" },
     { id: "ugc_resources",      icon: <FolderOpen size={16}/>,      label: "Resources" },
   ] : [
@@ -8005,6 +8037,7 @@ export default function DashboardPage() {
       case "ugc_hooks":         return (isFullAdmin || isUGC) ? <UGCHooksPage profile={p as UGCCreatorProfile} hooks={ugcHooks} setHooks={setUGCHooks} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_leaderboard":   return (isFullAdmin || isUGC) ? <UGCLeaderboardPage submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
       case "ugc_qa":            return (isFullAdmin || isUGC) ? <UGCQAPage profile={p as UGCCreatorProfile} questions={ugcQuestions} setQuestions={setUGCQuestions} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_meeting":       return isUGC ? <UGCMeetingPage profile={p as UGCCreatorProfile}/> : null;
       case "ugc_announcements": return isFullAdmin ? <UGCAnnouncementsPage profile={p as UGCCreatorProfile} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
       case "ugc_pivots_hub":            return isFullAdmin ? <UGCPivotsHubPage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_briefs_announcements":  return isFullAdmin ? <UGCBriefsAnnouncementsPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} ugcCreators={ugcCreators} sb={supabase}/> : null;
