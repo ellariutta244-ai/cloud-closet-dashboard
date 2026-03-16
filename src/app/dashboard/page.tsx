@@ -421,6 +421,31 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
   const SL: Record<string,string> = { not_started:"Not Started", in_progress:"In Progress", submitted:"Submitted", completed:"Completed" };
   const CATS = [{value:"brand_outreach",label:"Brand Outreach"},{value:"creator_outreach",label:"Creator Outreach"},{value:"campus_partnerships",label:"Campus Partnerships"},{value:"content_creation",label:"Content Creation"},{value:"research",label:"Research"},{value:"other",label:"Other"}];
   const iName=(id?:string)=>interns.find(i=>i.id===id)?.full_name||"—";
+  const [collapsed, setCollapsed] = useState<Record<string,boolean>>({});
+  const toggleCollapse = (id: string) => setCollapsed(prev => ({...prev, [id]: !prev[id]}));
+
+  // Group tasks by intern for admin view
+  const grouped = useMemo(() => {
+    if (!isAdmin) return null;
+    const map = new Map<string, { intern: Profile|undefined; tasks: Task[] }>();
+    // Unassigned bucket
+    map.set("__unassigned__", { intern: undefined, tasks: [] });
+    for (const intern of interns.filter(i => i.active !== false)) {
+      map.set(intern.id, { intern, tasks: [] });
+    }
+    for (const t of filtered) {
+      const key = t.assigned_to && map.has(t.assigned_to) ? t.assigned_to : "__unassigned__";
+      map.get(key)!.tasks.push(t);
+    }
+    // Remove empty buckets
+    return Array.from(map.entries())
+      .filter(([, v]) => v.tasks.length > 0)
+      .sort(([, a], [, b]) => {
+        if (!a.intern) return 1;
+        if (!b.intern) return -1;
+        return (a.intern.full_name ?? "").localeCompare(b.intern.full_name ?? "");
+      });
+  }, [isAdmin, interns, filtered]);
 
   async function create() {
     if (!form.title.trim()) return;
@@ -455,17 +480,47 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
           </button>
         ))}
       </div>
-      {filtered.length===0 ? <ES icon={<CheckSquare size={24}/>} message="No tasks here"/> : (
+      {filtered.length===0 ? <ES icon={<CheckSquare size={24}/>} message="No tasks here"/> : isAdmin && grouped ? (
+        <div className="flex flex-col gap-3">
+          {grouped.map(([key, { intern, tasks: internTasks }]) => {
+            const open = !collapsed[key];
+            const done = internTasks.filter(t => t.status === "completed").length;
+            return (
+              <div key={key} className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
+                <button onClick={() => toggleCollapse(key)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors">
+                  <Av name={intern?.full_name ?? "?"} size={28}/>
+                  <div className="flex-1 text-left">
+                    <p className="text-sm font-semibold text-stone-800">{intern?.full_name ?? "Unassigned"}</p>
+                    <p className="text-xs text-stone-400">{internTasks.length} task{internTasks.length!==1?"s":""} · {done} completed</p>
+                  </div>
+                  <ChevronDown size={16} className={`text-stone-400 transition-transform ${open?"rotate-180":""}`}/>
+                </button>
+                {open && (
+                  <div className="border-t border-stone-100 flex flex-col divide-y divide-stone-100">
+                    {internTasks.map(t => (
+                      <div key={t.id} onClick={()=>setDetail(t)} className="px-4 py-3 cursor-pointer hover:bg-stone-50 transition-colors flex items-center gap-3">
+                        <SD status={t.status}/>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-stone-800 truncate">{t.title}</p>
+                          {t.due_date&&<p className="text-xs text-stone-400 mt-0.5">Due {fmt(t.due_date)}</p>}
+                        </div>
+                        <PB priority={t.priority}/><ChevronRight size={14} className="text-stone-300"/>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
         <div className="flex flex-col gap-2">
           {filtered.map(t=>(
             <div key={t.id} onClick={()=>setDetail(t)} className="bg-white border border-stone-200/60 rounded-xl p-4 cursor-pointer hover:border-stone-300 transition-all flex items-center gap-3">
               <SD status={t.status}/>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-stone-800 truncate">{t.title}</p>
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  {isAdmin&&<span className="text-xs text-stone-400">{iName(t.assigned_to)}</span>}
-                  {t.due_date&&<span className="text-xs text-stone-400">Due {fmt(t.due_date)}</span>}
-                </div>
+                {t.due_date&&<span className="text-xs text-stone-400">Due {fmt(t.due_date)}</span>}
               </div>
               <PB priority={t.priority}/><ChevronRight size={14} className="text-stone-300"/>
             </div>
