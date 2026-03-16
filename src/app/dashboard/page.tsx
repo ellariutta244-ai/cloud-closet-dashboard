@@ -3456,7 +3456,30 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
       {status === "error" && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-600">{errorMsg || "Something went wrong."}</div>}
 
       <div className="bg-white border border-stone-200/60 rounded-xl p-5 flex flex-col gap-5">
-        <TI label="Week Date (Monday)" value={form.week_date} onChange={v => setForm({ ...form, week_date: v })} type="date" />
+        <Sel
+          label="Start of Week (Mon–Sun)"
+          value={form.week_date}
+          onChange={v => setForm({ ...form, week_date: v })}
+          options={(() => {
+            const mondays: { value: string; label: string }[] = [];
+            const today = new Date();
+            // Start from the most recent Monday, go back 8 weeks
+            const d = new Date(today);
+            const day = d.getDay();
+            d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+            for (let i = 0; i < 9; i++) {
+              const iso = d.toISOString().split("T")[0];
+              const label = i === 0
+                ? `${iso} (this week)`
+                : i === 1
+                ? `${iso} (last week)`
+                : iso;
+              mondays.push({ value: iso, label });
+              d.setDate(d.getDate() - 7);
+            }
+            return mondays;
+          })()}
+        />
         {isAdmin && <Sel label="Creator" value={form.creator_id} onChange={v => setForm({ ...form, creator_id: v })}
           options={[{ value: "", label: "— Select creator —" }, ...ugcCreators.filter(c => c.ugc_status !== "archived").map(c => ({ value: c.id, label: `${c.full_name}${c.tiktok_handle ? ` (@${c.tiktok_handle})` : ""}` }))]} />}
 
