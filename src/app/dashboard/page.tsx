@@ -3463,16 +3463,20 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
           options={(() => {
             const mondays: { value: string; label: string }[] = [];
             const today = new Date();
-            // Start from the most recent Monday, go back 8 weeks
+            // Find this week's Monday
             const d = new Date(today);
             const day = d.getDay();
             d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-            for (let i = 0; i < 9; i++) {
+            // Start 4 weeks in the future
+            d.setDate(d.getDate() + 4 * 7);
+            for (let i = -4; i < 9; i++) {
               const iso = d.toISOString().split("T")[0];
-              const label = i === 0
-                ? `${iso} (this week)`
-                : i === 1
-                ? `${iso} (last week)`
+              const label = i === -4 ? `${iso} (4 weeks ahead)`
+                : i === -3 ? `${iso} (3 weeks ahead)`
+                : i === -2 ? `${iso} (2 weeks ahead)`
+                : i === -1 ? `${iso} (next week)`
+                : i === 0  ? `${iso} (this week)`
+                : i === 1  ? `${iso} (last week)`
                 : iso;
               mondays.push({ value: iso, label });
               d.setDate(d.getDate() - 7);
