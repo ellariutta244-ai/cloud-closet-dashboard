@@ -19,7 +19,8 @@ import {
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Role = "admin" | "intern" | "ugc_creator" | "director" | "wisconsin_admin";
 type Profile = { id: string; full_name: string; email: string; role: Role; team?: string; active?: boolean };
-type Task = { id: string; title: string; description?: string; assigned_to?: string; category?: string; priority?: string; status: string; due_date?: string; created_at: string; completed_at?: string };
+type TaskComment = { id: string; task_id: string; author_id?: string; body: string; created_at: string };
+type Task = { id: string; title: string; description?: string; assigned_to?: string; category?: string; priority?: string; status: string; due_date?: string; created_at: string; completed_at?: string; task_comments?: TaskComment[] };
 type Outreach = { id: string; intern_id?: string; brand_or_creator: string; platform?: string; contact_name?: string; date_contacted?: string; status: string; notes?: string; created_at: string };
 type Reply = { id: string; question_id: string; author_id?: string; body: string; created_at: string };
 type Question = { id: string; author_id?: string; title: string; category?: string; description?: string; status: string; created_at: string; question_replies?: Reply[] };
@@ -467,6 +468,27 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
     setTasks(tasks.filter(t=>t.id!==id));if(detail?.id===id)setDetail(null);
   }
 
+  const [commentText, setCommentText] = useState("");
+  const [submittingComment, setSubmittingComment] = useState(false);
+  async function submitComment() {
+    if (!commentText.trim() || !detail) return;
+    setSubmittingComment(true);
+    const { data, error } = await sb.from("task_comments").insert({
+      task_id: detail.id, author_id: profile.id, body: commentText.trim(), created_at: new Date().toISOString()
+    }).select().single();
+    setSubmittingComment(false);
+    if (error) { console.error(error); return; }
+    const comment = data as TaskComment;
+    const updatedTask = { ...detail, task_comments: [...(detail.task_comments || []), comment] };
+    setDetail(updatedTask);
+    setTasks(tasks.map(t => t.id === detail.id ? updatedTask : t));
+    setCommentText("");
+    fetch("/api/send-notification", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "admin", title: "Task Question", body: `${profile.full_name} asked a question on "${detail.title}"` })
+    }).catch(() => {});
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -566,6 +588,35 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
                 {["not_started","in_progress","submitted","completed"].map(s=>(
                   <button key={s} onClick={()=>updateStatus(detail,s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${detail.status===s?"bg-stone-800 text-white":"bg-stone-100 text-stone-600 hover:bg-stone-200"}`}>{SL[s]}</button>
                 ))}
+              </div>
+            </div>
+            {/* Comments / Questions */}
+            <div className="border-t border-stone-100 pt-4">
+              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-3">Questions & Comments</p>
+              {(detail.task_comments||[]).length === 0
+                ? <p className="text-xs text-stone-400 italic mb-3">No questions yet</p>
+                : <div className="flex flex-col gap-2 mb-3">
+                    {[...(detail.task_comments||[])].sort((a,b)=>a.created_at.localeCompare(b.created_at)).map(c => {
+                      const authorName = interns.find(i=>i.id===c.author_id)?.full_name || (c.author_id === profile.id ? profile.full_name : "Unknown");
+                      const isMe = c.author_id === profile.id;
+                      return (
+                        <div key={c.id} className={`rounded-xl px-3 py-2 text-sm ${isMe ? "bg-stone-800 text-white ml-6" : "bg-stone-100 text-stone-700 mr-6"}`}>
+                          <p className={`text-[10px] font-semibold mb-0.5 ${isMe ? "text-stone-300" : "text-stone-500"}`}>{authorName}</p>
+                          <p className="leading-snug">{c.body}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+              }
+              <div className="flex gap-2">
+                <input
+                  value={commentText}
+                  onChange={e=>setCommentText(e.target.value)}
+                  onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();submitComment();} }}
+                  placeholder={isAdmin ? "Reply to this task…" : "Ask a question about this task…"}
+                  className="flex-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm text-stone-700 focus:outline-none focus:border-stone-400"
+                />
+                <Btn onClick={submitComment} disabled={!commentText.trim()||submittingComment}>Send</Btn>
               </div>
             </div>
             {isAdmin&&<div className="flex justify-end pt-2 border-t border-stone-100"><Btn variant="danger" onClick={()=>del(detail.id)}><Trash2 size={14}/>Delete</Btn></div>}
@@ -7831,7 +7882,7 @@ export default function DashboardPage() {
         { data: stD },
       ] = await Promise.all([
         supabase.from("profiles").select("*").eq("role", "intern").order("full_name"),
-        supabase.from("tasks").select("*").order("created_at", { ascending: false }),
+        supabase.from("tasks").select("*, task_comments(*)").order("created_at", { ascending: false }),
         supabase.from("outreach_logs").select("*").order("created_at", { ascending: false }),
         supabase.from("questions").select("*, question_replies(*)").order("created_at", { ascending: false }),
         supabase.from("weekly_reports").select("*").order("created_at", { ascending: false }),
