@@ -31,7 +31,7 @@ type RequestType = { id: string; name: string; description?: string; icon?: stri
 type Request = { id: string; intern_id?: string; type_id?: string; type_name?: string; message: string; status: string; replies: RequestReply[]; created_at: string };
 type RequestReply = { author: string; author_name: string; body: string; created_at: string };
 type EventMaterial = { item: string; qty: string; fulfilled?: boolean };
-type CCEvent = { id: string; title: string; description?: string; date?: string; time?: string; location?: string; status: string; intern_id?: string; team_members?: string[]; materials?: EventMaterial[]; created_at: string; file_url?: string };
+type CCEvent = { id: string; title: string; description?: string; date?: string; time?: string; location?: string; status: string; intern_id?: string; leader_id?: string; team_members?: string[]; materials?: EventMaterial[]; created_at: string; file_url?: string };
 type TechProject = { id: string; title: string; description?: string; status: string; priority?: string; owner_id?: string; contributors?: string[]; tech_stack?: string; github_url?: string; progress: number; created_at: string; updated_at?: string };
 type ContentVideo = { id: string; creator_id?: string; title: string; tiktok_url?: string; views?: number; likes?: number; comments?: number; date_posted?: string; status: string; created_at: string };
 type AppSettings = Record<string, string>;
@@ -1538,18 +1538,27 @@ function AdminRequestInbox({ requests, setRequests, requestTypes, setRequestType
 
 // ── Events Page ────────────────────────────────────────────────────────────────
 function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profile; interns:Profile[]; events:CCEvent[]; setEvents:(e:CCEvent[])=>void; sb:any }) {
+  const isAdmin = profile.role === "admin" || profile.role === "wisconsin_admin";
   const [showC, setShowC] = useState(false);
   const [sel, setSel] = useState<CCEvent|null>(null);
+  const [editEv, setEditEv] = useState<CCEvent|null>(null);
+  const [editDateTbd, setEditDateTbd] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [filter, setFilter] = useState("all");
   const [calMonth, setCalMonth] = useState(new Date());
-  const [ne, setNe] = useState({title:"",description:"",date:"",time:"",location:"",materials:[{item:"",qty:""}] as EventMaterial[]});
+  const emptyForm = {title:"",description:"",date:"",time:"",location:"",leader_id:"",team_members:[] as string[],materials:[{item:"",qty:""}] as EventMaterial[]};
+  const [ne, setNe] = useState(emptyForm);
   const [dateTbd, setDateTbd] = useState(false);
   const [eventFile, setEventFile] = useState<File|null>(null);
   const gn=(id?:string)=>interns.find(i=>i.id===id)?.full_name||"?";
   const fd=filter==="all"?events:events.filter(e=>e.status===filter);
   const sorted=[...fd].sort((a,b)=>new Date(a.date||"9999").getTime()-new Date(b.date||"9999").getTime());
   const SV: Record<string,BV>={planning:"warning",upcoming:"purple",completed:"success",cancelled:"danger"};
+  const allPeople = interns;
+
+  function toggleTeamMember(id: string, arr: string[], setArr: (v: string[]) => void) {
+    setArr(arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id]);
+  }
 
   async function create() {
     const mats=ne.materials.filter(m=>m.item.trim());
@@ -1559,10 +1568,28 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
       const { error: upErr } = await sb.storage.from("events").upload(path, eventFile, { upsert: false });
       if (!upErr) { const { data: ud } = sb.storage.from("events").getPublicUrl(path); file_url = ud.publicUrl; }
     }
-    const {data,error}=await sb.from("events").insert({...ne,date:dateTbd?null:(ne.date||null),materials:mats,intern_id:profile.id,team_members:[],status:"planning",file_url,created_at:new Date().toISOString()}).select().single();
+    const {data,error}=await sb.from("events").insert({
+      title:ne.title,description:ne.description,time:ne.time,location:ne.location,
+      leader_id:ne.leader_id||null,team_members:ne.team_members,
+      date:dateTbd?null:(ne.date||null),materials:mats,
+      intern_id:profile.id,status:"planning",file_url,created_at:new Date().toISOString()
+    }).select().single();
     if(error){console.error(error);return;}
-    setEvents([data,...events]);setShowC(false);setDateTbd(false);setEventFile(null);
-    setNe({title:"",description:"",date:"",time:"",location:"",materials:[{item:"",qty:""}]});
+    setEvents([data,...events]);setShowC(false);setDateTbd(false);setEventFile(null);setNe(emptyForm);
+  }
+  async function saveEdit() {
+    if (!editEv?.id) return;
+    const fields = {
+      title: editEv.title, description: editEv.description, time: editEv.time,
+      location: editEv.location, leader_id: editEv.leader_id||null,
+      team_members: editEv.team_members||[],
+      date: editDateTbd ? null : (editEv.date||null),
+    };
+    await sb.from("events").update(fields).eq("id", editEv.id);
+    const updated = {...editEv, ...fields};
+    setEvents(events.map(e => e.id === editEv.id ? updated : e));
+    if (sel?.id === editEv.id) setSel(updated);
+    setEditEv(null);
   }
   async function updateStatus(id:string,status:string) {
     await sb.from("events").update({status}).eq("id",id);
@@ -1592,7 +1619,23 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
     if(e.date){const d=new Date(e.date+"T12:00:00");if(d.getFullYear()===yr&&d.getMonth()===mo)acc[d.getDate()]=e;}
     return acc;
   },{});
-  const statusDot: Record<string,string>={planning:"#F59E0B",upcoming:"#8B5CF6",completed:"#10B981"};
+  const statusColor: Record<string,string>={planning:"#F59E0B",upcoming:"#8B5CF6",completed:"#10B981"};
+
+  // Shared people field (leader + additional interns)
+  const PeopleSelect = ({ label, selected, onToggle }: { label: string; selected: string[]; onToggle: (id: string) => void }) => (
+    <div>
+      <label className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">{label}</label>
+      <div className="flex flex-col gap-1 max-h-36 overflow-y-auto bg-stone-50 border border-stone-200 rounded-lg p-2">
+        {allPeople.map(p => (
+          <label key={p.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-stone-100 cursor-pointer">
+            <input type="checkbox" checked={selected.includes(p.id)} onChange={() => onToggle(p.id)} className="rounded accent-stone-800"/>
+            <span className="text-sm text-stone-700">{p.full_name}</span>
+            {p.team && <span className="text-xs text-stone-400">{p.team}</span>}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -1617,9 +1660,9 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
             const ev=evByDay[day];
             const isToday=day===today.getDate()&&mo===today.getMonth()&&yr===today.getFullYear();
             return (
-              <div key={day} onClick={()=>ev&&setSel(ev)} className={`relative flex items-center justify-center rounded-lg text-xs transition-all aspect-square ${isToday?"bg-stone-800 text-white font-bold":"text-stone-600 hover:bg-stone-50"}${ev?" cursor-pointer font-semibold":""}`}>
-                {day}
-                {ev && <span className="absolute bottom-0.5 w-1.5 h-1.5 rounded-full" style={{background:statusDot[ev.status]||"#8B5CF6"}}/>}
+              <div key={day} onClick={()=>ev&&setSel(ev)} className={`flex flex-col items-center rounded-lg text-xs transition-all py-1 min-h-[46px] ${isToday?"bg-stone-800 text-white font-bold":"text-stone-600 hover:bg-stone-50"}${ev?" cursor-pointer font-semibold":""}`}>
+                <span>{day}</span>
+                {ev && <span className="text-[8px] leading-tight px-0.5 mt-0.5 w-full text-center truncate" style={{color: isToday?"rgba(255,255,255,0.85)":statusColor[ev.status]||"#8B5CF6"}}>{ev.title}</span>}
               </div>
             );
           })}
@@ -1644,7 +1687,8 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
                     <div className="flex items-center gap-3 mt-2 flex-wrap">
                       {ev.location && <span className="text-xs text-stone-400 flex items-center gap-1"><MapPin size={10}/>{ev.location}</span>}
                       {ev.time && <span className="text-xs text-stone-400">{ev.time}</span>}
-                      <span className="text-xs text-stone-400">{gn(ev.intern_id)}</span>
+                      {ev.leader_id && <span className="text-xs text-stone-500 font-medium">Led by {gn(ev.leader_id)}</span>}
+                      {(ev.team_members||[]).length>0 && <span className="text-xs text-stone-400">+{(ev.team_members||[]).length} intern{(ev.team_members||[]).length!==1?"s":""}</span>}
                       {(ev.materials||[]).length>0 && <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex items-center gap-1"><ShoppingBag size={10}/>{(ev.materials||[]).filter(m=>m.fulfilled).length}/{(ev.materials||[]).length} materials</span>}
                     </div>
                   </div>
@@ -1656,7 +1700,7 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
         </div>
       )}
       {/* Create modal */}
-      <Md open={showC} onClose={()=>{setShowC(false);setDateTbd(false);}} title="Add Event">
+      <Md open={showC} onClose={()=>{setShowC(false);setDateTbd(false);setNe(emptyForm);}} title="Add Event">
         <div className="flex flex-col gap-3">
           <TI label="Title" value={ne.title} onChange={v=>setNe({...ne,title:v})} required/>
           <TA label="Description" value={ne.description} onChange={v=>setNe({...ne,description:v})}/>
@@ -1671,6 +1715,8 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
             <TI label="Time" value={ne.time} onChange={v=>setNe({...ne,time:v})} placeholder="e.g. 2:00 PM"/>
           </div>
           <TI label="Location" value={ne.location} onChange={v=>setNe({...ne,location:v})}/>
+          <PeopleSelect label="Event Leader" selected={ne.leader_id ? [ne.leader_id] : []} onToggle={id => setNe({...ne, leader_id: ne.leader_id === id ? "" : id})} />
+          <PeopleSelect label="Additional Interns" selected={ne.team_members} onToggle={id => toggleTeamMember(id, ne.team_members, tm => setNe({...ne, team_members: tm}))} />
           <div>
             <label className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-2">Materials Needed</label>
             {ne.materials.map((m,i)=>(
@@ -1686,9 +1732,32 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
             <p className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">Attach file <span className="text-stone-400 font-normal capitalize">(optional)</span></p>
             <FileDropZone file={eventFile} setFile={setEventFile}/>
           </div>
-          <div className="flex justify-end gap-2 pt-2"><Btn variant="secondary" onClick={()=>{setShowC(false);setEventFile(null);}}>Cancel</Btn><Btn onClick={create} disabled={!ne.title.trim()}>Create Event</Btn></div>
+          <div className="flex justify-end gap-2 pt-2"><Btn variant="secondary" onClick={()=>{setShowC(false);setEventFile(null);setNe(emptyForm);}}>Cancel</Btn><Btn onClick={create} disabled={!ne.title.trim()}>Create Event</Btn></div>
         </div>
       </Md>
+      {/* Edit modal */}
+      {editEv && (
+        <Md open={!!editEv} onClose={()=>setEditEv(null)} title="Edit Event">
+          <div className="flex flex-col gap-3">
+            <TI label="Title" value={editEv.title} onChange={v=>setEditEv({...editEv,title:v})} required/>
+            <TA label="Description" value={editEv.description||""} onChange={v=>setEditEv({...editEv,description:v})}/>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">Date</label>
+                <div className="flex items-center gap-3">
+                  <input type="date" value={editDateTbd?"":(editEv.date||"")} disabled={editDateTbd} onChange={e=>setEditEv({...editEv,date:e.target.value})} className={`flex-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm text-stone-700 focus:outline-none focus:border-stone-400 ${editDateTbd?"opacity-40 cursor-not-allowed":""}`}/>
+                  <label className="flex items-center gap-1.5 text-xs text-stone-500 cursor-pointer whitespace-nowrap"><input type="checkbox" checked={editDateTbd} onChange={e=>setEditDateTbd(e.target.checked)} className="rounded"/>TBD</label>
+                </div>
+              </div>
+              <TI label="Time" value={editEv.time||""} onChange={v=>setEditEv({...editEv,time:v})} placeholder="e.g. 2:00 PM"/>
+            </div>
+            <TI label="Location" value={editEv.location||""} onChange={v=>setEditEv({...editEv,location:v})}/>
+            <PeopleSelect label="Event Leader" selected={editEv.leader_id ? [editEv.leader_id] : []} onToggle={id => setEditEv({...editEv, leader_id: editEv.leader_id === id ? undefined : id})} />
+            <PeopleSelect label="Additional Interns" selected={editEv.team_members||[]} onToggle={id => { const tm=editEv.team_members||[]; setEditEv({...editEv,team_members:tm.includes(id)?tm.filter(x=>x!==id):[...tm,id]}); }} />
+            <div className="flex justify-end gap-2 pt-2"><Btn variant="secondary" onClick={()=>setEditEv(null)}>Cancel</Btn><Btn onClick={saveEdit} disabled={!editEv.title.trim()}>Save Changes</Btn></div>
+          </div>
+        </Md>
+      )}
       {/* Detail modal */}
       <Md open={!!sel} onClose={()=>{ setSel(null); setConfirmDelete(false); }} title="Event Detail">
         {sel && (
@@ -1701,9 +1770,14 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
                 {sel.date && <span>{new Date(sel.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"long",day:"numeric"})}</span>}
                 {sel.time && <span>{sel.time}</span>}
                 {sel.location && <span className="flex items-center gap-1"><MapPin size={10}/>{sel.location}</span>}
-                <span>Led by {gn(sel.intern_id)}</span>
                 {sel.file_url && <a href={sel.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-sky-600 hover:text-sky-700 font-medium"><ExternalLink size={10}/>Attachment</a>}
               </div>
+              {(sel.leader_id || (sel.team_members||[]).length>0) && (
+                <div className="mt-3 flex flex-col gap-1">
+                  {sel.leader_id && <p className="text-xs text-stone-600"><span className="font-medium text-stone-500 uppercase tracking-wide text-[10px]">Leader </span>{gn(sel.leader_id)}</p>}
+                  {(sel.team_members||[]).length>0 && <p className="text-xs text-stone-600"><span className="font-medium text-stone-500 uppercase tracking-wide text-[10px]">Team </span>{(sel.team_members||[]).map(id=>gn(id)).join(", ")}</p>}
+                </div>
+              )}
             </div>
             {(sel.materials||[]).length>0 && (
               <div>
@@ -1725,21 +1799,20 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
                 {["planning","upcoming","completed","cancelled"].map(s=><button key={s} onClick={()=>updateStatus(sel.id,s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${sel.status===s?"bg-stone-800 text-white":"bg-stone-100 text-stone-600 hover:bg-stone-200"}`}>{s.charAt(0).toUpperCase()+s.slice(1)}</button>)}
               </div>
             </div>
-            {(profile.role==="admin" || profile.role==="wisconsin_admin" || profile.role==="director") && (
-              <div className="pt-2 border-t border-stone-100 flex justify-end">
-                {confirmDelete ? (
-                  <div className="flex items-center gap-3 w-full justify-between">
-                    <p className="text-sm text-stone-600">Delete this event?</p>
-                    <div className="flex gap-2">
-                      <button onClick={() => setConfirmDelete(false)} className="text-xs px-3 py-1.5 rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-50 transition-all">Cancel</button>
-                      <Btn variant="danger" size="sm" onClick={() => { deleteEvent(sel.id); setConfirmDelete(false); }}><Trash2 size={12}/>Yes, delete</Btn>
-                    </div>
+            <div className="pt-2 border-t border-stone-100 flex items-center justify-between gap-3">
+              <button onClick={()=>{ setEditEv({...sel, date: sel.date||""}); setEditDateTbd(!sel.date); setSel(null); }} className="text-xs px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-all flex items-center gap-1"><Pencil size={12}/>Edit Event</button>
+              {isAdmin && (
+                confirmDelete ? (
+                  <div className="flex items-center gap-3">
+                    <p className="text-sm text-stone-600">Delete?</p>
+                    <button onClick={() => setConfirmDelete(false)} className="text-xs px-3 py-1.5 rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-50 transition-all">Cancel</button>
+                    <Btn variant="danger" size="sm" onClick={() => { deleteEvent(sel.id); setConfirmDelete(false); }}><Trash2 size={12}/>Yes, delete</Btn>
                   </div>
                 ) : (
-                  <Btn variant="danger" size="sm" onClick={() => setConfirmDelete(true)}><Trash2 size={12}/>Delete Event</Btn>
-                )}
-              </div>
-            )}
+                  <Btn variant="danger" size="sm" onClick={() => setConfirmDelete(true)}><Trash2 size={12}/>Delete</Btn>
+                )
+              )}
+            </div>
           </div>
         )}
       </Md>
