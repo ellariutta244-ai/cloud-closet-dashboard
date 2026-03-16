@@ -505,7 +505,7 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
       {filtered.length===0 ? <ES icon={<CheckSquare size={24}/>} message="No tasks here"/> : isAdmin && grouped ? (
         <div className="flex flex-col gap-3">
           {grouped.map(([key, { intern, tasks: internTasks }]) => {
-            const open = !collapsed[key];
+            const open = collapsed[key] === true;
             const done = internTasks.filter(t => t.status === "completed").length;
             return (
               <div key={key} className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
