@@ -1550,11 +1550,16 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
   const [ne, setNe] = useState(emptyForm);
   const [dateTbd, setDateTbd] = useState(false);
   const [eventFile, setEventFile] = useState<File|null>(null);
-  const gn=(id?:string)=>interns.find(i=>i.id===id)?.full_name||"?";
+  const [allProfiles, setAllProfiles] = useState<Profile[]>(interns);
+  useEffect(() => {
+    sb.from("profiles").select("id, full_name, role, team").order("full_name")
+      .then(({ data }: { data: Profile[] | null }) => { if (data) setAllProfiles(data); });
+  }, [sb]);
+  const gn=(id?:string)=>allProfiles.find(i=>i.id===id)?.full_name||interns.find(i=>i.id===id)?.full_name||"?";
   const fd=filter==="all"?events:events.filter(e=>e.status===filter);
   const sorted=[...fd].sort((a,b)=>new Date(a.date||"9999").getTime()-new Date(b.date||"9999").getTime());
   const SV: Record<string,BV>={planning:"warning",upcoming:"purple",completed:"success",cancelled:"danger"};
-  const allPeople = interns;
+  const allPeople = allProfiles;
 
   function toggleTeamMember(id: string, arr: string[], setArr: (v: string[]) => void) {
     setArr(arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id]);
