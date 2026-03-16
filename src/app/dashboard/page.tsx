@@ -3297,7 +3297,7 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
     week_date: currentWeek, creator_id: isAdmin ? "" : profile.id,
     // Video metadata — best performing video
     hook_text: "", format_type: "talking_head",
-    niche: "", trending_sound: false, has_cta: false,
+    niche: "", trending_sound: false, has_cta: false, is_slideshow: false,
     // Best performing video metrics
     video_length_seconds: "", best_video_views: "",
     avg_watch_time_seconds: "", watch_completion_rate: "",
@@ -3347,6 +3347,7 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
       niche: form.niche || null,
       trending_sound: form.trending_sound,
       has_cta: form.has_cta,
+      is_slideshow: form.is_slideshow,
       best_video_views: parseInt(form.best_video_views) || null,
       worst_video_views: parseInt(form.worst_video_views) || null,
       avg_watch_time_seconds: parseFloat(form.avg_watch_time_seconds) || null,
@@ -3473,6 +3474,12 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
           <TI label="Niche / Topic (best performing video)" value={form.niche} onChange={v => setForm({ ...form, niche: v })} placeholder="e.g. fashion, styling tips" />
           {tog("trending_sound", "Used a trending sound?")}
           {tog("has_cta", "Included a CTA?")}
+          <label className="flex items-center gap-3 py-2 px-3 bg-stone-50 rounded-lg cursor-pointer select-none">
+            <input type="checkbox" checked={form.is_slideshow} onChange={e => setForm({ ...form, is_slideshow: e.target.checked, video_length_seconds: e.target.checked ? "" : form.video_length_seconds, avg_watch_time_seconds: e.target.checked ? "" : form.avg_watch_time_seconds })}
+              className="w-4 h-4 accent-stone-800 rounded" />
+            <span className="text-sm text-stone-700">This video is a slideshow</span>
+            {form.is_slideshow && <span className="text-xs text-stone-400 ml-auto">(video length & watch time not applicable)</span>}
+          </label>
         </div>
 
         {/* View Data */}
@@ -3486,11 +3493,12 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
           </div>
 
           <p className="text-xs font-medium text-stone-400 uppercase tracking-wide pt-1">Best Performing Video</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid grid-cols-2 gap-3 ${form.is_slideshow ? "opacity-40 pointer-events-none" : ""}`}>
             {ni("video_length_seconds", "Video Length (sec)")}
             {ni("avg_watch_time_seconds", "Avg Watch Time (sec)", true)}
             {ni("watch_completion_rate", "Completion Rate (%)", true)}
           </div>
+          {form.is_slideshow && <p className="text-xs text-stone-400 italic -mt-1">Video length and watch time are not tracked for slideshows.</p>}
 
           <TI label="Most Active Viewer Time (e.g. 6:00–7:00pm)" value={form.most_active_time} onChange={v => setForm({ ...form, most_active_time: v })} placeholder="e.g. 6:00–7:00pm" />
 

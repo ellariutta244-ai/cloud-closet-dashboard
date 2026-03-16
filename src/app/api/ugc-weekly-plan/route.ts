@@ -36,9 +36,16 @@ function buildPrompt(creatorName: string, phase: string, submissions: any[]): st
         lines.push(`BEST PERFORMING VIDEO — all fields below are for their single top video only, NOT weekly averages:`);
         lines.push(`  best_video_views = ${fmt(s.best_video_views)}  ← views on their #1 video this week`);
         lines.push(`  worst_video_views = ${fmt(s.worst_video_views)}  ← views on their lowest-performing video`);
-        lines.push(`  video_length_seconds = ${sec(s.video_length_seconds)}  ← length of best video`);
-        lines.push(`  avg_watch_time_seconds = ${sec(s.avg_watch_time_seconds)}  ← avg time viewers spent watching best video`);
-        lines.push(`  watch_completion_rate = ${pct(s.watch_completion_rate)}  ← % of viewers who watched best video to the end`);
+        lines.push(`  is_slideshow = ${flag(s.is_slideshow)}  ← if true, best video is a photo slideshow (TikTok carousel), NOT a traditional video`);
+        if (s.is_slideshow) {
+          lines.push(`  video_length_seconds = N/A (slideshow — no meaningful video length)`);
+          lines.push(`  avg_watch_time_seconds = N/A (slideshow — watch time metric does not apply; TikTok loops slideshows automatically)`);
+          lines.push(`  watch_completion_rate = ${s.watch_completion_rate != null ? pct(s.watch_completion_rate) : 'N/A (slideshow)'}  ← for slideshows this reflects swipe-through rate, not video completion`);
+        } else {
+          lines.push(`  video_length_seconds = ${sec(s.video_length_seconds)}  ← length of best video`);
+          lines.push(`  avg_watch_time_seconds = ${sec(s.avg_watch_time_seconds)}  ← avg time viewers spent watching best video`);
+          lines.push(`  watch_completion_rate = ${pct(s.watch_completion_rate)}  ← % of viewers who watched best video to the end`);
+        }
         lines.push(`  hook_text = ${s.hook_text ? `"${s.hook_text}"` : 'not submitted'}  ← opening line/hook of best video`);
         lines.push(`  format_type = ${s.format_type ?? 'not submitted'}  ← video style (e.g. talking_head, voiceover, outfit_montage, pov, trending_audio, tutorial)`);
         lines.push(`  niche = ${s.niche ?? 'not submitted'}  ← topic or content category of best video`);
@@ -79,6 +86,7 @@ FIELD GLOSSARY — memorise these before reading the data:
 - comment_sentiment: the creator's read on overall comment tone (positive / neutral / negative).
 - trending_sound: whether the best video used a trending audio clip.
 - has_cta: whether the best video had a call to action.
+- is_slideshow: if true, the best video is a TikTok photo carousel/slideshow — there is no meaningful video_length or avg_watch_time. Do NOT apply watch-time or video-length based advice to slideshow content. Instead focus on hook text, slide count strategy, saves, and shares.
 - top_search_queries: keywords TikTok already ranks their content for — build on these.
 
 RULES:

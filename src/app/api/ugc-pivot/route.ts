@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
       followers_gained, followers_lost, net_follower_change,
       total_account_views, videos_posted,
       hook_text, format_type, video_length_seconds, niche,
-      trending_sound, has_cta,
+      trending_sound, has_cta, is_slideshow,
       best_video_views, worst_video_views,
       avg_watch_time_seconds, watch_completion_rate, profile_visits,
       traffic_fyp_pct, traffic_following_pct, traffic_search_pct,
@@ -169,6 +169,7 @@ FIELD DEFINITIONS — read before analysing the data:
 - traffic_fyp_pct: % of views from TikTok's For You Page algorithm.
 - traffic_search_pct: % of views from TikTok Search — high % means content is keyword-discoverable.
 - top_search_queries: keywords TikTok already ranks their content for — build on these.
+- is_slideshow: CRITICAL — if true, the best video is a TikTok photo carousel/slideshow, NOT a traditional video. video_length_seconds and avg_watch_time_seconds do not apply and are marked N/A. Do NOT give watch-time or video-length advice for slideshows. Focus on hook text (opening image/text), saves, shares, and whether each slide delivers a clear payoff.
 - Do NOT invent numbers for fields marked "not submitted".
 
 Creator: ${creatorName || 'Sample Creator'} (@${tiktokHandle || 'unknown'})
@@ -185,13 +186,14 @@ WEEKLY TOTALS — all videos combined this week:
 - comment_sentiment = ${comment_sentiment ?? 'not submitted'}
 
 BEST PERFORMING VIDEO — single video data only, not weekly averages:
+- is_slideshow = ${is_slideshow ? 'YES — this is a photo carousel/slideshow, NOT a video' : 'no — standard video'}
 - best_video_views = ${fmt(best_video_views)}  ← views on their #1 video
 - worst_video_views = ${fmt(worst_video_views)}  ← views on their lowest video
-- hook_text = ${hook_text ? `"${hook_text}"` : 'not submitted'}  ← opening line of best video
+- hook_text = ${hook_text ? `"${hook_text}"` : 'not submitted'}  ← opening line/image of best video
 - format_type = ${format_type ?? 'not submitted'}  ← video style (talking_head, voiceover, outfit_montage, pov, trending_audio, tutorial)
-- video_length_seconds = ${sec(video_length_seconds)}  ← length of best video
-- avg_watch_time_seconds = ${sec(avg_watch_time_seconds)}  ← avg time viewers watched best video
-- watch_completion_rate = ${pct(watch_completion_rate)}  ← % who watched best video to the end
+- video_length_seconds = ${is_slideshow ? 'N/A (slideshow — not applicable)' : sec(video_length_seconds)}
+- avg_watch_time_seconds = ${is_slideshow ? 'N/A (slideshow — TikTok loops these automatically, metric is not meaningful)' : sec(avg_watch_time_seconds)}
+- watch_completion_rate = ${is_slideshow ? `${watch_completion_rate != null ? pct(watch_completion_rate) + ' (swipe-through rate for slideshow, not video completion)' : 'N/A (slideshow)'}` : pct(watch_completion_rate) + '  ← % who watched to the end'}
 - niche = ${niche ?? 'not submitted'}  ← topic/category of best video
 - trending_sound = ${trending_sound ? 'yes' : 'no'}  ← used trending audio
 - has_cta = ${has_cta ? 'yes' : 'no'}  ← included a call to action
