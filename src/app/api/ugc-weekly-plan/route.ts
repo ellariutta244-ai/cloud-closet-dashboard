@@ -187,16 +187,20 @@ export async function POST(req: NextRequest) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // Check if plan already exists
-  if (!forceRegenerate) {
-    const { data: existing } = await supabase
-      .from('weekly_plans')
-      .select('id, status')
-      .eq('creator_id', creatorId)
-      .eq('week_date', targetWeek)
-      .maybeSingle();
+  // Check if plan already exists — always protect approved plans from being overwritten
+  const { data: existing } = await supabase
+    .from('weekly_plans')
+    .select('id, status')
+    .eq('creator_id', creatorId)
+    .eq('week_date', targetWeek)
+    .maybeSingle();
 
-    if (existing) {
+  if (existing) {
+    if (existing.status === 'approved') {
+      // Never overwrite an approved plan, even with forceRegenerate
+      return NextResponse.json({ exists: true, protected: true, plan: existing }, { status: 200 });
+    }
+    if (!forceRegenerate) {
       return NextResponse.json({ exists: true, plan: existing }, { status: 200 });
     }
   }

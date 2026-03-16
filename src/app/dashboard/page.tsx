@@ -2148,7 +2148,7 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
   const [generatingAll, setGeneratingAll] = useState(false);
-  const [generateResult, setGenerateResult] = useState<{ generated: number; skipped: number; errors: number; firstError?: string } | null>(null);
+  const [generateResult, setGenerateResult] = useState<{ generated: number; skipped: number; protected_: number; errors: number; firstError?: string } | null>(null);
   const [samplePlans, setSamplePlans] = useState<WeeklyPlan[] | null>(null);
   const currentWeek = getMondayOfWeek(new Date());
 
@@ -2250,7 +2250,11 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
   }
 
   async function regeneratePlan(plan: WeeklyPlan) {
-    if (!window.confirm("Regenerate this plan? The current version will be replaced.")) return;
+    if (plan.status === "approved") {
+      alert("This plan has been approved and cannot be regenerated. Unapprove it first if you need to replace it.");
+      return;
+    }
+    if (!window.confirm("Regenerate this plan? The current draft will be replaced.")) return;
     setGenerating(plan.id);
     try {
       const res = await fetch("/api/ugc-weekly-plan", {
@@ -2259,7 +2263,9 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
         body: JSON.stringify({ creatorId: plan.creator_id, weekDate: plan.week_date, forceRegenerate: true }),
       });
       const json = await res.json();
-      if (json.success && json.plan) {
+      if (json.protected) {
+        alert("This plan has been approved and is protected from regeneration.");
+      } else if (json.success && json.plan) {
         setWeeklyPlans(weeklyPlans.map(p => p.id === plan.id ? json.plan : p));
         if (selectedPlan?.id === plan.id) setSelectedPlan(json.plan);
       }
@@ -2285,7 +2291,7 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
     if (!activeCreators.length) return;
     setGeneratingAll(true);
     setGenerateResult(null);
-    let generated = 0, skipped = 0, errors = 0;
+    let generated = 0, skipped = 0, protected_ = 0, errors = 0;
     let firstError: string | undefined;
     for (const creator of activeCreators) {
       try {
@@ -2295,7 +2301,8 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
           body: JSON.stringify({ creatorId: creator.id, weekDate: currentWeek, forceRegenerate: false }),
         });
         const json = await res.json();
-        if (json.exists) skipped++;
+        if (json.protected) protected_++;
+        else if (json.exists) skipped++;
         else if (json.success) generated++;
         else { errors++; if (!firstError) firstError = json.error ?? `HTTP ${res.status}`; }
       } catch (e: any) { errors++; if (!firstError) firstError = e.message; }
@@ -2303,7 +2310,7 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
     // Refresh plans from DB
     const { data } = await sb.from("weekly_plans").select("*").order("week_date", { ascending: false });
     if (data) setWeeklyPlans(data as WeeklyPlan[]);
-    setGenerateResult({ generated, skipped, errors, firstError });
+    setGenerateResult({ generated, skipped, protected_, errors, firstError });
     setGeneratingAll(false);
   }
 
@@ -2357,6 +2364,7 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
               <div className="flex items-center gap-2">
                 {generateResult.generated > 0 && <span>{generateResult.generated} plan{generateResult.generated !== 1 ? "s" : ""} generated</span>}
                 {generateResult.skipped > 0 && <span>· {generateResult.skipped} already existed</span>}
+                {generateResult.protected_ > 0 && <span>· {generateResult.protected_} approved (protected)</span>}
                 {generateResult.errors > 0 && <span>· {generateResult.errors} error{generateResult.errors !== 1 ? "s" : ""}</span>}
                 <button onClick={() => setGenerateResult(null)} className="ml-auto text-stone-400 hover:text-stone-600">×</button>
               </div>
