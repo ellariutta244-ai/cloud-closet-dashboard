@@ -1586,14 +1586,15 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
   }
   async function saveEdit() {
     if (!editEv?.id) return;
+    const dbDate = editDateTbd ? null : (editEv.date||null);
     const fields = {
       title: editEv.title, description: editEv.description, time: editEv.time,
       location: editEv.location, leader_id: editEv.leader_id||null,
       team_members: editEv.team_members||[],
-      date: editDateTbd ? null : (editEv.date||null),
+      date: dbDate,
     };
     await sb.from("events").update(fields).eq("id", editEv.id);
-    const updated = {...editEv, ...fields};
+    const updated: CCEvent = {...editEv, ...fields, date: dbDate ?? undefined, leader_id: editEv.leader_id || undefined};
     setEvents(events.map(e => e.id === editEv.id ? updated : e));
     if (sel?.id === editEv.id) setSel(updated);
     setEditEv(null);
