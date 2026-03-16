@@ -10,46 +10,55 @@ function getPhase(submissionCount: number): string {
   return 'scale';
 }
 
+function fmt(n: any) { return n != null ? Number(n).toLocaleString() : 'not submitted'; }
+function pct(n: any) { return n != null && n !== 0 ? `${n}%` : 'not submitted'; }
+function sec(n: any) { return n != null ? `${n}s` : 'not submitted'; }
+function flag(b: any) { return b ? 'yes' : 'no'; }
+
 function buildPrompt(creatorName: string, phase: string, submissions: any[]): string {
   const recent = submissions.slice(0, 4);
 
   const analyticsSection = recent.length === 0
     ? '(no submissions yet — new creator, plan based on phase guidance only)'
     : recent.map((s: any, i: number) => {
-        const lines: string[] = [`Week of ${s.week_date}${i === 0 ? ' (most recent)' : ''}:`];
-        lines.push(`  WEEKLY TOTALS (all videos combined this week):`);
-        lines.push(`    Total views across all videos: ${(s.total_views ?? 0).toLocaleString()}`);
-        lines.push(`    Videos posted: ${s.videos_posted ?? 0}`);
-        lines.push(`    Likes: ${s.likes ?? 0}  Comments: ${s.comments ?? 0}  Shares: ${s.shares ?? 0}  Saves: ${s.saves ?? 0}`);
-        lines.push(`    Profile visits: ${s.profile_visits ?? 0}  Followers gained: ${s.followers_gained ?? 0}  Lost: ${s.followers_lost ?? 0}`);
+        const lines: string[] = [];
+        lines.push(`── WEEK OF ${s.week_date}${i === 0 ? ' [MOST RECENT]' : ''} ──`);
 
-        const hasBestVideo = s.best_video_views || s.avg_watch_time_seconds || s.watch_completion_rate || s.hook_text || s.format_type;
-        if (hasBestVideo) {
-          lines.push(`  BEST PERFORMING VIDEO (single video data, not weekly average):`);
-          if (s.best_video_views)        lines.push(`    Best video views: ${(s.best_video_views).toLocaleString()}`);
-          if (s.worst_video_views)       lines.push(`    Worst video views: ${(s.worst_video_views).toLocaleString()}`);
-          if (s.video_length_seconds)    lines.push(`    Video length: ${s.video_length_seconds}s`);
-          if (s.avg_watch_time_seconds)  lines.push(`    Avg watch time: ${s.avg_watch_time_seconds}s`);
-          if (s.watch_completion_rate)   lines.push(`    Completion rate: ${s.watch_completion_rate}%`);
-          if (s.hook_text)               lines.push(`    Hook used: "${s.hook_text}"`);
-          if (s.format_type)             lines.push(`    Format: ${s.format_type}`);
-          if (s.niche)                   lines.push(`    Niche/topic: ${s.niche}`);
-        }
+        lines.push(`WEEKLY TOTALS — these numbers cover ALL videos posted this week combined:`);
+        lines.push(`  total_views = ${fmt(s.total_views)}  ← sum of every video's views this week`);
+        lines.push(`  videos_posted = ${s.videos_posted ?? 'not submitted'}  ← how many videos they uploaded`);
+        lines.push(`  total_account_views = ${fmt(s.total_account_views)}  ← TikTok account-level view count for the week`);
+        lines.push(`  likes = ${fmt(s.likes)}  comments = ${fmt(s.comments)}  shares = ${fmt(s.shares)}  saves = ${fmt(s.saves)}`);
+        lines.push(`  profile_visits = ${fmt(s.profile_visits)}`);
+        lines.push(`  followers_gained = ${fmt(s.followers_gained)}  followers_lost = ${fmt(s.followers_lost)}  net = ${fmt((s.followers_gained ?? 0) - (s.followers_lost ?? 0))}`);
+        lines.push(`  comment_sentiment = ${s.comment_sentiment ?? 'not submitted'}  ← overall tone of comments (positive/neutral/negative)`);
+
+        lines.push(`BEST PERFORMING VIDEO — all fields below are for their single top video only, NOT weekly averages:`);
+        lines.push(`  best_video_views = ${fmt(s.best_video_views)}  ← views on their #1 video this week`);
+        lines.push(`  worst_video_views = ${fmt(s.worst_video_views)}  ← views on their lowest-performing video`);
+        lines.push(`  video_length_seconds = ${sec(s.video_length_seconds)}  ← length of best video`);
+        lines.push(`  avg_watch_time_seconds = ${sec(s.avg_watch_time_seconds)}  ← avg time viewers spent watching best video`);
+        lines.push(`  watch_completion_rate = ${pct(s.watch_completion_rate)}  ← % of viewers who watched best video to the end`);
+        lines.push(`  hook_text = ${s.hook_text ? `"${s.hook_text}"` : 'not submitted'}  ← opening line/hook of best video`);
+        lines.push(`  format_type = ${s.format_type ?? 'not submitted'}  ← video style (e.g. talking_head, voiceover, outfit_montage, pov, trending_audio, tutorial)`);
+        lines.push(`  niche = ${s.niche ?? 'not submitted'}  ← topic or content category of best video`);
+        lines.push(`  trending_sound = ${flag(s.trending_sound)}  ← did best video use a trending audio`);
+        lines.push(`  has_cta = ${flag(s.has_cta)}  ← did best video include a call to action`);
 
         const hasTraffic = s.traffic_fyp_pct || s.traffic_search_pct || s.traffic_profile_pct || s.traffic_following_pct || s.traffic_sound_pct;
         if (hasTraffic) {
-          lines.push(`  TRAFFIC SOURCES:`);
-          if (s.traffic_fyp_pct)        lines.push(`    For You Page: ${s.traffic_fyp_pct}%`);
-          if (s.traffic_search_pct)     lines.push(`    Search: ${s.traffic_search_pct}%`);
-          if (s.traffic_profile_pct)    lines.push(`    Profile: ${s.traffic_profile_pct}%`);
-          if (s.traffic_following_pct)  lines.push(`    Following: ${s.traffic_following_pct}%`);
-          if (s.traffic_sound_pct)      lines.push(`    Sound: ${s.traffic_sound_pct}%`);
+          lines.push(`TRAFFIC SOURCES — where viewers found their videos (should sum to ~100%):`);
+          lines.push(`  For You Page (FYP) = ${pct(s.traffic_fyp_pct)}  ← pushed by TikTok algorithm`);
+          lines.push(`  Search = ${pct(s.traffic_search_pct)}  ← found by searching keywords`);
+          lines.push(`  Following tab = ${pct(s.traffic_following_pct)}  ← existing followers`);
+          lines.push(`  Profile = ${pct(s.traffic_profile_pct)}  ← visited their profile directly`);
+          lines.push(`  Sound/Audio = ${pct(s.traffic_sound_pct)}  ← discovered via audio page`);
         }
 
-        if (s.most_active_time) lines.push(`  Most active viewer time: ${s.most_active_time}`);
+        if (s.most_active_time) lines.push(`most_active_time = ${s.most_active_time}  ← time of day their audience is most active`);
 
         const queries = [s.top_search_query_1, s.top_search_query_2, s.top_search_query_3].filter(Boolean);
-        if (queries.length) lines.push(`  Top search queries: ${queries.join(', ')}`);
+        if (queries.length) lines.push(`top_search_queries = ${queries.map((q: string) => `"${q}"`).join(', ')}  ← search terms TikTok shows their content for`);
 
         return lines.join('\n');
       }).join('\n\n');
@@ -58,20 +67,34 @@ function buildPrompt(creatorName: string, phase: string, submissions: any[]): st
 
 Generate a 7-day content plan for ${creatorName} (phase: ${phase}).
 
-CRITICAL — read these data definitions before making any recommendation:
-- "Total views across all videos" = combined views from every video posted that week, NOT one video's views
-- "Best video views" = views on their single best-performing video that week only
-- "Worst video views" = views on their single worst-performing video that week only
-- "Avg watch time" and "Completion rate" = from the best video only, not a weekly average
-- Every recommendation must reference specific numbers from the data below — no generic advice
+FIELD GLOSSARY — memorise these before reading the data:
+- total_views: the SUM of views across every video they posted that week. Do NOT treat this as one video's views.
+- best_video_views: views on their single highest-performing video only. This is one video, not an average.
+- worst_video_views: views on their single lowest-performing video only.
+- avg_watch_time_seconds + watch_completion_rate: retention metrics for the best video only, not a weekly average.
+- total_account_views: TikTok's account-level view metric, may differ slightly from total_views.
+- videos_posted: number of videos uploaded that week — use this to understand their volume output.
+- traffic_fyp_pct: percentage of views that came from TikTok's For You Page algorithm.
+- traffic_search_pct: percentage from TikTok Search — high % means content is keyword-discoverable.
+- comment_sentiment: the creator's read on overall comment tone (positive / neutral / negative).
+- trending_sound: whether the best video used a trending audio clip.
+- has_cta: whether the best video had a call to action.
+- top_search_queries: keywords TikTok already ranks their content for — build on these.
+
+RULES:
+- Every recommendation must cite specific numbers from the data. No generic advice.
+- Do not invent numbers or assume values for fields marked "not submitted".
+- If search traffic is high, recommend keyword-forward hooks and note the specific queries.
+- If FYP traffic dominates, focus on hook strength and watch time optimisation.
+- Use most_active_time to set post times. If not submitted, default to 7pm CST.
 
 Phase guidance:
 - setup: 1 video/day minimum, build consistency, establish content identity
-- volume: 1-2 videos/day, test 3 different hooks or formats, find what resonates
+- volume: 1–2 videos/day, test 3 different hooks or formats, find what resonates
 - optimize: double down on top 2 formats, cut what has not worked after 5+ tests
 - scale: max volume on proven formats, push for one breakout video this week
 
-ANALYTICS DATA:
+ANALYTICS DATA FOR ${creatorName.toUpperCase()}:
 ${analyticsSection}
 
 Cloud Closet voice: confident, observational, dry but warm. Group chat that became editorial. Never coach-y, never hype, never corporate. Hooks must be specific and feel real — never generic.
