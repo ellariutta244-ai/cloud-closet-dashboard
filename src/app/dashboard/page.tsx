@@ -13,7 +13,7 @@ import {
   CalendarClock, ShoppingBag, Coffee, HelpCircle, MapPin,
   Play, Trophy, ExternalLink, ArrowUpRight, MessageSquare, TrendingUp,
   Settings as SettingsIcon, Zap, ChevronDown, ChevronUp, AlertTriangle, Bookmark, Copy,
-  BookOpen, RefreshCw,
+  BookOpen, RefreshCw, Palette, Link as LinkIcon, Image,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -34,6 +34,7 @@ type RequestReply = { author: string; author_name: string; body: string; created
 type EventMaterial = { item: string; qty: string; fulfilled?: boolean };
 type CCEvent = { id: string; title: string; description?: string; date?: string; time?: string; location?: string; status: string; intern_id?: string; leader_id?: string; team_members?: string[]; materials?: EventMaterial[]; created_at: string; file_url?: string };
 type TechProject = { id: string; title: string; description?: string; status: string; priority?: string; owner_id?: string; contributors?: string[]; tech_stack?: string; github_url?: string; progress: number; created_at: string; updated_at?: string };
+type DesignProject = { id: string; title: string; description?: string; category?: string; status: string; priority?: string; owner_id?: string; contributors?: string[]; project_url?: string; file_url?: string; progress: number; created_at: string; updated_at?: string };
 type ContentVideo = { id: string; creator_id?: string; title: string; tiktok_url?: string; views?: number; likes?: number; comments?: number; date_posted?: string; status: string; created_at: string };
 type AppSettings = Record<string, string>;
 type ReportFieldConfig = { tasks_completed:boolean; outreach_sent:boolean; responses_received:boolean; wins:boolean; challenges:boolean; ideas:boolean; custom_fields:{key:string;label:string;type:"checkbox"|"text"}[] };
@@ -2044,6 +2045,176 @@ function TechProjectsPage({ profile, interns, projects, setProjects, sb }: { pro
               <div className="flex justify-between text-xs text-stone-400 mt-1"><span>Planning</span><span>In Progress</span><span>Complete</span></div>
             </div>
             {sel.github_url && <a href={sel.github_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700"><ExternalLink size={12}/>View on GitHub</a>}
+          </div>
+        )}
+      </Md>
+    </div>
+  );
+}
+
+// ── Design Projects Page ───────────────────────────────────────────────────────
+function DesignProjectsPage({ profile, interns, projects, setProjects, sb }: { profile:Profile; interns:Profile[]; projects:DesignProject[]; setProjects:(p:DesignProject[])=>void; sb:any }) {
+  const isAdmin = profile.role === "admin" || profile.role === "wisconsin_admin";
+  const [showC, setShowC] = useState(false);
+  const [sel, setSel] = useState<DesignProject|null>(null);
+  const [filter, setFilter] = useState("all");
+  const [projectFile, setProjectFile] = useState<File|null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [np, setNp] = useState({ title:"", description:"", category:"branding", priority:"medium", project_url:"" });
+  const CATS = [
+    {value:"branding",label:"Branding"},{value:"social_assets",label:"Social Assets"},
+    {value:"merchandise",label:"Merchandise"},{value:"campaign",label:"Campaign"},
+    {value:"ui_ux",label:"UI/UX"},{value:"other",label:"Other"},
+  ];
+  const CAT_COLOR: Record<string,BV> = { branding:"purple", social_assets:"info", merchandise:"warning", campaign:"success", ui_ux:"default", other:"default" };
+  const SV: Record<string,BV> = { planning:"warning", in_progress:"info", completed:"success" };
+  const SL: Record<string,string> = { planning:"Planning", in_progress:"In Progress", completed:"Completed" };
+  const gn = (id?:string) => interns.find(i=>i.id===id)?.full_name || "?";
+  const fd = filter==="all" ? projects : projects.filter(p=>p.status===filter);
+  const inProgress = projects.filter(p=>p.status==="in_progress").length;
+  const completed = projects.filter(p=>p.status==="completed").length;
+  const avgProg = projects.length>0 ? Math.round(projects.reduce((s,p)=>s+p.progress,0)/projects.length) : 0;
+
+  async function create() {
+    if (!np.title.trim()) return;
+    setUploading(true);
+    let file_url: string|null = null;
+    if (projectFile) {
+      const path = `${Date.now()}-${projectFile.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
+      const { error: upErr } = await sb.storage.from("design-projects").upload(path, projectFile, { upsert: false });
+      if (!upErr) { const { data: ud } = sb.storage.from("design-projects").getPublicUrl(path); file_url = ud.publicUrl; }
+    }
+    const { data, error } = await sb.from("design_projects").insert({
+      ...np, owner_id: profile.id, contributors: [], status: "planning",
+      file_url, progress: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString()
+    }).select().single();
+    setUploading(false);
+    if (error) { console.error(error); return; }
+    setProjects([data, ...projects]);
+    setShowC(false); setProjectFile(null);
+    setNp({ title:"", description:"", category:"branding", priority:"medium", project_url:"" });
+  }
+
+  async function updateProgress(id:string, progress:number) {
+    const status = progress>=100 ? "completed" : progress>0 ? "in_progress" : "planning";
+    await sb.from("design_projects").update({ progress, status, updated_at: new Date().toISOString() }).eq("id",id);
+    setProjects(projects.map(p=>p.id===id?{...p,progress,status}:p));
+    if (sel?.id===id) setSel({...sel,progress,status});
+  }
+
+  async function del(id:string) {
+    await sb.from("design_projects").delete().eq("id",id);
+    setProjects(projects.filter(p=>p.id!==id));
+    if (sel?.id===id) setSel(null);
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between">
+        <div><h1 className="text-xl font-bold text-stone-800">Design Projects</h1><p className="text-sm text-stone-400 mt-0.5">Creative work by the Design team</p></div>
+        <Btn onClick={()=>setShowC(true)}><Plus size={14}/>New Project</Btn>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <SC label="In Progress" value={inProgress}/><SC label="Completed" value={completed}/><SC label="Avg Progress" value={`${avgProg}%`}/>
+      </div>
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit flex-wrap">
+        {["all","planning","in_progress","completed"].map(s=>(
+          <button key={s} onClick={()=>setFilter(s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filter===s?"bg-white text-stone-800 shadow-sm":"text-stone-500"}`}>
+            {s==="all"?"All":SL[s]}
+          </button>
+        ))}
+      </div>
+      {fd.length===0 ? <ES icon={<Palette size={24}/>} message="No projects here"/> : (
+        <div className="flex flex-col gap-3">
+          {fd.map(pr=>(
+            <div key={pr.id} onClick={()=>setSel(pr)} className="bg-white border border-stone-200/60 rounded-xl p-5 hover:border-stone-300 transition-all cursor-pointer">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-sm font-semibold text-stone-800">{pr.title}</span>
+                    <PB priority={pr.priority}/>
+                    <Bg v={CAT_COLOR[pr.category||"other"]||"default"}>{CATS.find(c=>c.value===pr.category)?.label||pr.category}</Bg>
+                  </div>
+                  <p className="text-xs text-stone-400 line-clamp-1">{pr.description}</p>
+                </div>
+                <Bg v={SV[pr.status]||"default"}>{SL[pr.status]||pr.status}</Bg>
+              </div>
+              <div className="flex items-center gap-4 mb-3 flex-wrap">
+                <span className="text-xs text-stone-400 flex items-center gap-1"><Av name={gn(pr.owner_id)} size={16}/>{gn(pr.owner_id)}</span>
+                {pr.file_url && <span className="text-xs text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full flex items-center gap-1"><Image size={10}/>File attached</span>}
+                {pr.project_url && <span className="text-xs text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full flex items-center gap-1"><LinkIcon size={10}/>Link</span>}
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${pr.progress>=100?"bg-emerald-500":pr.progress>50?"bg-pink-500":"bg-amber-400"}`} style={{width:`${pr.progress}%`}}/>
+                </div>
+                <span className="text-xs font-semibold text-stone-600 w-10 text-right">{pr.progress}%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create modal */}
+      <Md open={showC} onClose={()=>{setShowC(false);setProjectFile(null);}} title="New Design Project">
+        <div className="flex flex-col gap-3">
+          <TI label="Title" value={np.title} onChange={v=>setNp({...np,title:v})} required/>
+          <TA label="Description" value={np.description} onChange={v=>setNp({...np,description:v})}/>
+          <Sel label="Category" value={np.category} onChange={v=>setNp({...np,category:v})} options={CATS}/>
+          <Sel label="Priority" value={np.priority} onChange={v=>setNp({...np,priority:v})} options={["low","medium","high","urgent"].map(p=>({value:p,label:p.charAt(0).toUpperCase()+p.slice(1)}))}/>
+          <TI label="Project Link" value={np.project_url} onChange={v=>setNp({...np,project_url:v})} placeholder="Figma, Canva, Drive link…"/>
+          <div>
+            <label className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">Attach File <span className="text-stone-400 font-normal">(optional)</span></label>
+            <FileDropZone file={projectFile} setFile={setProjectFile}/>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="secondary" onClick={()=>{setShowC(false);setProjectFile(null);}}>Cancel</Btn>
+            <Btn onClick={create} disabled={!np.title.trim()||uploading}>{uploading?"Uploading…":"Create"}</Btn>
+          </div>
+        </div>
+      </Md>
+
+      {/* Detail modal */}
+      <Md open={!!sel} onClose={()=>setSel(null)} title="Project Detail">
+        {sel && (
+          <div className="flex flex-col gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <PB priority={sel.priority}/>
+                <Bg v={SV[sel.status]||"default"}>{SL[sel.status]||sel.status}</Bg>
+                <Bg v={CAT_COLOR[sel.category||"other"]||"default"}>{CATS.find(c=>c.value===sel.category)?.label||sel.category}</Bg>
+              </div>
+              <h3 className="text-lg font-bold text-stone-800">{sel.title}</h3>
+              {sel.description && <p className="text-sm text-stone-500 mt-1 leading-relaxed">{sel.description}</p>}
+            </div>
+            <div className="bg-stone-50 rounded-lg p-3">
+              <p className="text-xs text-stone-400 mb-1">Owner</p>
+              <p className="text-sm font-medium text-stone-700">{gn(sel.owner_id)}</p>
+            </div>
+            <div className="flex gap-3 flex-wrap">
+              {sel.project_url && (
+                <a href={sel.project_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-sky-600 hover:text-sky-700 font-medium">
+                  <LinkIcon size={12}/>View Project Link
+                </a>
+              )}
+              {sel.file_url && (
+                <a href={sel.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-pink-600 hover:text-pink-700 font-medium">
+                  <Image size={12}/>View Attached File
+                </a>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-medium text-stone-500 mb-2">Progress: {sel.progress}%</p>
+              <input type="range" min="0" max="100" step="5" value={sel.progress}
+                onChange={e=>updateProgress(sel.id,parseInt(e.target.value))}
+                className="w-full h-2 bg-stone-100 rounded-full appearance-none cursor-pointer accent-stone-800"/>
+              <div className="flex justify-between text-xs text-stone-400 mt-1"><span>Planning</span><span>In Progress</span><span>Complete</span></div>
+            </div>
+            {(isAdmin || sel.owner_id===profile.id) && (
+              <div className="flex justify-end pt-2 border-t border-stone-100">
+                <Btn variant="danger" onClick={()=>del(sel.id)}><Trash2 size={14}/>Delete</Btn>
+              </div>
+            )}
           </div>
         )}
       </Md>
@@ -7843,6 +8014,7 @@ export default function DashboardPage() {
   const [requests, setRequests] = useState<Request[]>([]);
   const [events, setEvents] = useState<CCEvent[]>([]);
   const [techProjects, setTechProjects] = useState<TechProject[]>([]);
+  const [designProjects, setDesignProjects] = useState<DesignProject[]>([]);
   const [content, setContent] = useState<ContentVideo[]>([]);
   const [settings, setSettings] = useState<AppSettings>({});
   const [ugcSubmissions, setUGCSubmissions] = useState<UGCSubmission[]>([]);
@@ -7888,7 +8060,7 @@ export default function DashboardPage() {
         { data: iD }, { data: tD }, { data: oD }, { data: qD },
         { data: rD }, { data: resD }, { data: aD }, { data: actD },
         { data: rtD }, { data: reqD }, { data: evD }, { data: tpD }, { data: ctD },
-        { data: stD },
+        { data: stD }, { data: dpD },
       ] = await Promise.all([
         supabase.from("profiles").select("*").eq("role", "intern").order("full_name"),
         supabase.from("tasks").select("*, task_comments(*)").order("created_at", { ascending: false }).then(r => r.error ? supabase.from("tasks").select("*").order("created_at", { ascending: false }) : r),
@@ -7904,6 +8076,7 @@ export default function DashboardPage() {
         supabase.from("tech_projects").select("*").order("created_at", { ascending: false }),
         supabase.from("content_videos").select("*").order("created_at", { ascending: false }),
         supabase.from("settings").select("*"),
+        supabase.from("design_projects").select("*").order("created_at", { ascending: false }).then(r => r.error ? { data: [] } : r),
       ]);
       setInterns((iD || []) as Profile[]);
       setTasks((tD || []) as Task[]);
@@ -7919,6 +8092,7 @@ export default function DashboardPage() {
       setTechProjects((tpD || []) as TechProject[]);
       setContent((ctD || []) as ContentVideo[]);
       try { setSettings(((stD||[]) as any[]).reduce((acc:AppSettings,s:any)=>({...acc,[s.key]:s.value}),{})); } catch(_) {}
+      setDesignProjects((dpD || []) as DesignProject[]);
 
       // UGC data
       const isUGCRole = prof.role === "ugc_creator" || prof.role === "admin" || prof.role === "director";
@@ -8044,6 +8218,7 @@ export default function DashboardPage() {
   const isDirector = profile.role === "director";
   const isIntern = !isAdmin && !isUGC && !isDirector;
   const isTech = profile.team === "Tech/AI";
+  const isDesign = profile.team === "Design";
   const isCreator = profile.team === "Content Creation";
   const openQCount = questions.filter(q => q.status === "open").length;
   const activeAlertCount = smartAlerts.filter(a => !a.dismissed).length;
@@ -8073,6 +8248,7 @@ export default function DashboardPage() {
     { id: "reports",   icon: <FileText size={16}/>,        label: "Weekly Report" },
     { id: "resources", icon: <FolderOpen size={16}/>,      label: "Resources" },
     ...((isAdmin || isTech) ? [{ id: "tech", icon: <Code2 size={16}/>, label: "Tech Projects" }] : []),
+    ...((isAdmin || isDesign) ? [{ id: "design", icon: <Palette size={16}/>, label: "Design Projects" }] : []),
     ...((isAdmin || isCreator) ? [{ id: "content", icon: <Video size={16}/>, label: "Content" }] : []),
   ];
   const pendingPivotCount = ugcPivotQueue.filter(q => q.status === "pending").length;
@@ -8222,6 +8398,7 @@ export default function DashboardPage() {
       case "reports_analytics": return <ReportsAnalyticsPage profile={p} interns={interns} tasks={tasks} outreach={outreach} content={content} requests={requests} questions={questions} techProjects={techProjects} reports={reports} setReports={setReports} sb={supabase} settings={settings} addActivity={addActivity}/>;
       case "events":    return <EventsPage profile={p} interns={interns} events={events} setEvents={setEvents} sb={supabase}/>;
       case "tech":      return (isAdmin || isTech) ? <TechProjectsPage profile={p} interns={interns} projects={techProjects} setProjects={setTechProjects} sb={supabase}/> : null;
+      case "design":    return (isAdmin || isDesign) ? <DesignProjectsPage profile={p} interns={interns} projects={designProjects} setProjects={setDesignProjects} sb={supabase}/> : null;
       case "content":   return (isAdmin || isCreator) ? <ContentPage profile={p} interns={interns} content={content} setContent={setContent} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
       case "questions": return <QPg {...common} questions={questions} setQuestions={setQuestions}/>;
       case "reports":   return <RPg {...common} reports={reports} setReports={setReports} settings={settings}/>;
