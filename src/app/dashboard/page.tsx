@@ -166,7 +166,7 @@ function FileDropZone({ file, setFile }: { file:File|null; setFile:(f:File|null)
 }
 
 // ── Admin Dashboard ────────────────────────────────────────────────────────────
-function AdminDash({ interns, tasks, outreach, questions, activity, announcements, setAnnouncements, ugcPivotQueue, ugcSubmissions, ugcCreators, smartAlerts, sb }: { interns:Profile[]; tasks:Task[]; outreach:Outreach[]; questions:Question[]; activity:Activity[]; announcements:Announcement[]; setAnnouncements:(a:Announcement[])=>void; ugcPivotQueue:UGCPivotQueue[]; ugcSubmissions:UGCSubmission[]; ugcCreators:UGCCreatorProfile[]; smartAlerts:SmartAlert[]; sb:any }) {
+function AdminDash({ interns, tasks, outreach, questions, activity, announcements, setAnnouncements, ugcPivotQueue, ugcSubmissions, setUGCSubmissions, ugcCreators, smartAlerts, sb }: { interns:Profile[]; tasks:Task[]; outreach:Outreach[]; questions:Question[]; activity:Activity[]; announcements:Announcement[]; setAnnouncements:(a:Announcement[])=>void; ugcPivotQueue:UGCPivotQueue[]; ugcSubmissions:UGCSubmission[]; setUGCSubmissions?:(s:UGCSubmission[])=>void; ugcCreators:UGCCreatorProfile[]; smartAlerts:SmartAlert[]; sb:any }) {
   const completed = tasks.filter(t=>t.status==="completed").length;
   const openQ = questions.filter(q=>q.status==="open").length;
   const activeCount = interns.filter(i=>i.active!==false).length;
@@ -178,6 +178,17 @@ function AdminDash({ interns, tasks, outreach, questions, activity, announcement
   const killRuleAlerts = activeSubs.filter(s => s.week_date === currentWeek && s.total_views < 1000);
   const scaleRuleAlerts = activeSubs.filter(s => s.week_date === currentWeek && s.total_views >= 10000);
   const TEAMS = ["Tech/AI","Strategy","Events/Outreach","Design","Curation Team","Content Creation","UGC Creators"];
+
+  // Auto-refresh UGC submissions every 60s so new data appears without a page reload
+  useEffect(() => {
+    if (!setUGCSubmissions) return;
+    const id = setInterval(async () => {
+      const { data } = await sb.from("ugc_submissions").select("*").order("created_at", { ascending: false });
+      if (data) setUGCSubmissions(data as UGCSubmission[]);
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [sb, setUGCSubmissions]);
+
   const [aModal, setAModal] = useState(false);
   const [aForm, setAForm] = useState({ title:"", body:"", pinned:false, target_teams:[] as string[] });
   const [aSaving, setASaving] = useState(false);
@@ -5720,8 +5731,19 @@ function UGCAnalyticsOverview({ submissions, setSubmissions, ugcCreators, pivotQ
   const activeCreatorIds = new Set(ugcCreators.filter(c => c.ugc_status !== "archived").map(c => c.id));
   const activeSubs = submissions.filter(s => activeCreatorIds.has(s.creator_id ?? ""));
   const thisWeekSubs = activeSubs.filter(s => s.week_date === currentWeek);
-  const avgViews = thisWeekSubs.length > 0 ? Math.round(thisWeekSubs.reduce((s, x) => s + x.total_views, 0) / thisWeekSubs.length) : 0;
-  const topPerformer = [...thisWeekSubs].sort((a, b) => b.total_views - a.total_views)[0];
+
+  // Fall back to most recent week that has data if this week has no submissions yet
+  const recentWeek = thisWeekSubs.length > 0
+    ? thisWeekSubs
+    : (() => {
+        const lastWeek = [...new Set(activeSubs.map(s => s.week_date))].sort().reverse()[0];
+        return lastWeek ? activeSubs.filter(s => s.week_date === lastWeek) : [];
+      })();
+  const recentWeekDate = recentWeek[0]?.week_date ?? currentWeek;
+  const isCurrentWeek = recentWeekDate === currentWeek;
+
+  const avgViews = recentWeek.length > 0 ? Math.round(recentWeek.reduce((s, x) => s + x.total_views, 0) / recentWeek.length) : 0;
+  const topPerformer = [...recentWeek].sort((a, b) => b.total_views - a.total_views)[0];
   const topName = topPerformer ? ugcCreators.find(c => c.id === topPerformer.creator_id)?.full_name || "Unknown" : "—";
 
   const tierCounts = useMemo(() => {
@@ -5733,6 +5755,21 @@ function UGCAnalyticsOverview({ submissions, setSubmissions, ugcCreators, pivotQ
   const [c1, setC1] = useState("");
   const [c2, setC2] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function refresh() {
+    if (!sb || !setSubmissions) return;
+    setRefreshing(true);
+    const { data } = await sb.from("ugc_submissions").select("*").order("created_at", { ascending: false });
+    if (data) setSubmissions(data as UGCSubmission[]);
+    setRefreshing(false);
+  }
+
+  // Auto-refresh every 60 seconds
+  useEffect(() => {
+    const id = setInterval(refresh, 60_000);
+    return () => clearInterval(id);
+  }, [sb, setSubmissions]);
 
   async function deleteSub(id: string) {
     if (!sb || !setSubmissions) return;
@@ -5757,12 +5794,18 @@ function UGCAnalyticsOverview({ submissions, setSubmissions, ugcCreators, pivotQ
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-bold text-stone-800">UGC Analytics</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-stone-800">UGC Analytics</h1>
+        <button onClick={refresh} disabled={refreshing} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 text-xs text-stone-600 hover:bg-stone-50 disabled:opacity-50 transition-all">
+          <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </button>
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <SC label="This Week Submissions" value={thisWeekSubs.length} />
-        <SC label="Avg Views This Week" value={fmtViews(avgViews)} />
-        <SC label="Top Performer" value={topName} />
+        <SC label="Avg Views" value={fmtViews(avgViews)} sub={isCurrentWeek ? "this week" : `week of ${recentWeekDate}`} />
+        <SC label="Top Performer" value={topName} sub={isCurrentWeek ? "this week" : `week of ${recentWeekDate}`} />
         <SC label="Pending Pivots" value={pivotQueue.filter(q => q.status === "pending").length} />
       </div>
 
@@ -7876,7 +7919,7 @@ export default function DashboardPage() {
     const common = { profile: p, interns, sb: supabase, addActivity };
     switch (page) {
       case "dashboard": return isAdmin
-        ? <AdminDash interns={interns} tasks={tasks} outreach={outreach} questions={questions} activity={activity} announcements={announcements} setAnnouncements={setAnnouncements} ugcPivotQueue={ugcPivotQueue} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} smartAlerts={smartAlerts} sb={supabase}/>
+        ? <AdminDash interns={interns} tasks={tasks} outreach={outreach} questions={questions} activity={activity} announcements={announcements} setAnnouncements={setAnnouncements} ugcPivotQueue={ugcPivotQueue} ugcSubmissions={ugcSubmissions} setUGCSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} smartAlerts={smartAlerts} sb={supabase}/>
         : <InternDash profile={p} tasks={tasks} outreach={outreach} announcements={announcements} setPage={setPage} requests={requests}/>;
       case "tasks":     return <TasksPg {...common} tasks={tasks} setTasks={setTasks}/>;
       case "outreach":  return <OutPg {...common} outreach={outreach} setOutreach={setOutreach}/>;

@@ -10,60 +10,84 @@ function getPhase(submissionCount: number): string {
   return 'scale';
 }
 
-function buildPrompt(
-  creatorName: string,
-  phase: string,
-  submissions: any[],
-): string {
+function buildPrompt(creatorName: string, phase: string, submissions: any[]): string {
   const recent = submissions.slice(0, 4);
-  const perfLines = recent.map((s: any) =>
-    `Week of ${s.week_date}: ${s.total_views?.toLocaleString() ?? 0} views, ` +
-    `${s.videos_posted ?? 0} videos posted, ` +
-    `${s.watch_completion_rate ? Math.round(s.watch_completion_rate * 100) + '% completion' : 'no completion data'}, ` +
-    `format: ${s.format_type ?? 'unknown'}, niche: ${s.niche ?? 'unknown'}`
-  ).join('\n');
 
-  const bestFormat = recent.find((s: any) => s.format_type)?.format_type ?? 'talking head';
-  const niche = recent.find((s: any) => s.niche)?.niche ?? 'lifestyle';
+  const analyticsSection = recent.length === 0
+    ? '(no submissions yet — new creator, plan based on phase guidance only)'
+    : recent.map((s: any, i: number) => {
+        const lines: string[] = [`Week of ${s.week_date}${i === 0 ? ' (most recent)' : ''}:`];
+        lines.push(`  WEEKLY TOTALS (all videos combined this week):`);
+        lines.push(`    Total views across all videos: ${(s.total_views ?? 0).toLocaleString()}`);
+        lines.push(`    Videos posted: ${s.videos_posted ?? 0}`);
+        lines.push(`    Likes: ${s.likes ?? 0}  Comments: ${s.comments ?? 0}  Shares: ${s.shares ?? 0}  Saves: ${s.saves ?? 0}`);
+        lines.push(`    Profile visits: ${s.profile_visits ?? 0}  Followers gained: ${s.followers_gained ?? 0}  Lost: ${s.followers_lost ?? 0}`);
+
+        const hasBestVideo = s.best_video_views || s.avg_watch_time_seconds || s.watch_completion_rate || s.hook_text || s.format_type;
+        if (hasBestVideo) {
+          lines.push(`  BEST PERFORMING VIDEO (single video data, not weekly average):`);
+          if (s.best_video_views)        lines.push(`    Best video views: ${(s.best_video_views).toLocaleString()}`);
+          if (s.worst_video_views)       lines.push(`    Worst video views: ${(s.worst_video_views).toLocaleString()}`);
+          if (s.video_length_seconds)    lines.push(`    Video length: ${s.video_length_seconds}s`);
+          if (s.avg_watch_time_seconds)  lines.push(`    Avg watch time: ${s.avg_watch_time_seconds}s`);
+          if (s.watch_completion_rate)   lines.push(`    Completion rate: ${s.watch_completion_rate}%`);
+          if (s.hook_text)               lines.push(`    Hook used: "${s.hook_text}"`);
+          if (s.format_type)             lines.push(`    Format: ${s.format_type}`);
+          if (s.niche)                   lines.push(`    Niche/topic: ${s.niche}`);
+        }
+
+        const hasTraffic = s.traffic_fyp_pct || s.traffic_search_pct || s.traffic_profile_pct || s.traffic_following_pct || s.traffic_sound_pct;
+        if (hasTraffic) {
+          lines.push(`  TRAFFIC SOURCES:`);
+          if (s.traffic_fyp_pct)        lines.push(`    For You Page: ${s.traffic_fyp_pct}%`);
+          if (s.traffic_search_pct)     lines.push(`    Search: ${s.traffic_search_pct}%`);
+          if (s.traffic_profile_pct)    lines.push(`    Profile: ${s.traffic_profile_pct}%`);
+          if (s.traffic_following_pct)  lines.push(`    Following: ${s.traffic_following_pct}%`);
+          if (s.traffic_sound_pct)      lines.push(`    Sound: ${s.traffic_sound_pct}%`);
+        }
+
+        if (s.most_active_time) lines.push(`  Most active viewer time: ${s.most_active_time}`);
+
+        const queries = [s.top_search_query_1, s.top_search_query_2, s.top_search_query_3].filter(Boolean);
+        if (queries.length) lines.push(`  Top search queries: ${queries.join(', ')}`);
+
+        return lines.join('\n');
+      }).join('\n\n');
 
   return `You are a UGC content strategist for Cloud Closet — a platform where real people share how they get dressed.
 
-Generate a personalized weekly content plan for a TikTok UGC creator.
+Generate a 7-day content plan for ${creatorName} (phase: ${phase}).
 
-Creator Profile:
-- Name: ${creatorName}
-- Phase: ${phase} (setup/volume/optimize/scale)
-- Recent Performance:
-${perfLines || '(no submissions yet — this is a new creator)'}
-- Best performing format: ${bestFormat}
-- Niche: ${niche}
+CRITICAL — read these data definitions before making any recommendation:
+- "Total views across all videos" = combined views from every video posted that week, NOT one video's views
+- "Best video views" = views on their single best-performing video that week only
+- "Worst video views" = views on their single worst-performing video that week only
+- "Avg watch time" and "Completion rate" = from the best video only, not a weekly average
+- Every recommendation must reference specific numbers from the data below — no generic advice
 
 Phase guidance:
-- setup: Focus on consistency and establishing content identity. 1 video/day minimum.
-- volume: Post 1-2 videos/day, test 3 different hooks/formats, find what resonates.
-- optimize: Double down on your top 2 performing formats, cut what isn't working.
-- scale: Maximize volume on proven formats, challenge yourself to go viral once this week.
+- setup: 1 video/day minimum, build consistency, establish content identity
+- volume: 1-2 videos/day, test 3 different hooks or formats, find what resonates
+- optimize: double down on top 2 formats, cut what has not worked after 5+ tests
+- scale: max volume on proven formats, push for one breakout video this week
 
-Based on their data, create a 7-day content plan. For each day provide:
-- A specific hook (not generic — must feel real, direct, and fit Cloud Closet's dry-but-warm voice)
-- A video format
-- An optimal posting time (CST)
-- One tactical note
+ANALYTICS DATA:
+${analyticsSection}
 
-Cloud Closet voice: confident, observational, dry but warm. Think group chat that became editorial. Never coach-y, never hype, never corporate.
+Cloud Closet voice: confident, observational, dry but warm. Group chat that became editorial. Never coach-y, never hype, never corporate. Hooks must be specific and feel real — never generic.
 
-Format your response EXACTLY like this (no extra text before or after):
+Output EXACTLY the 10 lines below. No markdown, no asterisks, no bullet points, no numbering, no extra lines. Each entry is a single line:
 
-WEEK GOAL: [one clear goal for the week]
-MONDAY: [hook text] | [format] | [post time CST] | [tactical note]
-TUESDAY: [hook text] | [format] | [post time CST] | [tactical note]
-WEDNESDAY: [hook text] | [format] | [post time CST] | [tactical note]
-THURSDAY: [hook text] | [format] | [post time CST] | [tactical note]
-FRIDAY: [hook text] | [format] | [post time CST] | [tactical note]
-SATURDAY: [hook text] | [format] | [post time CST] | [tactical note]
-SUNDAY: [hook text] | [format] | [post time CST] | [tactical note]
-A/B TEST: [one specific test to run this week — what variable, two versions]
-WEEKLY REMINDER: [one mindset or tactical reminder, max 2 sentences]`;
+WEEK GOAL: [one specific goal tied to their actual numbers]
+MONDAY: [hook] | [format] | [post time CST] | [tactical note]
+TUESDAY: [hook] | [format] | [post time CST] | [tactical note]
+WEDNESDAY: [hook] | [format] | [post time CST] | [tactical note]
+THURSDAY: [hook] | [format] | [post time CST] | [tactical note]
+FRIDAY: [hook] | [format] | [post time CST] | [tactical note]
+SATURDAY: [hook] | [format] | [post time CST] | [tactical note]
+SUNDAY: [hook] | [format] | [post time CST] | [tactical note]
+A/B TEST: [specific variable to test, two concrete versions based on their data]
+WEEKLY REMINDER: [one reminder tied to their numbers, max 2 sentences]`;
 }
 
 function parseAIOutput(raw: string): {
@@ -186,7 +210,7 @@ export async function POST(req: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.85, maxOutputTokens: 2048 },
+          generationConfig: { temperature: 0.85, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } },
         }),
       }
     );
