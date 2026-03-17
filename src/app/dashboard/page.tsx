@@ -8460,6 +8460,7 @@ export default function DashboardPage() {
         { id: "director_analytics",        icon: <BarChart3 size={16}/>,  label: "Analytics Overview" },
         { id: "director_wisconsin_report", icon: <FileText size={16}/>,   label: "Wisconsin Report" },
         { id: "director_hooks",            icon: <Zap size={16}/>,        label: "Hook Generator" },
+        { id: "external-ugc",              icon: <Sparkles size={16}/>,   label: "External UGC" },
       ],
     },
     {
@@ -8582,7 +8583,7 @@ export default function DashboardPage() {
       case "ugc_analytics":     return isFullAdmin ? <UGCAnalyticsOverview submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} pivotQueue={ugcPivotQueue} smartAlerts={smartAlerts} sb={supabase}/> : null;
       case "ugc_pivot_history": return isFullAdmin ? <UGCPivotHistoryPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_brief":         return isFullAdmin ? <UGCBriefPage briefs={ugcBriefs} setBriefs={setUGCBriefs} sb={supabase}/> : null;
-      case "external-ugc":      return isSoraaCreator ? <SoraaCreatorView profile={profile!}/> : isAdmin ? <ExternalUGCPanel/> : null;
+      case "external-ugc":      return isSoraaCreator ? <SoraaCreatorView profile={profile!}/> : (isAdmin || isDirector) ? <ExternalUGCPanel/> : null;
       case "director_home":      return isDirector ? <DirectorDash profile={profile!} events={events} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} ugcBriefs={ugcBriefs} smartAlerts={smartAlerts} reports={reports} outreach={outreach} ugcHooks={ugcHooks} settings={settings} setPage={setPage} sb={supabase}/> : null;
       case "director_calendar":  return isDirector ? <EventsPage profile={profile!} interns={interns} events={events} setEvents={setEvents} sb={supabase}/> : null;
       case "director_analytics": return isDirector ? <DirectorAnalyticsPage ugcSubmissions={ugcSubmissions} setUGCSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} reports={reports} outreach={outreach} sb={supabase}/> : null;
