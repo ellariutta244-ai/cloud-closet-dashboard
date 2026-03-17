@@ -1420,7 +1420,21 @@ function RPg({ profile, interns, reports, setReports, sb, addActivity, settings 
       )}
       <Md open={modal} onClose={()=>{setModal(false);setReportFile(null);setCustomData({});}} title="Submit Weekly Update">
         <div className="flex flex-col gap-3">
-          <TI label="Week of" value={form.week_of} onChange={v=>setForm({...form,week_of:v})} type="date" required/>
+          <div>
+            <TI label="Week of" value={form.week_of} onChange={v=>{
+              if (!v) { setForm({...form,week_of:""}); return; }
+              // Snap to Monday of the selected week
+              const d = new Date(v + "T12:00:00");
+              const day = d.getDay();
+              d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+              setForm({...form,week_of:d.toISOString().split("T")[0]});
+            }} type="date" required/>
+            {form.week_of && (() => {
+              const mon = new Date(form.week_of + "T12:00:00");
+              const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+              return <p className="text-xs text-stone-400 mt-1">Week: {mon.toLocaleDateString("en-US",{month:"short",day:"numeric"})} – {sun.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</p>;
+            })()}
+          </div>
           {reportCfg.tasks_completed && <TA label="Tasks Completed" value={form.tasks_completed} onChange={v=>setForm({...form,tasks_completed:v})}/>}
           {(reportCfg.outreach_sent||reportCfg.responses_received) && (
             <div className="grid grid-cols-2 gap-3">
