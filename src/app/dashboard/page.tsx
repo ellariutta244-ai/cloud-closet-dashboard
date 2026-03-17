@@ -35,12 +35,15 @@ type Request = { id: string; intern_id?: string; type_id?: string; type_name?: s
 type RequestReply = { author: string; author_name: string; body: string; created_at: string };
 type EventMaterial = { item: string; qty: string; fulfilled?: boolean };
 type CCEvent = { id: string; title: string; description?: string; date?: string; time?: string; location?: string; status: string; intern_id?: string; leader_id?: string; team_members?: string[]; materials?: EventMaterial[]; created_at: string; file_url?: string };
-type TechProject = { id: string; title: string; description?: string; status: string; priority?: string; owner_id?: string; contributors?: string[]; tech_stack?: string; github_url?: string; progress: number; created_at: string; updated_at?: string };
-type DesignProject = { id: string; title: string; description?: string; category?: string; status: string; priority?: string; owner_id?: string; contributors?: string[]; project_url?: string; file_url?: string; progress: number; created_at: string; updated_at?: string };
+type ProjectNote = { author_id: string; body: string; created_at: string };
+type TechProject = { id: string; title: string; description?: string; status: string; priority?: string; owner_id?: string; contributors?: string[]; tech_stack?: string; github_url?: string; project_url?: string; file_url?: string; progress: number; notes?: ProjectNote[]; created_at: string; updated_at?: string };
+type DesignProject = { id: string; title: string; description?: string; category?: string; status: string; priority?: string; owner_id?: string; contributors?: string[]; project_url?: string; file_url?: string; progress: number; notes?: ProjectNote[]; created_at: string; updated_at?: string };
 type ContentVideo = { id: string; creator_id?: string; title: string; tiktok_url?: string; views?: number; likes?: number; comments?: number; date_posted?: string; status: string; created_at: string };
 type AppSettings = Record<string, string>;
 type ReportFieldConfig = { tasks_completed:boolean; outreach_sent:boolean; responses_received:boolean; wins:boolean; challenges:boolean; ideas:boolean; custom_fields:{key:string;label:string;type:"checkbox"|"text"}[] };
 type ReportConfig = Record<string, ReportFieldConfig>;
+type MeetingRequestComment = { author_id: string; body: string; created_at: string };
+type MeetingRequest = { id: string; title: string; description?: string; created_by?: string; recipient_ids: string[]; date_ranges: string[]; status: string; scheduled_at?: string; calendar_link?: string; comments: MeetingRequestComment[]; created_at: string };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TEAM_COLORS: Record<string, { bg: string; text: string }> = {
@@ -335,7 +338,8 @@ function AdminDash({ interns, tasks, outreach, questions, activity, announcement
 }
 
 // ── Intern Dashboard ───────────────────────────────────────────────────────────
-function InternDash({ profile, tasks, outreach, announcements, requests, setPage }: { profile:Profile; tasks:Task[]; outreach:Outreach[]; announcements:Announcement[]; requests:Request[]; setPage:(p:string)=>void }) {
+function InternDash({ profile, tasks, outreach, announcements, requests, meetingRequests, setMeetingRequests, interns, sb, setPage }: { profile:Profile; tasks:Task[]; outreach:Outreach[]; announcements:Announcement[]; requests:Request[]; meetingRequests:MeetingRequest[]; setMeetingRequests:(m:MeetingRequest[])=>void; interns:Profile[]; sb:any; setPage:(p:string)=>void }) {
+  const [selMR, setSelMR] = useState<MeetingRequest|null>(null);
   const myTasks = tasks.filter(t=>t.assigned_to===profile.id);
   const active = myTasks.filter(t=>t.status!=="completed").length;
   const myOut = outreach.filter(o=>o.intern_id===profile.id);
@@ -345,6 +349,7 @@ function InternDash({ profile, tasks, outreach, announcements, requests, setPage
   const pinned = myAnnouncements.filter(a=>a.pinned);
   const first = profile.full_name?.split(" ")[0]||"there";
   const unreadReplies = requests.filter(r=>r.intern_id===profile.id && r.replies.length>0 && r.status!=="resolved");
+  const myMeetingRequests = meetingRequests.filter(mr=>mr.recipient_ids.includes(profile.id));
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -388,6 +393,31 @@ function InternDash({ profile, tasks, outreach, announcements, requests, setPage
           </div>
         </div>
       )}
+      {myMeetingRequests.length>0 && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2"><CalendarClock size={14} className="text-amber-600"/><span className="text-xs font-semibold text-amber-700 uppercase tracking-widest">Meeting Requests</span></div>
+            <button onClick={()=>setPage("tasks")} className="text-xs text-stone-400 hover:text-stone-600 flex items-center gap-0.5">View all<ChevronRight size={12}/></button>
+          </div>
+          {myMeetingRequests.slice(0,2).map(mr=>{
+            const hasCommented = mr.comments.some(c=>c.author_id===profile.id);
+            return (
+              <div key={mr.id} onClick={()=>setSelMR(mr)} className={`border-2 rounded-xl p-4 cursor-pointer transition-all ${mr.status==="scheduled"?"bg-emerald-50 border-emerald-200 hover:border-emerald-300":"bg-amber-50 border-amber-200 hover:border-amber-300"}`}>
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  <CalendarClock size={13} className={mr.status==="scheduled"?"text-emerald-600":"text-amber-600"}/>
+                  <span className="text-sm font-semibold text-stone-800">{mr.title}</span>
+                  {mr.status==="scheduled"&&<span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Scheduled</span>}
+                </div>
+                {mr.date_ranges.length>0&&<div className="flex gap-1.5 flex-wrap mb-1.5">{mr.date_ranges.map((d,i)=><span key={i} className="text-[10px] bg-white text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">{d}</span>)}</div>}
+                {mr.status==="scheduled"&&mr.scheduled_at&&<p className="text-xs font-medium text-emerald-700">{mr.scheduled_at}</p>}
+                {mr.status==="scheduled"&&mr.calendar_link&&<a href={mr.calendar_link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} className="inline-flex items-center gap-1 text-xs text-sky-600 hover:text-sky-700 mt-1"><ExternalLink size={11}/>Open in Google Calendar</a>}
+                {mr.status!=="scheduled"&&(hasCommented?<p className="text-xs text-emerald-600">✓ Availability submitted</p>:<p className="text-xs text-amber-600">Tap to submit your availability</p>)}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {selMR&&<MeetingRequestDetailModal mr={selMR} profile={profile} interns={interns} meetingRequests={meetingRequests} setMeetingRequests={setMeetingRequests} sb={sb} open={!!selMR} onClose={()=>setSelMR(null)}/>}
       <div className="bg-white border border-stone-200/60 rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-semibold text-stone-700">Your Tasks</p>
@@ -412,16 +442,350 @@ function InternDash({ profile, tasks, outreach, announcements, requests, setPage
   );
 }
 
+// ── Meeting Request shared modal ───────────────────────────────────────────────
+function MeetingRequestDetailModal({ mr, profile, interns, meetingRequests, setMeetingRequests, sb, open, onClose }: {
+  mr: MeetingRequest; profile: Profile; interns: Profile[];
+  meetingRequests: MeetingRequest[]; setMeetingRequests: (m: MeetingRequest[]) => void;
+  sb: any; open: boolean; onClose: () => void;
+}) {
+  const [commentText, setCommentText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const gn = (id?: string) => interns.find(i => i.id === id)?.full_name || "Unknown";
+
+  async function addComment(body: string) {
+    const comment: MeetingRequestComment = { author_id: profile.id, body, created_at: new Date().toISOString() };
+    const updated = [...mr.comments, comment];
+    await sb.from("meeting_requests").update({ comments: updated }).eq("id", mr.id);
+    const updatedMR: MeetingRequest = { ...mr, comments: updated };
+    setMeetingRequests(meetingRequests.map(m => m.id === mr.id ? updatedMR : m));
+  }
+  async function submit() {
+    if (!commentText.trim()) return;
+    setSaving(true);
+    await addComment(commentText.trim());
+    setCommentText("");
+    setSaving(false);
+  }
+  const hasMyComment = mr.comments.some(c => c.author_id === profile.id);
+  return (
+    <Md open={open} onClose={onClose} title="Meeting Request">
+      <div className="flex flex-col gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            {mr.status === "scheduled"
+              ? <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Scheduled</span>
+              : <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Awaiting Availability</span>}
+          </div>
+          <h3 className="text-lg font-bold text-stone-800">{mr.title}</h3>
+          {mr.description && <p className="text-sm text-stone-500 mt-1 leading-relaxed">{mr.description}</p>}
+        </div>
+        {mr.date_ranges.length > 0 && (
+          <div>
+            <p className="text-xs text-stone-400 mb-1.5">Proposed date ranges</p>
+            <div className="flex gap-1.5 flex-wrap">
+              {mr.date_ranges.map((d, i) => <span key={i} className="text-xs bg-sky-50 text-sky-700 px-2.5 py-1 rounded-full border border-sky-100">{d}</span>)}
+            </div>
+          </div>
+        )}
+        {mr.status === "scheduled" && mr.scheduled_at && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+            <p className="text-xs font-semibold text-emerald-700 mb-1">Meeting Confirmed</p>
+            <p className="text-sm text-emerald-800 font-medium">{mr.scheduled_at}</p>
+            {mr.calendar_link && <a href={mr.calendar_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-sky-600 hover:text-sky-700 mt-1.5"><ExternalLink size={11}/>Open in Google Calendar</a>}
+          </div>
+        )}
+        {mr.comments.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2">Responses</p>
+            <div className="flex flex-col gap-2 max-h-44 overflow-y-auto pr-1">
+              {mr.comments.map((c, i) => {
+                const isScheduleMsg = c.body.startsWith("Meeting scheduled:");
+                return (
+                  <div key={i} className={`rounded-xl p-3 ${isScheduleMsg ? "bg-emerald-50 border border-emerald-200" : "bg-stone-50"}`}>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-xs font-semibold text-stone-700">{gn(c.author_id)}</span>
+                      <span className="text-[10px] text-stone-400">{new Date(c.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</span>
+                    </div>
+                    <p className="text-xs text-stone-600 leading-relaxed">{c.body}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {mr.status !== "scheduled" && (
+          <div>
+            <p className="text-xs text-stone-400 mb-1.5">{hasMyComment ? "Update your availability" : "Submit your availability"}</p>
+            <div className="flex gap-2 items-end">
+              <textarea value={commentText} onChange={e => setCommentText(e.target.value)}
+                placeholder={hasMyComment ? "Add another note…" : "e.g. I'm free March 25-26 mornings, not available the 27th"}
+                rows={2} className="flex-1 text-xs border border-stone-200 rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:border-stone-400 placeholder:text-stone-300"/>
+              <Btn onClick={submit} disabled={!commentText.trim() || saving} variant="secondary"><Send size={13}/>{saving ? "…" : "Send"}</Btn>
+            </div>
+          </div>
+        )}
+      </div>
+    </Md>
+  );
+}
+
+// ── Meeting Requests Admin ─────────────────────────────────────────────────────
+function MeetingRequestsAdmin({ profile, interns, meetingRequests, setMeetingRequests, sb }: {
+  profile: Profile; interns: Profile[]; meetingRequests: MeetingRequest[];
+  setMeetingRequests: (m: MeetingRequest[]) => void; sb: any;
+}) {
+  const [showCreate, setShowCreate] = useState(false);
+  const [sel, setSel] = useState<MeetingRequest|null>(null);
+  const [scheduleModal, setScheduleModal] = useState(false);
+  const [schedForm, setSchedForm] = useState({ scheduled_at: "", calendar_link: "" });
+  const [commentText, setCommentText] = useState("");
+  const emptyForm = { title:"", description:"", teamFilter:"all", selectedInterns:[] as string[], dateRanges:[""] };
+  const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+  const teams = [...new Set(interns.filter(i=>i.active!==false).map(i=>i.team).filter(Boolean))] as string[];
+  const activeInterns = interns.filter(i=>i.active!==false);
+  const gn = (id?: string) => interns.find(i=>i.id===id)?.full_name || "Unknown";
+
+  const getRecipients = () => {
+    if (form.teamFilter === "individual") return form.selectedInterns;
+    if (form.teamFilter === "all") return activeInterns.map(i=>i.id);
+    return activeInterns.filter(i=>i.team===form.teamFilter).map(i=>i.id);
+  };
+
+  async function create() {
+    const recipientIds = getRecipients();
+    if (!form.title.trim() || recipientIds.length === 0) return;
+    setSubmitting(true);
+    const { data, error } = await sb.from("meeting_requests").insert({
+      title: form.title, description: form.description,
+      created_by: profile.id, recipient_ids: recipientIds,
+      date_ranges: form.dateRanges.filter(d=>d.trim()),
+      status: "open", comments: [], created_at: new Date().toISOString(),
+    }).select().single();
+    setSubmitting(false);
+    if (error) { console.error(error); return; }
+    setMeetingRequests([data as MeetingRequest, ...meetingRequests]);
+    setShowCreate(false); setForm(emptyForm);
+  }
+
+  async function addAdminComment(body: string) {
+    if (!sel) return;
+    const comment: MeetingRequestComment = { author_id: profile.id, body, created_at: new Date().toISOString() };
+    const updated = [...sel.comments, comment];
+    await sb.from("meeting_requests").update({ comments: updated }).eq("id", sel.id);
+    const updatedMR = { ...sel, comments: updated };
+    setMeetingRequests(meetingRequests.map(m => m.id === sel.id ? updatedMR : m));
+    setSel(updatedMR);
+  }
+
+  async function schedule() {
+    if (!sel || !schedForm.scheduled_at.trim()) return;
+    const body = `Meeting scheduled: ${schedForm.scheduled_at}`;
+    const comment: MeetingRequestComment = { author_id: profile.id, body, created_at: new Date().toISOString() };
+    const updated = [...sel.comments, comment];
+    await sb.from("meeting_requests").update({ comments: updated, status: "scheduled", scheduled_at: schedForm.scheduled_at, calendar_link: schedForm.calendar_link || null }).eq("id", sel.id);
+    const updatedMR = { ...sel, comments: updated, status: "scheduled", scheduled_at: schedForm.scheduled_at, calendar_link: schedForm.calendar_link || undefined };
+    setMeetingRequests(meetingRequests.map(m => m.id === sel.id ? updatedMR : m));
+    setSel(updatedMR); setScheduleModal(false); setSchedForm({ scheduled_at:"", calendar_link:"" });
+  }
+
+  async function del(id: string) {
+    await sb.from("meeting_requests").delete().eq("id", id);
+    setMeetingRequests(meetingRequests.filter(m => m.id !== id));
+    setSel(null);
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-stone-400">Send availability polls to interns and schedule meetings</p>
+        <Btn onClick={()=>setShowCreate(true)}><Plus size={14}/>Request Meeting</Btn>
+      </div>
+      {meetingRequests.length === 0 ? <ES icon={<CalendarClock size={24}/>} message="No meeting requests yet"/> : (
+        <div className="flex flex-col gap-3">
+          {meetingRequests.map(mr => {
+            const pendingCount = mr.recipient_ids.filter(id => !mr.comments.some(c=>c.author_id===id)).length;
+            return (
+              <div key={mr.id} onClick={()=>setSel(mr)} className={`bg-white border rounded-xl p-4 hover:border-stone-300 cursor-pointer transition-all ${mr.status==="scheduled"?"border-emerald-200 bg-emerald-50/20":"border-stone-200/60"}`}>
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="text-sm font-semibold text-stone-800">{mr.title}</span>
+                      {mr.status==="scheduled"
+                        ? <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Scheduled</span>
+                        : <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Awaiting Availability</span>}
+                    </div>
+                    <p className="text-xs text-stone-400 line-clamp-1">{mr.recipient_ids.map(id=>gn(id)).join(", ")}</p>
+                  </div>
+                  <span className="text-[10px] text-stone-400 shrink-0">{new Date(mr.created_at).toLocaleDateString()}</span>
+                </div>
+                {mr.date_ranges.length>0 && (
+                  <div className="flex gap-1.5 flex-wrap mb-2">
+                    {mr.date_ranges.map((d,i)=><span key={i} className="text-[10px] bg-sky-50 text-sky-700 px-2 py-0.5 rounded-full border border-sky-100">{d}</span>)}
+                  </div>
+                )}
+                <div className="flex items-center gap-3 text-xs text-stone-400">
+                  <span className="flex items-center gap-1"><MessageSquare size={11}/>{mr.comments.length} response{mr.comments.length!==1?"s":""}</span>
+                  {pendingCount>0 && <span className="text-amber-600">{pendingCount} still pending</span>}
+                  {mr.status==="scheduled"&&mr.scheduled_at&&<span className="text-emerald-600">{mr.scheduled_at}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Create modal */}
+      <Md open={showCreate} onClose={()=>{setShowCreate(false);setForm(emptyForm);}} title="Request Meeting">
+        <div className="flex flex-col gap-3">
+          <TI label="Title" value={form.title} onChange={v=>setForm({...form,title:v})} placeholder="e.g. Weekly check-in, Strategy session" required/>
+          <TA label="Message (optional)" value={form.description||""} onChange={v=>setForm({...form,description:v})} placeholder="What's this meeting about?"/>
+          <div>
+            <label className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">Date Ranges</label>
+            <div className="flex flex-col gap-1.5">
+              {form.dateRanges.map((d,i)=>(
+                <div key={i} className="flex gap-2 items-center">
+                  <input value={d} onChange={e=>{const r=[...form.dateRanges];r[i]=e.target.value;setForm({...form,dateRanges:r});}}
+                    placeholder="e.g. March 25-27, mornings preferred"
+                    className="flex-1 text-sm border border-stone-200 rounded-xl px-3 py-2 focus:outline-none focus:border-stone-400"/>
+                  {form.dateRanges.length>1&&<button onClick={()=>setForm({...form,dateRanges:form.dateRanges.filter((_,j)=>j!==i)})} className="text-stone-400 hover:text-red-400"><X size={14}/></button>}
+                </div>
+              ))}
+              <button onClick={()=>setForm({...form,dateRanges:[...form.dateRanges,""]})} className="text-xs text-stone-400 hover:text-stone-600 flex items-center gap-1 mt-1"><Plus size={11}/>Add date range</button>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">Send To</label>
+            <div className="flex gap-1 bg-stone-100 p-1 rounded-xl mb-2 flex-wrap">
+              {["all",...teams,"individual"].map(t=>(
+                <button key={t} onClick={()=>setForm({...form,teamFilter:t,selectedInterns:[]})}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${form.teamFilter===t?"bg-white text-stone-800 shadow-sm":"text-stone-500 hover:text-stone-700"}`}>
+                  {t==="all"?"All Interns":t==="individual"?"Individual":t}
+                </button>
+              ))}
+            </div>
+            {form.teamFilter==="all"&&<p className="text-xs text-stone-400">Sending to all {activeInterns.length} active interns</p>}
+            {form.teamFilter!=="all"&&form.teamFilter!=="individual"&&<p className="text-xs text-stone-400">Sending to all {form.teamFilter} interns ({activeInterns.filter(i=>i.team===form.teamFilter).length} people)</p>}
+            {form.teamFilter==="individual"&&(
+              <div className="flex flex-col gap-1 max-h-40 overflow-y-auto border border-stone-200 rounded-xl p-2">
+                {activeInterns.map(i=>(
+                  <label key={i.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-stone-50 cursor-pointer">
+                    <input type="checkbox" checked={form.selectedInterns.includes(i.id)}
+                      onChange={()=>setForm(f=>({...f,selectedInterns:f.selectedInterns.includes(i.id)?f.selectedInterns.filter(id=>id!==i.id):[...f.selectedInterns,i.id]}))}
+                      className="rounded"/>
+                    <Av name={i.full_name} size={20}/>
+                    <span className="text-sm text-stone-700 flex-1">{i.full_name}</span>
+                    {i.team&&<span className="text-xs text-stone-400">{i.team}</span>}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="secondary" onClick={()=>{setShowCreate(false);setForm(emptyForm);}}>Cancel</Btn>
+            <Btn onClick={create} disabled={!form.title.trim()||getRecipients().length===0||submitting}>
+              {submitting?"Sending…":`Send to ${getRecipients().length} intern${getRecipients().length!==1?"s":""}`}
+            </Btn>
+          </div>
+        </div>
+      </Md>
+
+      {/* Detail modal */}
+      <Md open={!!sel} onClose={()=>{setSel(null);setCommentText("");}} title="Meeting Request">
+        {sel&&(
+          <div className="flex flex-col gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                {sel.status==="scheduled"
+                  ? <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Scheduled</span>
+                  : <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Awaiting Availability</span>}
+              </div>
+              <h3 className="text-lg font-bold text-stone-800">{sel.title}</h3>
+              {sel.description&&<p className="text-sm text-stone-500 mt-1">{sel.description}</p>}
+            </div>
+            {sel.date_ranges.length>0&&(
+              <div>
+                <p className="text-xs text-stone-400 mb-1.5">Proposed date ranges</p>
+                <div className="flex gap-1.5 flex-wrap">{sel.date_ranges.map((d,i)=><span key={i} className="text-xs bg-sky-50 text-sky-700 px-2.5 py-1 rounded-full border border-sky-100">{d}</span>)}</div>
+              </div>
+            )}
+            <div>
+              <p className="text-xs text-stone-400 mb-1.5">Recipients ({sel.recipient_ids.length})</p>
+              <div className="flex gap-1.5 flex-wrap">
+                {sel.recipient_ids.map(id=>{
+                  const hasReplied=sel.comments.some(c=>c.author_id===id);
+                  return <span key={id} className={`text-xs px-2.5 py-1 rounded-full border ${hasReplied?"bg-emerald-50 text-emerald-700 border-emerald-200":"bg-stone-50 text-stone-500 border-stone-200"}`}>{hasReplied?"✓ ":""}{gn(id)}</span>;
+                })}
+              </div>
+            </div>
+            {sel.comments.length>0&&(
+              <div>
+                <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2">Availability Responses</p>
+                <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                  {sel.comments.map((c,i)=>{
+                    const isScheduleMsg=c.body.startsWith("Meeting scheduled:");
+                    return (
+                      <div key={i} className={`rounded-xl p-3 ${isScheduleMsg?"bg-emerald-50 border border-emerald-200":"bg-stone-50"}`}>
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-xs font-semibold text-stone-700">{gn(c.author_id)}</span>
+                          <span className="text-[10px] text-stone-400">{new Date(c.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</span>
+                        </div>
+                        <p className="text-xs text-stone-600 leading-relaxed">{c.body}</p>
+                        {isScheduleMsg&&sel.calendar_link&&<a href={sel.calendar_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-sky-600 hover:text-sky-700 mt-1.5"><ExternalLink size={11}/>Open in Google Calendar</a>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-2 items-end">
+              <textarea value={commentText} onChange={e=>setCommentText(e.target.value)}
+                placeholder="Reply to an intern or add a note…" rows={2}
+                className="flex-1 text-xs border border-stone-200 rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:border-stone-400 placeholder:text-stone-300"/>
+              <Btn variant="secondary" onClick={()=>{if(commentText.trim())addAdminComment(commentText.trim()).then(()=>setCommentText(""));}} disabled={!commentText.trim()}>
+                <Send size={13}/>Post
+              </Btn>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-stone-100">
+              {sel.status!=="scheduled"
+                ? <Btn onClick={()=>setScheduleModal(true)}><CalendarClock size={14}/>Schedule Meeting</Btn>
+                : <span className="text-xs text-emerald-600 font-medium">✓ Scheduled: {sel.scheduled_at}</span>
+              }
+              <Btn variant="danger" onClick={()=>del(sel.id)}><Trash2 size={14}/>Delete</Btn>
+            </div>
+          </div>
+        )}
+      </Md>
+
+      {/* Schedule modal */}
+      <Md open={scheduleModal} onClose={()=>setScheduleModal(false)} title="Confirm Meeting">
+        <div className="flex flex-col gap-3">
+          <TI label="Date & Time" value={schedForm.scheduled_at} onChange={v=>setSchedForm({...schedForm,scheduled_at:v})} placeholder="e.g. Thursday March 27, 2:00pm CST" required/>
+          <TI label="Google Calendar Link" value={schedForm.calendar_link} onChange={v=>setSchedForm({...schedForm,calendar_link:v})} placeholder="https://calendar.google.com/..."/>
+          <p className="text-xs text-stone-400">This will post a confirmation to all recipients and mark the meeting as scheduled.</p>
+          <div className="flex justify-end gap-2 pt-1">
+            <Btn variant="secondary" onClick={()=>setScheduleModal(false)}>Cancel</Btn>
+            <Btn onClick={schedule} disabled={!schedForm.scheduled_at.trim()}>Send Confirmation</Btn>
+          </div>
+        </div>
+      </Md>
+    </div>
+  );
+}
+
 // ── Tasks Page ─────────────────────────────────────────────────────────────────
-function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profile:Profile; interns:Profile[]; tasks:Task[]; setTasks:(t:Task[])=>void; sb:any; addActivity:(a:any)=>void }) {
+function TasksPg({ profile, interns, tasks, setTasks, meetingRequests, setMeetingRequests, sb, addActivity }: { profile:Profile; interns:Profile[]; tasks:Task[]; setTasks:(t:Task[])=>void; meetingRequests:MeetingRequest[]; setMeetingRequests:(m:MeetingRequest[])=>void; sb:any; addActivity:(a:any)=>void }) {
+  const [tab, setTab] = useState<'tasks'|'meetings'>('tasks');
   const [filter,setFilter]=useState("all");
   const [modal,setModal]=useState(false);
   const [editTask,setEditTask]=useState<Task|null>(null);
   const [detail,setDetail]=useState<Task|null>(null);
+  const [selMR, setSelMR] = useState<MeetingRequest|null>(null);
   const emptyForm = { title:"", description:"", assignees:[] as string[], category:"brand_outreach", priority:"medium", status:"not_started", due_date:"" };
   const [form,setForm]=useState(emptyForm);
   const [dateTbd,setDateTbd]=useState(false);
   const isAdmin=profile.role==="admin"||profile.role==="wisconsin_admin";
+  const myMeetingRequests = isAdmin ? [] : meetingRequests.filter(mr => mr.recipient_ids.includes(profile.id));
 
   // a task is visible to an intern if they are the primary assignee or in co_assignees
   const isAssignedTo = (t: Task, id: string) => t.assigned_to === id || (t.co_assignees||[]).includes(id);
@@ -531,8 +895,54 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-stone-800">{isAdmin?"All Tasks":"My Tasks"}</h1>
-        {isAdmin&&<Btn onClick={openNew}><Plus size={14}/>New Task</Btn>}
+        {isAdmin && tab==='tasks' && <Btn onClick={openNew}><Plus size={14}/>New Task</Btn>}
       </div>
+      {/* Admin subtabs */}
+      {isAdmin && (
+        <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit">
+          <button onClick={()=>setTab('tasks')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${tab==='tasks'?'bg-white text-stone-800 shadow-sm':'text-stone-500 hover:text-stone-700'}`}><CheckSquare size={12}/>Tasks</button>
+          <button onClick={()=>setTab('meetings')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${tab==='meetings'?'bg-white text-stone-800 shadow-sm':'text-stone-500 hover:text-stone-700'}`}>
+            <CalendarClock size={12}/>Request Meeting
+            {meetingRequests.filter(m=>m.status==='open').length>0&&<span className="bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">{meetingRequests.filter(m=>m.status==='open').length}</span>}
+          </button>
+        </div>
+      )}
+      {/* Admin: meetings subtab */}
+      {isAdmin && tab==='meetings' && (
+        <MeetingRequestsAdmin profile={profile} interns={interns} meetingRequests={meetingRequests} setMeetingRequests={setMeetingRequests} sb={sb}/>
+      )}
+      {/* Intern: meeting requests banner at top */}
+      {!isAdmin && myMeetingRequests.length>0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-semibold text-amber-600 uppercase tracking-widest flex items-center gap-1.5"><CalendarClock size={12}/>Meeting Requests</p>
+          {myMeetingRequests.map(mr=>{
+            const hasCommented = mr.comments.some(c=>c.author_id===profile.id);
+            return (
+              <div key={mr.id} onClick={()=>setSelMR(mr)} className={`border-2 rounded-xl p-4 cursor-pointer transition-all ${mr.status==="scheduled"?"bg-emerald-50 border-emerald-200 hover:border-emerald-300":"bg-amber-50 border-amber-200 hover:border-amber-300"}`}>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CalendarClock size={14} className={mr.status==="scheduled"?"text-emerald-600":"text-amber-600"}/>
+                    <span className="text-sm font-semibold text-stone-800">{mr.title}</span>
+                    {mr.status==="scheduled"&&<span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Scheduled</span>}
+                  </div>
+                </div>
+                {mr.date_ranges.length>0&&(
+                  <div className="flex gap-1.5 flex-wrap mb-2">
+                    {mr.date_ranges.map((d,i)=><span key={i} className="text-[10px] bg-white text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">{d}</span>)}
+                  </div>
+                )}
+                {mr.status==="scheduled"&&mr.scheduled_at&&<p className="text-xs font-medium text-emerald-700 mb-1">Meeting: {mr.scheduled_at}</p>}
+                {mr.status==="scheduled"&&mr.calendar_link&&<a href={mr.calendar_link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} className="inline-flex items-center gap-1 text-xs text-sky-600 hover:text-sky-700"><ExternalLink size={11}/>Open in Google Calendar</a>}
+                {mr.status!=="scheduled"&&(hasCommented?<p className="text-xs text-emerald-600">✓ Availability submitted · Tap to add more</p>:<p className="text-xs text-amber-600">Tap to submit your availability</p>)}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {/* Meeting request detail modal for interns */}
+      {selMR&&<MeetingRequestDetailModal mr={selMR} profile={profile} interns={interns} meetingRequests={meetingRequests} setMeetingRequests={setMeetingRequests} sb={sb} open={!!selMR} onClose={()=>setSelMR(null)}/>}
+      {/* Task filters — only shown for tasks tab */}
+      {(!isAdmin || tab==='tasks') && (
       <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit flex-wrap">
         {["all","not_started","in_progress","submitted","completed"].map(s=>(
           <button key={s} onClick={()=>setFilter(s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filter===s?"bg-white text-stone-800 shadow-sm":"text-stone-500 hover:text-stone-700"}`}>
@@ -540,7 +950,8 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
           </button>
         ))}
       </div>
-      {filtered.length===0 ? <ES icon={<CheckSquare size={24}/>} message="No tasks here"/> : isAdmin && grouped ? (
+      )}
+      {(!isAdmin || tab==='tasks') && (filtered.length===0 ? <ES icon={<CheckSquare size={24}/>} message="No tasks here"/> : isAdmin && grouped ? (
         <div className="flex flex-col gap-3">
           {grouped.map(([key, { intern, tasks: internTasks }]) => {
             const open = collapsed[key] === true;
@@ -602,7 +1013,7 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
             );
           })}
         </div>
-      )}
+      ))}
 
       {/* Create / Edit modal */}
       <Md open={modal} onClose={()=>setModal(false)} title={editTask?"Edit Task":"New Task"}>
@@ -2134,30 +2545,100 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
 }
 
 // ── Tech Projects Page ─────────────────────────────────────────────────────────
+function ProjectNotes({ notes, profile, interns, onAdd }: { notes: ProjectNote[]; profile: Profile; interns: Profile[]; onAdd: (body: string) => Promise<void> }) {
+  const [body, setBody] = useState("");
+  const [saving, setSaving] = useState(false);
+  const gn = (id: string) => interns.find(i => i.id === id)?.full_name || "Unknown";
+  async function submit() {
+    if (!body.trim()) return;
+    setSaving(true);
+    await onAdd(body.trim());
+    setBody("");
+    setSaving(false);
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Notes</p>
+      {notes.length > 0 && (
+        <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+          {notes.map((n, i) => (
+            <div key={i} className="bg-stone-50 rounded-xl p-3">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="text-xs font-semibold text-stone-700">{gn(n.author_id)}</span>
+                <span className="text-[10px] text-stone-400">{new Date(n.created_at).toLocaleDateString("en-US",{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}</span>
+              </div>
+              <p className="text-xs text-stone-600 leading-relaxed">{n.body}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2 items-end">
+        <textarea
+          value={body}
+          onChange={e => setBody(e.target.value)}
+          placeholder="Add a note or update…"
+          rows={2}
+          className="flex-1 text-xs border border-stone-200 rounded-xl px-3 py-2.5 resize-none focus:outline-none focus:border-stone-400 placeholder:text-stone-300"
+        />
+        <Btn onClick={submit} disabled={!body.trim() || saving} variant="secondary">
+          <Send size={13}/>{saving ? "…" : "Post"}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
 function TechProjectsPage({ profile, interns, projects, setProjects, sb }: { profile:Profile; interns:Profile[]; projects:TechProject[]; setProjects:(p:TechProject[])=>void; sb:any }) {
+  const isAdmin = profile.role === "admin" || profile.role === "wisconsin_admin";
   const [showC, setShowC] = useState(false);
   const [sel, setSel] = useState<TechProject|null>(null);
   const [filter, setFilter] = useState("all");
-  const [np, setNp] = useState({title:"",description:"",tech_stack:"",priority:"medium"});
+  const [projectFile, setProjectFile] = useState<File|null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [np, setNp] = useState({title:"",description:"",tech_stack:"",priority:"medium",project_url:""});
   const gn=(id?:string)=>interns.find(i=>i.id===id)?.full_name||"?";
   const fd=filter==="all"?projects:projects.filter(p=>p.status===filter);
   const inProgress=projects.filter(p=>p.status==="in_progress").length;
   const completed=projects.filter(p=>p.status==="completed").length;
   const avgProg=projects.length>0?Math.round(projects.reduce((s,p)=>s+p.progress,0)/projects.length):0;
-  const SV: Record<string,BV>={planning:"warning",in_progress:"info",completed:"success"};
-  const SL: Record<string,string>={planning:"Planning",in_progress:"In Progress",completed:"Completed"};
+  const SV: Record<string,BV>={planning:"warning",in_progress:"info",submitted:"purple",completed:"success"};
+  const SL: Record<string,string>={planning:"Planning",in_progress:"In Progress",submitted:"Submitted",completed:"Completed"};
 
   async function create() {
-    const {data,error}=await sb.from("tech_projects").insert({...np,owner_id:profile.id,contributors:[],status:"planning",github_url:"",progress:0,created_at:new Date().toISOString(),updated_at:new Date().toISOString()}).select().single();
+    if (!np.title.trim()) return;
+    setUploading(true);
+    let file_url: string|null = null;
+    if (projectFile) {
+      const path = `${Date.now()}-${projectFile.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
+      const { error: upErr } = await sb.storage.from("tech-projects").upload(path, projectFile, { upsert: false });
+      if (!upErr) { const { data: ud } = sb.storage.from("tech-projects").getPublicUrl(path); file_url = ud.publicUrl; }
+    }
+    const {data,error}=await sb.from("tech_projects").insert({...np,owner_id:profile.id,contributors:[],status:"planning",github_url:"",file_url,notes:[],progress:0,created_at:new Date().toISOString(),updated_at:new Date().toISOString()}).select().single();
+    setUploading(false);
     if(error){console.error(error);return;}
-    setProjects([data,...projects]);setShowC(false);
-    setNp({title:"",description:"",tech_stack:"",priority:"medium"});
+    setProjects([data,...projects]);setShowC(false);setProjectFile(null);
+    setNp({title:"",description:"",tech_stack:"",priority:"medium",project_url:""});
   }
   async function updateProgress(id:string,progress:number) {
     const status=progress>=100?"completed":progress>0?"in_progress":"planning";
     await sb.from("tech_projects").update({progress,status,updated_at:new Date().toISOString()}).eq("id",id);
     setProjects(projects.map(p=>p.id===id?{...p,progress,status}:p));
     if(sel?.id===id) setSel({...sel,progress,status});
+  }
+  async function del(id:string) {
+    await sb.from("tech_projects").delete().eq("id",id);
+    setProjects(projects.filter(p=>p.id!==id));
+    setSel(null);
+  }
+  async function addNote(id: string, body: string) {
+    const project = projects.find(p => p.id === id);
+    if (!project) return;
+    const note: ProjectNote = { author_id: profile.id, body, created_at: new Date().toISOString() };
+    const updated = [...(project.notes || []), note];
+    await sb.from("tech_projects").update({ notes: updated, updated_at: new Date().toISOString() }).eq("id", id);
+    const updatedProject = { ...project, notes: updated };
+    setProjects(projects.map(p => p.id === id ? updatedProject : p));
+    setSel(updatedProject);
   }
 
   return (
@@ -2170,15 +2651,15 @@ function TechProjectsPage({ profile, interns, projects, setProjects, sb }: { pro
         <SC label="In Progress" value={inProgress}/><SC label="Completed" value={completed}/><SC label="Avg Progress" value={`${avgProg}%`}/>
       </div>
       <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit flex-wrap">
-        {["all","planning","in_progress","completed"].map(s=><button key={s} onClick={()=>setFilter(s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filter===s?"bg-white text-stone-800 shadow-sm":"text-stone-500"}`}>{s==="all"?"All":SL[s]}</button>)}
+        {["all","planning","in_progress","submitted","completed"].map(s=><button key={s} onClick={()=>setFilter(s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filter===s?"bg-white text-stone-800 shadow-sm":"text-stone-500"}`}>{s==="all"?"All":SL[s]}</button>)}
       </div>
       {fd.length===0 ? <ES icon={<Code2 size={24}/>} message="No projects here"/> : (
         <div className="flex flex-col gap-3">
           {fd.map(pr=>(
-            <div key={pr.id} onClick={()=>setSel(pr)} className="bg-white border border-stone-200/60 rounded-xl p-5 hover:border-stone-300 transition-all cursor-pointer">
+            <div key={pr.id} onClick={()=>setSel(pr)} className={`bg-white border rounded-xl p-5 hover:border-stone-300 transition-all cursor-pointer ${pr.status==="submitted"?"border-violet-200 bg-violet-50/20":"border-stone-200/60"}`}>
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1"><span className="text-sm font-semibold text-stone-800">{pr.title}</span><PB priority={pr.priority}/></div>
+                  <div className="flex items-center gap-2 mb-1 flex-wrap"><span className="text-sm font-semibold text-stone-800">{pr.title}</span><PB priority={pr.priority}/>{pr.status==="submitted"&&<span className="text-[10px] font-semibold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">Awaiting Review</span>}</div>
                   <p className="text-xs text-stone-400 line-clamp-1">{pr.description}</p>
                 </div>
                 <Bg v={SV[pr.status]||"default"}>{SL[pr.status]||pr.status}</Bg>
@@ -2186,6 +2667,9 @@ function TechProjectsPage({ profile, interns, projects, setProjects, sb }: { pro
               <div className="flex items-center gap-4 mb-3 flex-wrap">
                 <span className="text-xs text-stone-400 flex items-center gap-1"><Av name={gn(pr.owner_id)} size={16}/>{gn(pr.owner_id)}</span>
                 {pr.tech_stack && <span className="text-xs text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">{pr.tech_stack}</span>}
+                {pr.file_url && <span className="text-xs text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full flex items-center gap-1"><Upload size={10}/>File attached</span>}
+                {pr.project_url && <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1"><LinkIcon size={10}/>Link</span>}
+                {(pr.notes||[]).length>0 && <span className="text-xs text-stone-400 flex items-center gap-1"><MessageSquare size={10}/>{pr.notes!.length} note{pr.notes!.length!==1?"s":""}</span>}
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden">
@@ -2197,13 +2681,18 @@ function TechProjectsPage({ profile, interns, projects, setProjects, sb }: { pro
           ))}
         </div>
       )}
-      <Md open={showC} onClose={()=>setShowC(false)} title="New Project">
+      <Md open={showC} onClose={()=>{setShowC(false);setProjectFile(null);}} title="New Project">
         <div className="flex flex-col gap-3">
           <TI label="Title" value={np.title} onChange={v=>setNp({...np,title:v})} required/>
           <TA label="Description" value={np.description} onChange={v=>setNp({...np,description:v})}/>
           <TI label="Tech Stack" value={np.tech_stack} onChange={v=>setNp({...np,tech_stack:v})} placeholder="e.g. React, Python, Supabase"/>
           <Sel label="Priority" value={np.priority} onChange={v=>setNp({...np,priority:v})} options={["low","medium","high","urgent"].map(p=>({value:p,label:p.charAt(0).toUpperCase()+p.slice(1)}))}/>
-          <div className="flex justify-end gap-2 pt-2"><Btn variant="secondary" onClick={()=>setShowC(false)}>Cancel</Btn><Btn onClick={create} disabled={!np.title.trim()}>Create</Btn></div>
+          <TI label="Project Link" value={np.project_url} onChange={v=>setNp({...np,project_url:v})} placeholder="GitHub, Vercel, Drive link…"/>
+          <div>
+            <label className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">Attach File <span className="text-stone-400 font-normal">(optional)</span></label>
+            <FileDropZone file={projectFile} setFile={setProjectFile}/>
+          </div>
+          <div className="flex justify-end gap-2 pt-2"><Btn variant="secondary" onClick={()=>{setShowC(false);setProjectFile(null);}}>Cancel</Btn><Btn onClick={create} disabled={!np.title.trim()||uploading}>{uploading?"Uploading…":"Create"}</Btn></div>
         </div>
       </Md>
       <Md open={!!sel} onClose={()=>setSel(null)} title="Project Detail">
@@ -2221,6 +2710,11 @@ function TechProjectsPage({ profile, interns, projects, setProjects, sb }: { pro
             {(sel.contributors||[]).length>0 && (
               <div><p className="text-xs text-stone-400 mb-2">Contributors</p><div className="flex gap-2 flex-wrap">{(sel.contributors||[]).map(id=><span key={id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-stone-50 rounded-lg text-xs text-stone-600"><Av name={gn(id)} size={16}/>{gn(id)}</span>)}</div></div>
             )}
+            <div className="flex gap-3 flex-wrap">
+              {sel.github_url && <a href={sel.github_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700"><ExternalLink size={12}/>View on GitHub</a>}
+              {sel.project_url && <a href={sel.project_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 font-medium"><LinkIcon size={12}/>View Project Link</a>}
+              {sel.file_url && <a href={sel.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-sky-600 hover:text-sky-700 font-medium"><Upload size={12}/>View Attached File</a>}
+            </div>
             <div>
               <p className="text-xs font-medium text-stone-500 mb-2">Progress: {sel.progress}%</p>
               <input type="range" min="0" max="100" step="5" value={sel.progress}
@@ -2228,7 +2722,14 @@ function TechProjectsPage({ profile, interns, projects, setProjects, sb }: { pro
                 className="w-full h-2 bg-stone-100 rounded-full appearance-none cursor-pointer accent-stone-800"/>
               <div className="flex justify-between text-xs text-stone-400 mt-1"><span>Planning</span><span>In Progress</span><span>Complete</span></div>
             </div>
-            {sel.github_url && <a href={sel.github_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700"><ExternalLink size={12}/>View on GitHub</a>}
+            <div className="border-t border-stone-100 pt-3">
+              <ProjectNotes notes={sel.notes||[]} profile={profile} interns={interns} onAdd={body=>addNote(sel.id,body)}/>
+            </div>
+            {isAdmin && (
+              <div className="flex justify-end pt-2 border-t border-stone-100">
+                <Btn variant="danger" onClick={()=>del(sel.id)}><Trash2 size={14}/>Delete Project</Btn>
+              </div>
+            )}
           </div>
         )}
       </Md>
@@ -2289,7 +2790,17 @@ function DesignProjectsPage({ profile, interns, projects, setProjects, sb }: { p
   async function del(id:string) {
     await sb.from("design_projects").delete().eq("id",id);
     setProjects(projects.filter(p=>p.id!==id));
-    if (sel?.id===id) setSel(null);
+    setSel(null);
+  }
+  async function addNote(id: string, body: string) {
+    const project = projects.find(p => p.id === id);
+    if (!project) return;
+    const note: ProjectNote = { author_id: profile.id, body, created_at: new Date().toISOString() };
+    const updated = [...(project.notes || []), note];
+    await sb.from("design_projects").update({ notes: updated, updated_at: new Date().toISOString() }).eq("id", id);
+    const updatedProject = { ...project, notes: updated };
+    setProjects(projects.map(p => p.id === id ? updatedProject : p));
+    setSel(updatedProject);
   }
 
   return (
@@ -2311,13 +2822,14 @@ function DesignProjectsPage({ profile, interns, projects, setProjects, sb }: { p
       {fd.length===0 ? <ES icon={<Palette size={24}/>} message="No projects here"/> : (
         <div className="flex flex-col gap-3">
           {fd.map(pr=>(
-            <div key={pr.id} onClick={()=>setSel(pr)} className="bg-white border border-stone-200/60 rounded-xl p-5 hover:border-stone-300 transition-all cursor-pointer">
+            <div key={pr.id} onClick={()=>setSel(pr)} className={`bg-white border rounded-xl p-5 hover:border-stone-300 transition-all cursor-pointer ${pr.status==="submitted"?"border-amber-200 bg-amber-50/20":"border-stone-200/60"}`}>
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="text-sm font-semibold text-stone-800">{pr.title}</span>
                     <PB priority={pr.priority}/>
                     <Bg v={CAT_COLOR[pr.category||"other"]||"default"}>{CATS.find(c=>c.value===pr.category)?.label||pr.category}</Bg>
+                    {pr.status==="submitted"&&<span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Awaiting Review</span>}
                   </div>
                   <p className="text-xs text-stone-400 line-clamp-1">{pr.description}</p>
                 </div>
@@ -2327,6 +2839,7 @@ function DesignProjectsPage({ profile, interns, projects, setProjects, sb }: { p
                 <span className="text-xs text-stone-400 flex items-center gap-1"><Av name={gn(pr.owner_id)} size={16}/>{gn(pr.owner_id)}</span>
                 {pr.file_url && <span className="text-xs text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full flex items-center gap-1"><Image size={10}/>File attached</span>}
                 {pr.project_url && <span className="text-xs text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full flex items-center gap-1"><LinkIcon size={10}/>Link</span>}
+                {(pr.notes||[]).length>0 && <span className="text-xs text-stone-400 flex items-center gap-1"><MessageSquare size={10}/>{pr.notes!.length} note{pr.notes!.length!==1?"s":""}</span>}
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden">
@@ -2394,9 +2907,12 @@ function DesignProjectsPage({ profile, interns, projects, setProjects, sb }: { p
                 className="w-full h-2 bg-stone-100 rounded-full appearance-none cursor-pointer accent-stone-800"/>
               <div className="flex justify-between text-xs text-stone-400 mt-1"><span>Planning</span><span>In Progress</span><span>Complete</span></div>
             </div>
-            {(isAdmin || sel.owner_id===profile.id) && (
+            <div className="border-t border-stone-100 pt-3">
+              <ProjectNotes notes={sel.notes||[]} profile={profile} interns={interns} onAdd={body=>addNote(sel.id,body)}/>
+            </div>
+            {isAdmin && (
               <div className="flex justify-end pt-2 border-t border-stone-100">
-                <Btn variant="danger" onClick={()=>del(sel.id)}><Trash2 size={14}/>Delete</Btn>
+                <Btn variant="danger" onClick={()=>del(sel.id)}><Trash2 size={14}/>Delete Project</Btn>
               </div>
             )}
           </div>
@@ -6999,9 +7515,29 @@ function DirectorProjectsPage({ techProjects: initialTech, designProjects: initi
                 <div className={`h-full rounded-full ${sel.progress>=100?'bg-emerald-500':sel.progress>50?'bg-sky-500':'bg-amber-400'}`} style={{width:`${sel.progress}%`}}/>
               </div>
             </div>
-            {isTechProject(sel)&&sel.github_url&&<a href={sel.github_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700"><ExternalLink size={12}/>View on GitHub</a>}
-            {!isTechProject(sel)&&sel.project_url&&<a href={sel.project_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700"><ExternalLink size={12}/>View Project</a>}
-            {!isTechProject(sel)&&sel.file_url&&<a href={sel.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700"><Image size={12}/>View Attached File</a>}
+            <div className="flex gap-3 flex-wrap">
+              {isTechProject(sel)&&sel.github_url&&<a href={sel.github_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700"><ExternalLink size={12}/>View on GitHub</a>}
+              {isTechProject(sel)&&sel.project_url&&<a href={sel.project_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 font-medium"><LinkIcon size={12}/>View Project Link</a>}
+              {isTechProject(sel)&&sel.file_url&&<a href={sel.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-sky-600 hover:text-sky-700 font-medium"><Upload size={12}/>View Attached File</a>}
+              {!isTechProject(sel)&&sel.project_url&&<a href={sel.project_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-sky-600 hover:text-sky-700 font-medium"><ExternalLink size={12}/>View Project</a>}
+              {!isTechProject(sel)&&sel.file_url&&<a href={sel.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-pink-600 hover:text-pink-700 font-medium"><Image size={12}/>View Attached File</a>}
+            </div>
+            {(sel.notes||[]).length>0&&(
+              <div className="border-t border-stone-100 pt-3">
+                <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2">Notes ({sel.notes!.length})</p>
+                <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                  {sel.notes!.map((n,i)=>(
+                    <div key={i} className="bg-stone-50 rounded-xl p-3">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-xs font-semibold text-stone-700">{interns.find(x=>x.id===n.author_id)?.full_name||'Unknown'}</span>
+                        <span className="text-[10px] text-stone-400">{new Date(n.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+                      </div>
+                      <p className="text-xs text-stone-600 leading-relaxed">{n.body}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Md>
@@ -8546,6 +9082,7 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<CCEvent[]>([]);
   const [techProjects, setTechProjects] = useState<TechProject[]>([]);
   const [designProjects, setDesignProjects] = useState<DesignProject[]>([]);
+  const [meetingRequests, setMeetingRequests] = useState<MeetingRequest[]>([]);
   const [content, setContent] = useState<ContentVideo[]>([]);
   const [settings, setSettings] = useState<AppSettings>({});
   const [ugcSubmissions, setUGCSubmissions] = useState<UGCSubmission[]>([]);
@@ -8625,6 +9162,13 @@ export default function DashboardPage() {
       setContent((ctD || []) as ContentVideo[]);
       try { setSettings(((stD||[]) as any[]).reduce((acc:AppSettings,s:any)=>({...acc,[s.key]:s.value}),{})); } catch(_) {}
       setDesignProjects((dpD || []) as DesignProject[]);
+
+      // Meeting requests — admin fetches all, interns fetch ones they're in
+      const mrQuery = (prof.role === "admin" || prof.role === "wisconsin_admin")
+        ? supabase.from("meeting_requests").select("*").order("created_at", { ascending: false })
+        : supabase.from("meeting_requests").select("*").contains("recipient_ids", [prof.id]).order("created_at", { ascending: false });
+      const { data: mrD } = await mrQuery;
+      setMeetingRequests((mrD || []) as MeetingRequest[]);
 
       // UGC data
       const isUGCRole = prof.role === "ugc_creator" || prof.role === "admin" || prof.role === "director";
@@ -8934,8 +9478,8 @@ export default function DashboardPage() {
     switch (page) {
       case "dashboard": return isAdmin
         ? <AdminDash interns={interns} tasks={tasks} outreach={outreach} questions={questions} activity={activity} announcements={announcements} setAnnouncements={setAnnouncements} ugcPivotQueue={ugcPivotQueue} ugcSubmissions={ugcSubmissions} setUGCSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} smartAlerts={smartAlerts} sb={supabase}/>
-        : <InternDash profile={p} tasks={tasks} outreach={outreach} announcements={announcements} setPage={setPage} requests={requests}/>;
-      case "tasks":     return <TasksPg {...common} tasks={tasks} setTasks={setTasks}/>;
+        : <InternDash profile={p} tasks={tasks} outreach={outreach} announcements={announcements} setPage={setPage} requests={requests} meetingRequests={meetingRequests} setMeetingRequests={setMeetingRequests} interns={interns} sb={supabase}/>;
+      case "tasks":     return <TasksPg {...common} tasks={tasks} setTasks={setTasks} meetingRequests={meetingRequests} setMeetingRequests={setMeetingRequests}/>;
       case "outreach":  return <OutPg {...common} outreach={outreach} setOutreach={setOutreach}/>;
       case "requests":  return isAdmin
         ? <AdminRequestInbox requests={requests} setRequests={setRequests} requestTypes={requestTypes} setRequestTypes={setRequestTypes} interns={interns} sb={supabase} settings={settings}/>

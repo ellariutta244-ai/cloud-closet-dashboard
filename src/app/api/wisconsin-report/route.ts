@@ -314,6 +314,7 @@ export async function GET(req: NextRequest) {
 
   if (upsertErr) {
     console.error('Upsert error:', upsertErr);
+    return NextResponse.json({ success: false, error: upsertErr.message }, { status: 500 });
   }
 
   // ── Push notification to Caroline (director) ────────────────────────────────
