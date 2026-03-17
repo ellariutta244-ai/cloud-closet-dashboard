@@ -4902,7 +4902,7 @@ function TutorialLibraryPage({ profile, tutorials, setTutorials, savedCaptions, 
               const isOpen = expanded.has(t.id);
               return (
                 <div key={t.id} className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
-                  <button onClick={() => toggleExpand(t.id)} className="w-full flex items-start gap-3 p-4 text-left hover:bg-stone-50 transition-colors">
+                  <div onClick={() => toggleExpand(t.id)} className="w-full flex items-start gap-3 p-4 text-left hover:bg-stone-50 transition-colors cursor-pointer">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <p className="text-sm font-semibold text-stone-800">{t.title}</p>
@@ -4925,7 +4925,7 @@ function TutorialLibraryPage({ profile, tutorials, setTutorials, savedCaptions, 
                       )}
                       <ChevronDown size={16} className={`text-stone-400 transition-transform duration-200 ${isOpen ? "" : "-rotate-90"}`} />
                     </div>
-                  </button>
+                  </div>
 
                   {isOpen && (
                     <div className="px-4 pb-4 flex flex-col gap-4 border-t border-stone-100">
@@ -6721,7 +6721,7 @@ function DirectorAnalyticsPage({ ugcSubmissions, setUGCSubmissions, ugcCreators,
   // Active creators — all three groups
   const activeUGC = ugcCreators.filter(c => c.ugc_status !== "archived").length;
   const activeExternal = 6; // SORAA_CREATORS
-  const activeWisconsin = interns.filter(i => i.role === "intern").length;
+  const activeWisconsin = new Set(content.map(v => v.creator_id).filter(Boolean)).size;
   const totalActiveCreators = activeUGC + activeExternal + activeWisconsin;
 
   // Benchmark distribution
