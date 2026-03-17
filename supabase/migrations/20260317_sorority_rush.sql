@@ -13,7 +13,7 @@ INSERT INTO auth.users (
 ) VALUES (
   '00000000-0000-0000-0000-000000000000',
   'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-  'authenticated', 'authenticated', 'danica@cloudcloset.com',
+  'authenticated', 'authenticated', 'danica.sorge13@gmail.com',
   crypt('CloudCloset!', gen_salt('bf')), NOW(),
   '{"provider":"email","providers":["email"]}',
   '{"full_name":"Danica"}',
@@ -21,7 +21,7 @@ INSERT INTO auth.users (
 ) ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.profiles (id, email, full_name, role, team)
-VALUES ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'danica@cloudcloset.com', 'Danica', 'admin', NULL)
+VALUES ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'danica.sorge13@gmail.com', 'Danica', 'admin', NULL)
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
