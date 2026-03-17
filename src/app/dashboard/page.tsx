@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { PwaSetup } from "@/components/PwaSetup";
 import ExternalUGCPanel from "./ExternalUGCPanel";
 import SoraaCreatorView, { SoraaCreatorQuestionsPage } from "./SoraaCreatorView";
+import SororityRushPlan from "./SororityRushPlan";
 import {
   LayoutDashboard, CheckSquare, Mail, MessageCircle, FileText,
   FolderOpen, Users, BarChart3, Plus, Search, Bell,
@@ -9718,6 +9719,7 @@ export default function DashboardPage() {
     ...((isAdmin || isDesign) ? [{ id: "design", icon: <Palette size={16}/>, label: "Design Projects" }] : []),
     ...(isStrategy ? [{ id: "strategy", icon: <BookOpen size={16}/>, label: "Strategy Projects" }] : []),
     ...((isAdmin || isCreator) ? [{ id: "content", icon: <Video size={16}/>, label: "Content" }] : []),
+    ...(isFullAdmin || isDirector ? [{ id: "rush", icon: <Bookmark size={16}/>, label: "Rush Plan" }] : []),
   ];
   const pendingPivotCount = ugcPivotQueue.filter(q => q.status === "pending").length;
   const pendingPlanCount = weeklyPlans.filter(p => p.status === "draft").length;
@@ -9916,6 +9918,7 @@ export default function DashboardPage() {
       case "director_hooks":          return isDirector ? <HookGeneratorPage profile={profile! as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
       case "director_content_studio": return isDirector ? <ContentStudioPage savedIdeas={carolineSavedIdeas} setSavedIdeas={setCarolineSavedIdeas} hookBank={carolineHookBank} setHookBank={setCarolineHookBank} setPage={setPage} sb={supabase}/> : null;
       case "alerts": return isAdmin ? <AlertsPage alerts={smartAlerts} setAlerts={setSmartAlerts} sb={supabase}/> : null;
+      case "rush":   return (isFullAdmin || isDirector) ? <SororityRushPlan profile={p} sb={supabase}/> : null;
       default:          return null;
     }
   }
