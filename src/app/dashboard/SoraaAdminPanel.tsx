@@ -433,6 +433,7 @@ function QuestionsPanel({ questions, onRefresh }: {
 }) {
   const [replies, setReplies] = useState<Record<string, string>>({});
   const [sending, setSending] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [localQuestions, setLocalQuestions] = useState<SoraaQuestion[]>(questions);
 
@@ -467,6 +468,14 @@ function QuestionsPanel({ questions, onRefresh }: {
     }
   }
 
+  async function deleteQuestion(questionId: string) {
+    if (!confirm('Delete this message and all its replies?')) return;
+    setDeleting(questionId);
+    await fetch(`/api/soraa/questions?id=${questionId}`, { method: 'DELETE' });
+    setLocalQuestions(prev => prev.filter(q => q.id !== questionId));
+    setDeleting(null);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -492,7 +501,15 @@ function QuestionsPanel({ questions, onRefresh }: {
               {c.questions.map(q => (
                 <div key={q.id} className="flex flex-col gap-2">
                   {/* Creator message */}
-                  <div className="flex justify-end">
+                  <div className="flex justify-end items-start gap-2">
+                    <button
+                      onClick={() => deleteQuestion(q.id)}
+                      disabled={deleting === q.id}
+                      className="text-stone-300 hover:text-red-400 disabled:opacity-50 transition-colors mt-1 flex-shrink-0"
+                      title="Delete message"
+                    >
+                      <Trash2 size={13}/>
+                    </button>
                     <div className="bg-stone-100 rounded-xl px-3 py-2 max-w-[85%]">
                       <p className="text-[10px] font-semibold text-stone-400 mb-0.5">{c.name} · {fmtDate(q.created_at)}</p>
                       <p className="text-xs text-stone-700">{q.body}</p>
