@@ -796,7 +796,8 @@ function TasksPg({ profile, interns, tasks, setTasks, meetingRequests, setMeetin
   // a task is visible to an intern if they are the primary assignee or in co_assignees
   const isAssignedTo = (t: Task, id: string) => t.assigned_to === id || (t.co_assignees||[]).includes(id);
   const visible = isAdmin ? tasks : tasks.filter(t => isAssignedTo(t, profile.id));
-  const filtered = filter==="all" ? visible : visible.filter(t=>t.status===filter);
+  const isUnassigned = (t: Task) => !t.assigned_to && (t.co_assignees||[]).length === 0;
+  const filtered = filter==="all" ? visible : filter==="unassigned" ? visible.filter(isUnassigned) : visible.filter(t=>t.status===filter);
   const SL: Record<string,string> = { not_started:"Not Started", in_progress:"In Progress", submitted:"Submitted", completed:"Completed" };
   const CATS = [{value:"brand_outreach",label:"Brand Outreach"},{value:"creator_outreach",label:"Creator Outreach"},{value:"campus_partnerships",label:"Campus Partnerships"},{value:"content_creation",label:"Content Creation"},{value:"research",label:"Research"},{value:"other",label:"Other"}];
   const iName=(id?:string)=>interns.find(i=>i.id===id)?.full_name||"—";
@@ -962,11 +963,15 @@ function TasksPg({ profile, interns, tasks, setTasks, meetingRequests, setMeetin
       {/* Task filters — only shown for tasks tab */}
       {(!isAdmin || tab==='tasks') && (
       <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit flex-wrap">
-        {["all","not_started","in_progress","submitted","completed"].map(s=>(
-          <button key={s} onClick={()=>setFilter(s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filter===s?"bg-white text-stone-800 shadow-sm":"text-stone-500 hover:text-stone-700"}`}>
-            {s==="all"?"All":SL[s]}
-          </button>
-        ))}
+        {["all","not_started","in_progress","submitted","completed",...(isAdmin?["unassigned"]:[])].map(s=>{
+          const unassignedCount = s==="unassigned" ? visible.filter(isUnassigned).length : 0;
+          return (
+            <button key={s} onClick={()=>setFilter(s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${filter===s?"bg-white text-stone-800 shadow-sm":"text-stone-500 hover:text-stone-700"}`}>
+              {s==="all"?"All":s==="unassigned"?"Unassigned":SL[s]}
+              {s==="unassigned"&&unassignedCount>0&&<span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${filter===s?"bg-red-100 text-red-600":"bg-red-100 text-red-500"}`}>{unassignedCount}</span>}
+            </button>
+          );
+        })}
       </div>
       )}
       {(!isAdmin || tab==='tasks') && (filtered.length===0 ? <ES icon={<CheckSquare size={24}/>} message="No tasks here"/> : isAdmin && grouped ? (
