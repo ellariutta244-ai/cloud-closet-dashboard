@@ -9323,7 +9323,7 @@ export default function DashboardPage() {
   ] : [
     { id: "dashboard", icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
     { id: "tasks",     icon: <CheckSquare size={16}/>,     label: isAdmin ? "All Tasks" : "My Tasks" },
-    { id: "outreach",  icon: <Mail size={16}/>,            label: "Outreach Log" },
+    ...(!isTech ? [{ id: "outreach", icon: <Mail size={16}/>, label: "Outreach Log" }] : []),
     { id: "requests",  icon: <Inbox size={16}/>,           label: isAdmin ? "Request Inbox" : "Requests" },
     ...(!isTech ? [{ id: "events", icon: <CalendarDays size={16}/>, label: "Events" }] : []),
     { id: "questions", icon: <MessageCircle size={16}/>,   label: "Questions", badge: openQCount || null },
