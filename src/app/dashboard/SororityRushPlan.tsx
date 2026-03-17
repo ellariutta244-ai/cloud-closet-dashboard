@@ -205,7 +205,7 @@ function NotesSidebar({
   canAddNotes: boolean;
   onNotesChange: () => void;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
