@@ -13,7 +13,7 @@ function getAdminApp() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { title, body, team, role, userId } = await req.json();
+    const { title, body, team, role, userId, userIds } = await req.json();
     if (!title || !body) return NextResponse.json({ error: 'Missing title or body' }, { status: 400 });
 
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -26,7 +26,8 @@ export async function POST(req: NextRequest) {
     );
 
     let query = supabase.from('fcm_tokens').select('user_id, token, profiles!inner(role, team)');
-    if (userId) query = (query as any).eq('user_id', userId);
+    if (userIds && Array.isArray(userIds) && userIds.length > 0) query = (query as any).in('user_id', userIds);
+    else if (userId) query = (query as any).eq('user_id', userId);
     else if (role) query = (query as any).eq('profiles.role', role);
     else if (team) query = (query as any).eq('profiles.team', team);
 

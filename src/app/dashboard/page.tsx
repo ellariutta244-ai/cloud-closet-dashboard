@@ -565,6 +565,12 @@ function MeetingRequestsAdmin({ profile, interns, meetingRequests, setMeetingReq
     setSubmitting(false);
     if (error) { console.error(error); return; }
     setMeetingRequests([data as MeetingRequest, ...meetingRequests]);
+    // Notify recipients
+    if (recipientIds.length > 0) {
+      const ranges = form.dateRanges.filter(d=>d.trim()).join(", ");
+      fetch("/api/send-notification", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ userIds: recipientIds, title:"Meeting Request", body:`${form.title}${ranges ? ` — ${ranges}` : ""}. Tap to submit your availability.` }) }).catch(()=>{});
+    }
     setShowCreate(false); setForm(emptyForm);
   }
 
@@ -829,10 +835,22 @@ function TasksPg({ profile, interns, tasks, setTasks, meetingRequests, setMeetin
       const updated: Task = {...editTask, ...payload, assigned_to: payload.assigned_to ?? undefined, due_date: payload.due_date ?? undefined};
       setTasks(tasks.map(t=>t.id===editTask.id ? updated : t));
       if (detail?.id===editTask.id) setDetail(updated);
+      // Notify newly added assignees
+      const prevAssignees = [editTask.assigned_to, ...(editTask.co_assignees||[])].filter(Boolean) as string[];
+      const newAssignees = form.assignees.filter(id => !prevAssignees.includes(id));
+      if (newAssignees.length > 0) {
+        fetch("/api/send-notification", { method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ userIds: newAssignees, title:"Task Assigned", body:`You've been added to "${form.title}"` }) }).catch(()=>{});
+      }
     } else {
       const {data,error} = await sb.from("tasks").insert({...payload, created_at:new Date().toISOString()}).select().single();
       if (error) { console.error(error); return; }
       setTasks([data as Task, ...tasks]);
+      // Notify all assignees
+      if (form.assignees.length > 0) {
+        fetch("/api/send-notification", { method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ userIds: form.assignees, title:"New Task Assigned", body:`"${form.title}" has been added to your tasks` }) }).catch(()=>{});
+      }
     }
     setModal(false);
   }
@@ -1242,6 +1260,11 @@ function QPg({ profile, interns, questions, setQuestions, sb, addActivity }: { p
     setQuestions(updated);
     if (detail.status==="open") await sb.from("questions").update({status:"answered"}).eq("id",detail.id);
     setDetail(updated.find(q=>q.id===detail.id)||null);setReply("");
+    // Notify question author if an admin is replying to an intern's question
+    if (isAdmin && detail.author_id && detail.author_id !== profile.id) {
+      fetch("/api/send-notification", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ userId: detail.author_id, title:"Question Answered", body:`Your question "${detail.title}" received a reply` }) }).catch(()=>{});
+    }
   }
   async function resolve(id:string) {
     await sb.from("questions").update({status:"resolved"}).eq("id",id);
