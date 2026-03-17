@@ -3,7 +3,8 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Plus, Trash2, Send, ChevronDown, ChevronUp, MessageSquare,
   Check, X, Pencil, BookOpen, Clock, AlertTriangle,
-  Users, ShoppingBag, FileText, CheckSquare,
+  Users, ShoppingBag, FileText, CheckSquare, Link, Upload,
+  ExternalLink, File, Folder,
 } from 'lucide-react';
 
 // ============================================================
@@ -18,6 +19,7 @@ type RushToteSettings = { num_chapters: number; bags_per_chapter: number };
 type RushStrategySection = { id: string; section_type: string; content: any[] };
 type RushActionItem = { id: string; action: string; owner: string; due_date: string; priority: string; status: string; order_num: number };
 type RushNote = { id: string; sub_tab: string; author_id: string; author_name: string; content: string; parent_id: string | null; created_at: string; replies?: RushNote[] };
+type RushResource = { id: string; name: string; type: 'link' | 'file'; url: string; file_name?: string; file_size?: number; order_num: number; created_at: string };
 type RushOverview = { north_star_goal: string; opportunities: string[]; extra_sections: { heading: string; body: string }[] };
 
 // ============================================================
@@ -2072,6 +2074,262 @@ function seedActionItems() {
 }
 
 // ============================================================
+// ResourcesTab
+// ============================================================
+
+function ResourcesTab({
+  resources, canEdit, sb, onChange,
+}: {
+  resources: RushResource[];
+  canEdit: boolean;
+  sb: any;
+  onChange: () => void;
+}) {
+  const [linkName, setLinkName] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
+  const [addingLink, setAddingLink] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const links = resources.filter(r => r.type === 'link').sort((a, b) => a.order_num - b.order_num);
+  const files = resources.filter(r => r.type === 'file').sort((a, b) => a.order_num - b.order_num);
+
+  async function addLink() {
+    if (!linkName.trim() || !linkUrl.trim()) return;
+    const url = linkUrl.startsWith('http') ? linkUrl : `https://${linkUrl}`;
+    const { error } = await sb.from('rush_resources').insert({
+      id: crypto.randomUUID(),
+      name: linkName.trim(),
+      type: 'link',
+      url,
+      order_num: links.length,
+      created_at: new Date().toISOString(),
+    });
+    if (error) { console.error('add link', error); return; }
+    setLinkName(''); setLinkUrl(''); setAddingLink(false);
+    onChange();
+  }
+
+  async function uploadFile(file: File) {
+    if (uploading) return;
+    setUploading(true);
+    const path = `rush/${crypto.randomUUID()}_${file.name}`;
+    const { error: upErr } = await sb.storage.from('rush-resources').upload(path, file);
+    if (upErr) { console.error('upload', upErr); setUploading(false); return; }
+    const { data: { publicUrl } } = sb.storage.from('rush-resources').getPublicUrl(path);
+    const { error: dbErr } = await sb.from('rush_resources').insert({
+      id: crypto.randomUUID(),
+      name: file.name,
+      type: 'file',
+      url: publicUrl,
+      file_name: file.name,
+      file_size: file.size,
+      order_num: files.length,
+      created_at: new Date().toISOString(),
+    });
+    if (dbErr) console.error('file record', dbErr);
+    else onChange();
+    setUploading(false);
+  }
+
+  async function handleFiles(fileList: FileList | null) {
+    if (!fileList) return;
+    for (const file of Array.from(fileList)) await uploadFile(file);
+  }
+
+  async function updateName(id: string, name: string) {
+    await sb.from('rush_resources').update({ name }).eq('id', id);
+    onChange();
+  }
+
+  async function deleteResource(id: string, url: string, type: string) {
+    if (type === 'file') {
+      // Extract storage path from url
+      const parts = url.split('/rush-resources/');
+      if (parts[1]) await sb.storage.from('rush-resources').remove([decodeURIComponent(parts[1])]);
+    }
+    await sb.from('rush_resources').delete().eq('id', id);
+    onChange();
+  }
+
+  function fmtSize(bytes?: number) {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return (
+    <div className="flex flex-col gap-6 max-w-4xl">
+
+      {/* Links */}
+      <div className="bg-white border border-stone-200 rounded-xl p-5 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Link size={15} className="text-rose-600" />
+            <h3 className="font-semibold text-stone-800 text-sm">Links</h3>
+          </div>
+          {canEdit && !addingLink && (
+            <Btn size="sm" variant="ghost" onClick={() => setAddingLink(true)}>
+              <Plus size={12} /> Add Link
+            </Btn>
+          )}
+        </div>
+
+        {addingLink && (
+          <div className="flex flex-col gap-2 bg-rose-50 border border-rose-100 rounded-lg p-3">
+            <input
+              type="text"
+              placeholder="Name (e.g. Sorority Contact Sheet)"
+              value={linkName}
+              onChange={e => setLinkName(e.target.value)}
+              className="text-sm border border-stone-200 rounded-lg px-3 py-2 outline-none focus:border-rose-400 bg-white"
+            />
+            <input
+              type="text"
+              placeholder="URL (e.g. https://docs.google.com/...)"
+              value={linkUrl}
+              onChange={e => setLinkUrl(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addLink()}
+              className="text-sm border border-stone-200 rounded-lg px-3 py-2 outline-none focus:border-rose-400 bg-white"
+            />
+            <div className="flex gap-2">
+              <Btn size="sm" variant="primary" onClick={addLink} disabled={!linkName.trim() || !linkUrl.trim()}>Save</Btn>
+              <Btn size="sm" variant="ghost" onClick={() => { setAddingLink(false); setLinkName(''); setLinkUrl(''); }}>Cancel</Btn>
+            </div>
+          </div>
+        )}
+
+        {links.length === 0 && !addingLink && (
+          <p className="text-sm text-stone-400 italic">No links added yet.</p>
+        )}
+
+        <div className="flex flex-col gap-1">
+          {links.map(r => (
+            <div key={r.id} className="flex items-center gap-3 group py-1.5 px-2 rounded-lg hover:bg-stone-50">
+              <ExternalLink size={14} className="text-rose-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                {canEdit ? (
+                  <InlineEdit
+                    value={r.name}
+                    onSave={v => updateName(r.id, v)}
+                    disabled={false}
+                    placeholder="Link name"
+                  />
+                ) : (
+                  <span className="text-sm font-medium text-stone-800">{r.name}</span>
+                )}
+                <a
+                  href={r.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-stone-400 hover:text-rose-600 truncate block"
+                >
+                  {r.url}
+                </a>
+              </div>
+              <a
+                href={r.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-stone-300 hover:text-rose-600 flex-shrink-0"
+              >
+                <ExternalLink size={13} />
+              </a>
+              {canEdit && (
+                <button
+                  onClick={() => deleteResource(r.id, r.url, r.type)}
+                  className="text-stone-300 hover:text-red-400 flex-shrink-0 opacity-0 group-hover:opacity-100"
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Files */}
+      <div className="bg-white border border-stone-200 rounded-xl p-5 flex flex-col gap-4">
+        <div className="flex items-center gap-2">
+          <Folder size={15} className="text-rose-600" />
+          <h3 className="font-semibold text-stone-800 text-sm">Files</h3>
+        </div>
+
+        {canEdit && (
+          <div
+            onDragOver={e => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); }}
+            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center gap-2 cursor-pointer transition-colors ${
+              dragging ? 'border-rose-400 bg-rose-50' : 'border-stone-200 hover:border-rose-300 hover:bg-rose-50/40'
+            }`}
+          >
+            <Upload size={20} className={dragging ? 'text-rose-500' : 'text-stone-300'} />
+            <p className="text-sm text-stone-500 font-medium">
+              {uploading ? 'Uploading...' : 'Drop files here or click to upload'}
+            </p>
+            <p className="text-xs text-stone-400">PDFs, images, docs, spreadsheets — anything</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={e => handleFiles(e.target.files)}
+            />
+          </div>
+        )}
+
+        {files.length === 0 && (
+          <p className="text-sm text-stone-400 italic">No files uploaded yet.</p>
+        )}
+
+        <div className="flex flex-col gap-1">
+          {files.map(r => (
+            <div key={r.id} className="flex items-center gap-3 group py-1.5 px-2 rounded-lg hover:bg-stone-50">
+              <File size={14} className="text-rose-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                {canEdit ? (
+                  <InlineEdit
+                    value={r.name}
+                    onSave={v => updateName(r.id, v)}
+                    disabled={false}
+                    placeholder="File name"
+                  />
+                ) : (
+                  <span className="text-sm font-medium text-stone-800">{r.name}</span>
+                )}
+                {r.file_size && (
+                  <span className="text-xs text-stone-400 ml-1">{fmtSize(r.file_size)}</span>
+                )}
+              </div>
+              <a
+                href={r.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-stone-400 hover:text-rose-600 flex-shrink-0 font-medium"
+              >
+                Open
+              </a>
+              {canEdit && (
+                <button
+                  onClick={() => deleteResource(r.id, r.url, r.type)}
+                  className="text-stone-300 hover:text-red-400 flex-shrink-0 opacity-0 group-hover:opacity-100"
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // Main Component
 // ============================================================
 
@@ -2082,6 +2340,7 @@ const TABS = [
   { id: 'tote', label: 'Tote Bag & Budget', icon: ShoppingBag },
   { id: 'download', label: 'Download Card Strategy', icon: FileText },
   { id: 'actions', label: 'Open Items', icon: CheckSquare },
+  { id: 'resources', label: 'Docs & Links', icon: Folder },
   { id: 'notes', label: 'Notes & Comments', icon: MessageSquare },
 ];
 
@@ -2095,6 +2354,7 @@ export default function SororityRushPlan({ profile, sb }: { profile: Profile; sb
   const [strategySections, setStrategySections] = useState<RushStrategySection[]>([]);
   const [actionItems, setActionItems] = useState<RushActionItem[]>([]);
   const [notes, setNotes] = useState<RushNote[]>([]);
+  const [resources, setResources] = useState<RushResource[]>([]);
   const [overview, setOverview] = useState<RushOverview>(DEFAULT_OVERVIEW);
   const [loading, setLoading] = useState(true);
   const [overviewId, setOverviewId] = useState<string | null>(null);
@@ -2195,6 +2455,10 @@ export default function SororityRushPlan({ profile, sb }: { profile: Profile; sb
         setActionItems(actionData);
       }
 
+      // Resources
+      const { data: resData } = await sb.from('rush_resources').select('*').order('order_num');
+      setResources(resData ?? []);
+
       // Notes
       await loadNotes();
     } catch (err) {
@@ -2255,6 +2519,11 @@ export default function SororityRushPlan({ profile, sb }: { profile: Profile; sb
   async function reloadActionItems() {
     const { data } = await sb.from('rush_action_items').select('*').order('order_num');
     setActionItems(data ?? []);
+  }
+
+  async function reloadResources() {
+    const { data } = await sb.from('rush_resources').select('*').order('order_num');
+    setResources(data ?? []);
   }
 
   if (loading) {
@@ -2389,6 +2658,14 @@ export default function SororityRushPlan({ profile, sb }: { profile: Profile; sb
               notes={notes}
               profile={profile}
               onNotesChange={loadNotes}
+            />
+          )}
+          {tab === 'resources' && (
+            <ResourcesTab
+              resources={resources}
+              canEdit={canEdit}
+              sb={sb}
+              onChange={reloadResources}
             />
           )}
           {tab === 'notes' && (
