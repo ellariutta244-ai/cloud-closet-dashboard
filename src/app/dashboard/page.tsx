@@ -346,6 +346,7 @@ function InternDash({ profile, tasks, outreach, announcements, requests, meeting
   const myOut = outreach.filter(o=>o.intern_id===profile.id);
   const responded = myOut.filter(o=>["responded","interested"].includes(o.status)).length;
   const rate = myOut.length>0 ? Math.round((responded/myOut.length)*100) : 0;
+  const hideOutreachStats = ["Tech/AI","Content Creation","Strategy"].includes(profile.team||"");
   const myAnnouncements = announcements.filter(a => !a.target_teams || a.target_teams.length === 0 || a.target_teams.includes(profile.team || ""));
   const pinned = myAnnouncements.filter(a=>a.pinned);
   const first = profile.full_name?.split(" ")[0]||"there";
@@ -360,10 +361,10 @@ function InternDash({ profile, tasks, outreach, announcements, requests, meeting
         </div>
         <Btn onClick={()=>setPage("outreach")}><Plus size={14}/>Log Outreach</Btn>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className={`grid grid-cols-1 gap-3 ${hideOutreachStats ? "" : "sm:grid-cols-3"}`}>
         <SC label="Active Tasks" value={active}/>
-        <SC label="Outreach Sent" value={myOut.length}/>
-        <SC label="Response Rate" value={`${rate}%`}/>
+        {!hideOutreachStats && <SC label="Outreach Sent" value={myOut.length}/>}
+        {!hideOutreachStats && <SC label="Response Rate" value={`${rate}%`}/>}
       </div>
       {unreadReplies.length>0 && (
         <div className="flex flex-col gap-2">
