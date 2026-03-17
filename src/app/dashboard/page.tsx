@@ -6670,16 +6670,19 @@ function DirectorAnalyticsPage({ ugcSubmissions, setUGCSubmissions, ugcCreators,
   reports: Report[]; outreach: Outreach[]; sb: any;
 }) {
   const [refreshing, setRefreshing] = useState(false);
+  const [soraaSubs, setSoraaSubs] = useState<Array<{ views?: number; created_at: string }>>([]);
 
   useEffect(() => {
     async function refresh() {
       setRefreshing(true);
-      const [{ data: subs }, { data: creators }] = await Promise.all([
+      const [{ data: subs }, { data: creators }, soraaRes] = await Promise.all([
         sb.from("ugc_submissions").select("*").order("created_at", { ascending: false }),
         sb.from("profiles").select("*").eq("role", "ugc_creator").order("full_name"),
+        fetch("/api/soraa/submissions").then(r => r.json()).catch(() => ({ submissions: [] })),
       ]);
       if (subs) setUGCSubmissions(subs as UGCSubmission[]);
       if (creators) setUGCCreators(creators as UGCCreatorProfile[]);
+      setSoraaSubs(soraaRes.submissions || []);
       setRefreshing(false);
     }
     refresh();
@@ -6687,16 +6690,10 @@ function DirectorAnalyticsPage({ ugcSubmissions, setUGCSubmissions, ugcCreators,
 
   const currentWeek = getMondayOfWeek(new Date());
   const thisWeekSubs = ugcSubmissions.filter(s => s.week_date === currentWeek);
-  const totalViewsThisWeek = thisWeekSubs.reduce((s, x) => s + x.total_views, 0);
-  const totalViewsAllTime = ugcSubmissions.reduce((s, x) => s + x.total_views, 0);
-
-  // Leaderboard this week
-  const leaderboard = thisWeekSubs
-    .map(s => ({ creator: ugcCreators.find(c => c.id === s.creator_id), views: s.total_views }))
-    .filter(x => x.creator)
-    .sort((a, b) => b.views - a.views)
-    .slice(0, 5);
-  const medals = ["🥇", "🥈", "🥉"];
+  const soraaThisWeek = soraaSubs.filter(s => s.created_at >= currentWeek);
+  const totalViewsThisWeek = thisWeekSubs.reduce((s, x) => s + x.total_views, 0) + soraaThisWeek.reduce((s, x) => s + (x.views || 0), 0);
+  const totalViewsAllTime = ugcSubmissions.reduce((s, x) => s + x.total_views, 0) + soraaSubs.reduce((s, x) => s + (x.views || 0), 0);
+  const submissionsThisWeek = thisWeekSubs.length + soraaThisWeek.length;
 
   // Benchmark distribution
   const tierCounts = useMemo(() => {
@@ -6728,7 +6725,7 @@ function DirectorAnalyticsPage({ ugcSubmissions, setUGCSubmissions, ugcCreators,
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <SC label="Views This Week" value={fmtViews(totalViewsThisWeek)} />
         <SC label="Total Views" value={fmtViews(totalViewsAllTime)} />
-        <SC label="Submissions This Week" value={thisWeekSubs.length} />
+        <SC label="Submissions This Week" value={submissionsThisWeek} />
         <SC label="Active Creators" value={ugcCreators.filter(c => c.ugc_status !== "archived").length} />
       </div>
 
@@ -6740,38 +6737,19 @@ function DirectorAnalyticsPage({ ugcSubmissions, setUGCSubmissions, ugcCreators,
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Leaderboard */}
-        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
-          <p className="text-sm font-semibold text-stone-700 mb-4">This Week&apos;s Leaderboard</p>
-          {leaderboard.length === 0 ? <ES message="No submissions yet this week" /> : (
-            <div className="flex flex-col gap-2">
-              {leaderboard.map((entry, i) => (
-                <div key={entry.creator!.id} className="flex items-center gap-3 p-2 rounded-lg bg-stone-50">
-                  <span className="text-lg w-7 text-center">{i < 3 ? medals[i] : <span className="text-sm font-bold text-stone-400">{i + 1}</span>}</span>
-                  <Av name={entry.creator!.full_name} size={28} />
-                  <span className="text-sm font-medium text-stone-800 flex-1 truncate">{entry.creator!.full_name}</span>
-                  <span className="text-sm font-bold text-stone-700">{fmtViews(entry.views)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Benchmark distribution */}
-        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
-          <p className="text-sm font-semibold text-stone-700 mb-4">Benchmark Breakdown</p>
-          <div className="flex flex-col gap-2">
-            {[["viral", "Viral 🔥", "#7C3AED"], ["strong", "Strong", "#059669"], ["good", "Good", "#3B82F6"], ["average", "Average", "#F59E0B"], ["hook_failed", "Hook Failed", "#EF4444"]].map(([tier, label, color]) => (
-              <div key={tier} className="flex items-center gap-3">
-                <span className="text-xs font-medium text-stone-600 w-24">{label}</span>
-                <div className="flex-1 bg-stone-100 rounded-full h-2">
-                  <div className="h-2 rounded-full transition-all" style={{ width: `${ugcSubmissions.length > 0 ? Math.round(((tierCounts[tier] || 0) / ugcSubmissions.length) * 100) : 0}%`, background: color }} />
-                </div>
-                <span className="text-xs text-stone-500 w-8 text-right">{tierCounts[tier] || 0}</span>
+      {/* Benchmark distribution */}
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+        <p className="text-sm font-semibold text-stone-700 mb-4">Benchmark Breakdown</p>
+        <div className="flex flex-col gap-2">
+          {[["viral", "Viral 🔥", "#7C3AED"], ["strong", "Strong", "#059669"], ["good", "Good", "#3B82F6"], ["average", "Average", "#F59E0B"], ["hook_failed", "Hook Failed", "#EF4444"]].map(([tier, label, color]) => (
+            <div key={tier} className="flex items-center gap-3">
+              <span className="text-xs font-medium text-stone-600 w-24">{label}</span>
+              <div className="flex-1 bg-stone-100 rounded-full h-2">
+                <div className="h-2 rounded-full transition-all" style={{ width: `${ugcSubmissions.length > 0 ? Math.round(((tierCounts[tier] || 0) / ugcSubmissions.length) * 100) : 0}%`, background: color }} />
               </div>
-            ))}
-          </div>
+              <span className="text-xs text-stone-500 w-8 text-right">{tierCounts[tier] || 0}</span>
+            </div>
+          ))}
         </div>
       </div>
 
