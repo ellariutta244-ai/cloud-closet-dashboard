@@ -9771,6 +9771,12 @@ export default function DashboardPage() {
         { id: "external-ugc", icon: <Sparkles size={16}/>, label: "External UGC" },
       ],
     },
+    ...(canSeeRush ? [{
+      label: "SORORITY RUSH",
+      items: [
+        { id: "rush", icon: <Bookmark size={16}/>, label: "Rush Plan" },
+      ],
+    }] : []),
   ];
 
   const DIRECTOR_SECTIONS = [
