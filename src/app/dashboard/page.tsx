@@ -38,6 +38,7 @@ type CCEvent = { id: string; title: string; description?: string; date?: string;
 type ProjectNote = { author_id: string; body: string; created_at: string };
 type TechProject = { id: string; title: string; description?: string; status: string; priority?: string; owner_id?: string; contributors?: string[]; tech_stack?: string; github_url?: string; project_url?: string; file_url?: string; progress: number; notes?: ProjectNote[]; created_at: string; updated_at?: string };
 type DesignProject = { id: string; title: string; description?: string; category?: string; status: string; priority?: string; owner_id?: string; contributors?: string[]; project_url?: string; file_url?: string; progress: number; notes?: ProjectNote[]; created_at: string; updated_at?: string };
+type StrategyProject = { id: string; title: string; description?: string; category?: string; status: string; priority?: string; owner_id?: string; contributors?: string[]; project_url?: string; file_url?: string; progress: number; notes?: ProjectNote[]; created_at: string; updated_at?: string };
 type ContentVideo = { id: string; creator_id?: string; title: string; tiktok_url?: string; views?: number; likes?: number; comments?: number; date_posted?: string; status: string; created_at: string };
 type AppSettings = Record<string, string>;
 type ReportFieldConfig = { tasks_completed:boolean; outreach_sent:boolean; responses_received:boolean; wins:boolean; challenges:boolean; ideas:boolean; custom_fields:{key:string;label:string;type:"checkbox"|"text"}[] };
@@ -1730,10 +1731,11 @@ function ResPg({ profile, resources, setResources, sb }: { profile:Profile; reso
 }
 
 // ── Intern Hub (tabbed wrapper for admin) ─────────────────────────────────────
-function InternHubPage({ profile, interns, setInterns, techProjects, setTechProjects, designProjects, setDesignProjects, content, setContent, ugcHooks, setUGCHooks, savedHooks, setSavedHooks, settings, sb }: {
+function InternHubPage({ profile, interns, setInterns, techProjects, setTechProjects, designProjects, setDesignProjects, strategyProjects, setStrategyProjects, content, setContent, ugcHooks, setUGCHooks, savedHooks, setSavedHooks, settings, sb }: {
   profile: Profile; interns: Profile[]; setInterns: (i:Profile[])=>void;
   techProjects: TechProject[]; setTechProjects: (p:TechProject[])=>void;
   designProjects: DesignProject[]; setDesignProjects: (p:DesignProject[])=>void;
+  strategyProjects: StrategyProject[]; setStrategyProjects: (p:StrategyProject[])=>void;
   content: ContentVideo[]; setContent: (c:ContentVideo[])=>void;
   ugcHooks: UGCHook[]; setUGCHooks: (h:UGCHook[])=>void;
   savedHooks: SavedHook[]; setSavedHooks: (h:SavedHook[])=>void;
@@ -1741,10 +1743,11 @@ function InternHubPage({ profile, interns, setInterns, techProjects, setTechProj
 }) {
   const [tab, setTab] = useState("roster");
   const TABS = [
-    { id: "roster",  label: "Roster",           icon: <Users size={14}/> },
-    { id: "tech",    label: "Tech Projects",     icon: <Code2 size={14}/> },
-    { id: "design",  label: "Design Projects",   icon: <Palette size={14}/> },
-    { id: "content", label: "Content",           icon: <Video size={14}/> },
+    { id: "roster",   label: "Roster",             icon: <Users size={14}/> },
+    { id: "tech",     label: "Tech Projects",       icon: <Code2 size={14}/> },
+    { id: "design",   label: "Design Projects",     icon: <Palette size={14}/> },
+    { id: "strategy", label: "Strategy Projects",   icon: <BookOpen size={14}/> },
+    { id: "content",  label: "Content",             icon: <Video size={14}/> },
   ];
   return (
     <div className="flex flex-col gap-4">
@@ -1759,10 +1762,11 @@ function InternHubPage({ profile, interns, setInterns, techProjects, setTechProj
           </button>
         ))}
       </div>
-      {tab==="roster"  && <IntMgmt interns={interns} setInterns={setInterns} sb={sb}/>}
-      {tab==="tech"    && <TechProjectsPage profile={profile} interns={interns} projects={techProjects} setProjects={setTechProjects} sb={sb}/>}
-      {tab==="design"  && <DesignProjectsPage profile={profile} interns={interns} projects={designProjects} setProjects={setDesignProjects} sb={sb}/>}
-      {tab==="content" && <ContentPage profile={profile} interns={interns} content={content} setContent={setContent} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={sb}/>}
+      {tab==="roster"   && <IntMgmt interns={interns} setInterns={setInterns} sb={sb}/>}
+      {tab==="tech"     && <TechProjectsPage profile={profile} interns={interns} projects={techProjects} setProjects={setTechProjects} sb={sb}/>}
+      {tab==="design"   && <DesignProjectsPage profile={profile} interns={interns} projects={designProjects} setProjects={setDesignProjects} sb={sb}/>}
+      {tab==="strategy" && <StrategyProjectsPage profile={profile} interns={interns} projects={strategyProjects} setProjects={setStrategyProjects} sb={sb}/>}
+      {tab==="content"  && <ContentPage profile={profile} interns={interns} content={content} setContent={setContent} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={sb}/>}
     </div>
   );
 }
@@ -3092,6 +3096,189 @@ function DesignProjectsPage({ profile, interns, projects, setProjects, sb }: { p
                   <Image size={12}/>View Attached File
                 </a>
               )}
+            </div>
+            <div>
+              <p className="text-xs font-medium text-stone-500 mb-2">Progress: {sel.progress}%</p>
+              <input type="range" min="0" max="100" step="5" value={sel.progress}
+                onChange={e=>updateProgress(sel.id,parseInt(e.target.value))}
+                className="w-full h-2 bg-stone-100 rounded-full appearance-none cursor-pointer accent-stone-800"/>
+              <div className="flex justify-between text-xs text-stone-400 mt-1"><span>Planning</span><span>In Progress</span><span>Complete</span></div>
+            </div>
+            <div className="border-t border-stone-100 pt-3">
+              <ProjectNotes notes={sel.notes||[]} profile={profile} interns={interns} onAdd={body=>addNote(sel.id,body)}/>
+            </div>
+            {isAdmin && (
+              <div className="flex justify-end pt-2 border-t border-stone-100">
+                <Btn variant="danger" onClick={()=>del(sel.id)}><Trash2 size={14}/>Delete Project</Btn>
+              </div>
+            )}
+          </div>
+        )}
+      </Md>
+    </div>
+  );
+}
+
+// ── Strategy Projects Page ─────────────────────────────────────────────────────
+function StrategyProjectsPage({ profile, interns, projects, setProjects, sb }: { profile:Profile; interns:Profile[]; projects:StrategyProject[]; setProjects:(p:StrategyProject[])=>void; sb:any }) {
+  const isAdmin = profile.role === "admin" || profile.role === "wisconsin_admin";
+  const [showC, setShowC] = useState(false);
+  const [sel, setSel] = useState<StrategyProject|null>(null);
+  const [filter, setFilter] = useState("all");
+  const [projectFile, setProjectFile] = useState<File|null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [np, setNp] = useState({ title:"", description:"", category:"research_project", priority:"medium", project_url:"" });
+  const CATS = [
+    {value:"research_project",label:"Research Project"},
+    {value:"expansion_proposition",label:"Expansion Proposition"},
+    {value:"market_analysis",label:"Market Analysis"},
+    {value:"partnership_proposal",label:"Partnership Proposal"},
+    {value:"brand_strategy",label:"Brand Strategy"},
+    {value:"campaign_strategy",label:"Campaign Strategy"},
+    {value:"competitive_analysis",label:"Competitive Analysis"},
+    {value:"other",label:"Other"},
+  ];
+  const CAT_COLOR: Record<string,BV> = { research_project:"info", expansion_proposition:"success", market_analysis:"warning", partnership_proposal:"purple", brand_strategy:"info", campaign_strategy:"success", competitive_analysis:"warning", other:"default" };
+  const SV: Record<string,BV> = { planning:"warning", in_progress:"info", submitted:"purple", completed:"success" };
+  const SL: Record<string,string> = { planning:"Planning", in_progress:"In Progress", submitted:"Submitted", completed:"Completed" };
+  const gn = (id?:string) => interns.find(i=>i.id===id)?.full_name || "?";
+  const fd = filter==="all" ? projects : projects.filter(p=>p.status===filter);
+  const inProgress = projects.filter(p=>p.status==="in_progress").length;
+  const completed = projects.filter(p=>p.status==="completed").length;
+  const avgProg = projects.length>0 ? Math.round(projects.reduce((s,p)=>s+p.progress,0)/projects.length) : 0;
+
+  async function create() {
+    if (!np.title.trim()) return;
+    setUploading(true);
+    let file_url: string|null = null;
+    if (projectFile) {
+      const path = `${Date.now()}-${projectFile.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
+      const { error: upErr } = await sb.storage.from("strategy-projects").upload(path, projectFile, { upsert: false });
+      if (!upErr) { const { data: ud } = sb.storage.from("strategy-projects").getPublicUrl(path); file_url = ud.publicUrl; }
+    }
+    const { data, error } = await sb.from("strategy_projects").insert({
+      ...np, owner_id: profile.id, contributors: [], status: "planning",
+      file_url, progress: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString()
+    }).select().single();
+    setUploading(false);
+    if (error) { console.error(error); return; }
+    setProjects([data, ...projects]);
+    setShowC(false); setProjectFile(null);
+    setNp({ title:"", description:"", category:"research_project", priority:"medium", project_url:"" });
+    if (profile.role !== "admin" && profile.role !== "wisconsin_admin") {
+      fetch("/api/send-notification",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"admin",title:"New Strategy Project 📋",body:`${profile.full_name} added "${data.title}"`})}).catch(()=>{});
+    }
+  }
+
+  async function updateProgress(id:string, progress:number) {
+    const status = progress>=100 ? "completed" : progress>0 ? "in_progress" : "planning";
+    await sb.from("strategy_projects").update({ progress, status, updated_at: new Date().toISOString() }).eq("id",id);
+    setProjects(projects.map(p=>p.id===id?{...p,progress,status}:p));
+    if (sel?.id===id) setSel({...sel,progress,status});
+  }
+
+  async function del(id:string) {
+    await sb.from("strategy_projects").delete().eq("id",id);
+    setProjects(projects.filter(p=>p.id!==id));
+    setSel(null);
+  }
+  async function addNote(id: string, body: string) {
+    const project = projects.find(p => p.id === id);
+    if (!project) return;
+    const note: ProjectNote = { author_id: profile.id, body, created_at: new Date().toISOString() };
+    const updated = [...(project.notes || []), note];
+    await sb.from("strategy_projects").update({ notes: updated, updated_at: new Date().toISOString() }).eq("id", id);
+    const updatedProject = { ...project, notes: updated };
+    setProjects(projects.map(p => p.id === id ? updatedProject : p));
+    setSel(updatedProject);
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between">
+        <div><h1 className="text-xl font-bold text-stone-800">Strategy Projects</h1><p className="text-sm text-stone-400 mt-0.5">Research and proposals by the Strategy team</p></div>
+        <Btn onClick={()=>setShowC(true)}><Plus size={14}/>New Project</Btn>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <SC label="In Progress" value={inProgress}/><SC label="Completed" value={completed}/><SC label="Avg Progress" value={`${avgProg}%`}/>
+      </div>
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit flex-wrap">
+        {["all","planning","in_progress","submitted","completed"].map(s=>(
+          <button key={s} onClick={()=>setFilter(s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filter===s?"bg-white text-stone-800 shadow-sm":"text-stone-500"}`}>
+            {s==="all"?"All":SL[s]}
+          </button>
+        ))}
+      </div>
+      {fd.length===0 ? <ES icon={<BookOpen size={24}/>} message="No projects here"/> : (
+        <div className="flex flex-col gap-3">
+          {fd.map(pr=>(
+            <div key={pr.id} onClick={()=>setSel(pr)} className={`bg-white border rounded-xl p-5 hover:border-stone-300 transition-all cursor-pointer ${pr.status==="submitted"?"border-violet-200 bg-violet-50/20":"border-stone-200/60"}`}>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-sm font-semibold text-stone-800">{pr.title}</span>
+                    <PB priority={pr.priority}/>
+                    <Bg v={CAT_COLOR[pr.category||"other"]||"default"}>{CATS.find(c=>c.value===pr.category)?.label||pr.category}</Bg>
+                    {pr.status==="submitted"&&<span className="text-[10px] font-semibold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">Awaiting Review</span>}
+                  </div>
+                  <p className="text-xs text-stone-400 line-clamp-1">{pr.description}</p>
+                </div>
+                <Bg v={SV[pr.status]||"default"}>{SL[pr.status]||pr.status}</Bg>
+              </div>
+              <div className="flex items-center gap-4 mb-3 flex-wrap">
+                <span className="text-xs text-stone-400 flex items-center gap-1"><Av name={gn(pr.owner_id)} size={16}/>{gn(pr.owner_id)}</span>
+                {pr.file_url && <span className="text-xs text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full flex items-center gap-1"><Upload size={10}/>File attached</span>}
+                {pr.project_url && <span className="text-xs text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full flex items-center gap-1"><LinkIcon size={10}/>Link</span>}
+                {(pr.notes||[]).length>0 && <span className="text-xs text-stone-400 flex items-center gap-1"><MessageSquare size={10}/>{pr.notes!.length} note{pr.notes!.length!==1?"s":""}</span>}
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${pr.progress>=100?"bg-emerald-500":pr.progress>50?"bg-violet-500":"bg-amber-400"}`} style={{width:`${pr.progress}%`}}/>
+                </div>
+                <span className="text-xs font-semibold text-stone-600 w-10 text-right">{pr.progress}%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Md open={showC} onClose={()=>{setShowC(false);setProjectFile(null);}} title="New Strategy Project">
+        <div className="flex flex-col gap-3">
+          <TI label="Title" value={np.title} onChange={v=>setNp({...np,title:v})} required/>
+          <TA label="Description" value={np.description} onChange={v=>setNp({...np,description:v})}/>
+          <Sel label="Category" value={np.category} onChange={v=>setNp({...np,category:v})} options={CATS}/>
+          <Sel label="Priority" value={np.priority} onChange={v=>setNp({...np,priority:v})} options={["low","medium","high","urgent"].map(p=>({value:p,label:p.charAt(0).toUpperCase()+p.slice(1)}))}/>
+          <TI label="Project Link" value={np.project_url} onChange={v=>setNp({...np,project_url:v})} placeholder="Google Doc, Drive, Notion link…"/>
+          <div>
+            <label className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">Attach File <span className="text-stone-400 font-normal">(optional)</span></label>
+            <FileDropZone file={projectFile} setFile={setProjectFile}/>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="secondary" onClick={()=>{setShowC(false);setProjectFile(null);}}>Cancel</Btn>
+            <Btn onClick={create} disabled={!np.title.trim()||uploading}>{uploading?"Uploading…":"Create"}</Btn>
+          </div>
+        </div>
+      </Md>
+
+      <Md open={!!sel} onClose={()=>setSel(null)} title="Project Detail">
+        {sel && (
+          <div className="flex flex-col gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <PB priority={sel.priority}/>
+                <Bg v={SV[sel.status]||"default"}>{SL[sel.status]||sel.status}</Bg>
+                <Bg v={CAT_COLOR[sel.category||"other"]||"default"}>{CATS.find(c=>c.value===sel.category)?.label||sel.category}</Bg>
+              </div>
+              <h3 className="text-lg font-bold text-stone-800">{sel.title}</h3>
+              {sel.description && <p className="text-sm text-stone-500 mt-1 leading-relaxed">{sel.description}</p>}
+            </div>
+            <div className="bg-stone-50 rounded-lg p-3">
+              <p className="text-xs text-stone-400 mb-1">Owner</p>
+              <p className="text-sm font-medium text-stone-700">{gn(sel.owner_id)}</p>
+            </div>
+            <div className="flex gap-3 flex-wrap">
+              {sel.project_url && <a href={sel.project_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-sky-600 hover:text-sky-700 font-medium"><LinkIcon size={12}/>View Project Link</a>}
+              {sel.file_url && <a href={sel.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-700 font-medium"><Upload size={12}/>View Attached File</a>}
             </div>
             <div>
               <p className="text-xs font-medium text-stone-500 mb-2">Progress: {sel.progress}%</p>
@@ -9275,6 +9462,7 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<CCEvent[]>([]);
   const [techProjects, setTechProjects] = useState<TechProject[]>([]);
   const [designProjects, setDesignProjects] = useState<DesignProject[]>([]);
+  const [strategyProjects, setStrategyProjects] = useState<StrategyProject[]>([]);
   const [meetingRequests, setMeetingRequests] = useState<MeetingRequest[]>([]);
   const [content, setContent] = useState<ContentVideo[]>([]);
   const [settings, setSettings] = useState<AppSettings>({});
@@ -9322,7 +9510,7 @@ export default function DashboardPage() {
         { data: iD }, { data: tD }, { data: oD }, { data: qD },
         { data: rD }, { data: resD }, { data: aD }, { data: actD },
         { data: rtD }, { data: reqD }, { data: evD }, { data: tpD }, { data: ctD },
-        { data: stD }, { data: dpD },
+        { data: stD }, { data: dpD }, { data: spD },
       ] = await Promise.all([
         supabase.from("profiles").select("*").eq("role", "intern").order("full_name"),
         supabase.from("tasks").select("*, task_comments(*)").order("created_at", { ascending: false }).then(r => r.error ? supabase.from("tasks").select("*").order("created_at", { ascending: false }) : r),
@@ -9339,6 +9527,7 @@ export default function DashboardPage() {
         supabase.from("content_videos").select("*").order("created_at", { ascending: false }),
         supabase.from("settings").select("*"),
         supabase.from("design_projects").select("*").order("created_at", { ascending: false }).then(r => r.error ? { data: [] } : r),
+        supabase.from("strategy_projects").select("*").order("created_at", { ascending: false }).then(r => r.error ? { data: [] } : r),
       ]);
       setInterns((iD || []) as Profile[]);
       setTasks((tD || []) as Task[]);
@@ -9355,6 +9544,7 @@ export default function DashboardPage() {
       setContent((ctD || []) as ContentVideo[]);
       try { setSettings(((stD||[]) as any[]).reduce((acc:AppSettings,s:any)=>({...acc,[s.key]:s.value}),{})); } catch(_) {}
       setDesignProjects((dpD || []) as DesignProject[]);
+      setStrategyProjects((spD || []) as StrategyProject[]);
 
       // Meeting requests — admin fetches all, interns fetch ones they're in
       const mrQuery = (prof.role === "admin" || prof.role === "wisconsin_admin")
@@ -9489,6 +9679,7 @@ export default function DashboardPage() {
   const isIntern = !isAdmin && !isUGC && !isDirector && !isSoraaCreator;
   const isTech = profile.team === "Tech/AI";
   const isDesign = profile.team === "Design";
+  const isStrategy = profile.team === "Strategy";
   const isCreator = profile.team === "Content Creation";
   const openQCount = questions.filter(q => q.status === "open").length;
   const activeAlertCount = smartAlerts.filter(a => !a.dismissed).length;
@@ -9524,6 +9715,7 @@ export default function DashboardPage() {
     { id: "resources", icon: <FolderOpen size={16}/>,      label: "Resources" },
     ...((isAdmin || isTech) ? [{ id: "tech", icon: <Code2 size={16}/>, label: "Tech Projects" }] : []),
     ...((isAdmin || isDesign) ? [{ id: "design", icon: <Palette size={16}/>, label: "Design Projects" }] : []),
+    ...(isStrategy ? [{ id: "strategy", icon: <BookOpen size={16}/>, label: "Strategy Projects" }] : []),
     ...((isAdmin || isCreator) ? [{ id: "content", icon: <Video size={16}/>, label: "Content" }] : []),
   ];
   const pendingPivotCount = ugcPivotQueue.filter(q => q.status === "pending").length;
@@ -9682,11 +9874,12 @@ export default function DashboardPage() {
       case "events":    return <EventsPage profile={p} interns={interns} events={events} setEvents={setEvents} sb={supabase}/>;
       case "tech":      return (isAdmin || isTech) ? <TechProjectsPage profile={p} interns={interns} projects={techProjects} setProjects={setTechProjects} sb={supabase}/> : null;
       case "design":    return (isAdmin || isDesign) ? <DesignProjectsPage profile={p} interns={interns} projects={designProjects} setProjects={setDesignProjects} sb={supabase}/> : null;
+      case "strategy":  return isStrategy ? <StrategyProjectsPage profile={p} interns={interns} projects={strategyProjects} setProjects={setStrategyProjects} sb={supabase}/> : null;
       case "content":   return (isAdmin || isCreator) ? <ContentPage profile={p} interns={interns} content={content} setContent={setContent} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
       case "questions": return isSoraaCreator ? <SoraaCreatorQuestionsPage profile={profile!}/> : <QPg {...common} questions={questions} setQuestions={setQuestions}/>;
       case "reports":   return <RPg {...common} reports={reports} setReports={setReports} settings={settings}/>;
       case "resources": return <ResPg profile={p} resources={resources} setResources={setResources} sb={supabase}/>;
-      case "interns":   return isAdmin ? <InternHubPage profile={p} interns={interns} setInterns={setInterns} techProjects={techProjects} setTechProjects={setTechProjects} designProjects={designProjects} setDesignProjects={setDesignProjects} content={content} setContent={setContent} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
+      case "interns":   return isAdmin ? <InternHubPage profile={p} interns={interns} setInterns={setInterns} techProjects={techProjects} setTechProjects={setTechProjects} designProjects={designProjects} setDesignProjects={setDesignProjects} strategyProjects={strategyProjects} setStrategyProjects={setStrategyProjects} content={content} setContent={setContent} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
       case "analytics": return isAdmin ? <AnPg interns={interns} tasks={tasks} outreach={outreach} content={content} requests={requests} questions={questions} techProjects={techProjects}/> : null;
       case "notifications": return isAdmin ? <NotificationPg interns={interns} ugcCreators={ugcCreators}/> : null;
       case "settings":  return isAdmin ? <SettingsPg settings={settings} setSettings={setSettings} sb={supabase}/> : null;
