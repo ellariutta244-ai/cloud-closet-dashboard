@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { PwaSetup } from "@/components/PwaSetup";
 import ExternalUGCPanel from "./ExternalUGCPanel";
-import SoraaCreatorView from "./SoraaCreatorView";
+import SoraaCreatorView, { SoraaCreatorQuestionsPage } from "./SoraaCreatorView";
 import {
   LayoutDashboard, CheckSquare, Mail, MessageCircle, FileText,
   FolderOpen, Users, BarChart3, Plus, Search, Bell,
@@ -8553,7 +8553,7 @@ export default function DashboardPage() {
       case "tech":      return (isAdmin || isTech) ? <TechProjectsPage profile={p} interns={interns} projects={techProjects} setProjects={setTechProjects} sb={supabase}/> : null;
       case "design":    return (isAdmin || isDesign) ? <DesignProjectsPage profile={p} interns={interns} projects={designProjects} setProjects={setDesignProjects} sb={supabase}/> : null;
       case "content":   return (isAdmin || isCreator) ? <ContentPage profile={p} interns={interns} content={content} setContent={setContent} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
-      case "questions": return <QPg {...common} questions={questions} setQuestions={setQuestions}/>;
+      case "questions": return isSoraaCreator ? <SoraaCreatorQuestionsPage profile={profile!}/> : <QPg {...common} questions={questions} setQuestions={setQuestions}/>;
       case "reports":   return <RPg {...common} reports={reports} setReports={setReports} settings={settings}/>;
       case "resources": return <ResPg profile={p} resources={resources} setResources={setResources} sb={supabase}/>;
       case "interns":   return isAdmin ? <InternHubPage profile={p} interns={interns} setInterns={setInterns} techProjects={techProjects} setTechProjects={setTechProjects} designProjects={designProjects} setDesignProjects={setDesignProjects} content={content} setContent={setContent} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;

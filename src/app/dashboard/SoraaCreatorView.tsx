@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Send, RefreshCw, CheckCircle2, Instagram, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Send, RefreshCw, CheckCircle2, Instagram, Trash2, MessageCircle } from 'lucide-react';
 
 interface SoraaCreator {
   email: string;
@@ -446,6 +446,143 @@ export default function SoraaCreatorView({ profile }: { profile: Profile }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Soraa Creator Questions Page ──────────────────────────────────────────────
+interface SoraaReply {
+  id: string;
+  question_id: string;
+  author_name: string;
+  body: string;
+  created_at: string;
+}
+interface SoraaQuestion {
+  id: string;
+  creator_email: string;
+  creator_name: string;
+  body: string;
+  created_at: string;
+  soraa_question_replies?: SoraaReply[];
+}
+
+function fmtDate(d?: string) {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+export function SoraaCreatorQuestionsPage({ profile }: { profile: Profile }) {
+  const email = profile.email?.toLowerCase();
+  const creator = SORAA_CREATORS.find(c => c.email.toLowerCase() === email);
+  const [questions, setQuestions] = useState<SoraaQuestion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchQuestions = useCallback(async () => {
+    if (!creator) { setLoading(false); return; }
+    setLoading(true);
+    const data = await fetch(`/api/soraa/questions?email=${encodeURIComponent(creator.email)}`)
+      .then(r => r.json()).catch(() => ({ questions: [] }));
+    setQuestions(data.questions || []);
+    setLoading(false);
+  }, [creator]);
+
+  useEffect(() => { fetchQuestions(); }, [fetchQuestions]);
+
+  async function submit() {
+    if (!msg.trim() || !creator) return;
+    setSending(true); setError(''); setSent(false);
+    const res = await fetch('/api/soraa/questions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ creator_email: creator.email, creator_name: creator.name, body: msg.trim() }),
+    });
+    if (res.ok) {
+      setMsg(''); setSent(true);
+      await fetchQuestions();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error || 'Failed to send.');
+    }
+    setSending(false);
+  }
+
+  if (!creator) {
+    return <div className="py-16 text-center text-sm text-stone-400">Creator profile not found.</div>;
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-xl font-bold text-stone-800 flex items-center gap-2"><MessageCircle size={20}/>Questions</h1>
+        <p className="text-sm text-stone-400 mt-0.5">Send a message to the Cloud Closet team</p>
+      </div>
+
+      {/* Send new message */}
+      <div className="bg-white border border-stone-200/60 rounded-2xl p-5 flex flex-col gap-3">
+        <p className="text-xs font-semibold text-stone-600">New Message</p>
+        <textarea
+          value={msg}
+          onChange={e => { setMsg(e.target.value); setSent(false); }}
+          placeholder="Ask a question or send a message…"
+          rows={3}
+          className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:border-stone-400 resize-none"
+        />
+        {error && <p className="text-xs text-red-500">{error}</p>}
+        {sent && <p className="text-xs text-emerald-600">Message sent!</p>}
+        <button
+          onClick={submit}
+          disabled={sending || !msg.trim()}
+          className="flex items-center gap-2 px-4 py-2.5 bg-stone-800 text-white rounded-xl text-sm font-medium hover:bg-stone-700 disabled:opacity-50 transition-colors w-fit"
+        >
+          {sending ? <RefreshCw size={14} className="animate-spin"/> : <Send size={14}/>}
+          {sending ? 'Sending…' : 'Send Message'}
+        </button>
+      </div>
+
+      {/* Message history */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Message History</p>
+          <button onClick={fetchQuestions} className="flex items-center gap-1 text-xs text-stone-400 hover:text-stone-600">
+            <RefreshCw size={11}/>Refresh
+          </button>
+        </div>
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-stone-400 text-sm">
+            <RefreshCw size={14} className="animate-spin"/>Loading…
+          </div>
+        ) : questions.length === 0 ? (
+          <div className="text-center py-8 text-stone-400 text-sm">No messages yet</div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {questions.map(q => (
+              <div key={q.id} className="flex flex-col gap-2">
+                {/* Creator message (right) */}
+                <div className="flex justify-end">
+                  <div className="bg-stone-100 rounded-xl px-3 py-2 max-w-[85%]">
+                    <p className="text-[10px] text-stone-400 mb-0.5">{fmtDate(q.created_at)}</p>
+                    <p className="text-sm text-stone-700">{q.body}</p>
+                  </div>
+                </div>
+                {/* Replies from team (left) */}
+                {(q.soraa_question_replies || []).map(r => (
+                  <div key={r.id} className="flex justify-start">
+                    <div className="bg-stone-800 rounded-xl px-3 py-2 max-w-[85%]">
+                      <p className="text-[10px] text-stone-300 mb-0.5">{r.author_name} · {fmtDate(r.created_at)}</p>
+                      <p className="text-sm text-white">{r.body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
