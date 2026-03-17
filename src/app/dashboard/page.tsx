@@ -9681,6 +9681,7 @@ export default function DashboardPage() {
   const isDirector = profile.role === "director";
   const isSoraaCreator = profile.role === "soraa_creator";
   const canSeeRush = profile.rush_access === true;
+  console.log('[rush]', { rush_access: profile.rush_access, canSeeRush, email: profile.email });
   const isIntern = !isAdmin && !isUGC && !isDirector && !isSoraaCreator;
   const isTech = profile.team === "Tech/AI";
   const isDesign = profile.team === "Design";
