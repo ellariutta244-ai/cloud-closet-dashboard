@@ -22,7 +22,7 @@ import {
 type Role = "admin" | "intern" | "ugc_creator" | "director" | "wisconsin_admin" | "soraa_creator";
 type Profile = { id: string; full_name: string; email: string; role: Role; team?: string; active?: boolean };
 type TaskComment = { id: string; task_id: string; author_id?: string; body: string; created_at: string };
-type Task = { id: string; title: string; description?: string; assigned_to?: string; category?: string; priority?: string; status: string; due_date?: string; created_at: string; completed_at?: string; task_comments?: TaskComment[] };
+type Task = { id: string; title: string; description?: string; assigned_to?: string; co_assignees?: string[]; category?: string; priority?: string; status: string; due_date?: string; created_at: string; completed_at?: string; task_comments?: TaskComment[] };
 type Outreach = { id: string; intern_id?: string; brand_or_creator: string; platform?: string; contact_name?: string; date_contacted?: string; status: string; notes?: string; created_at: string };
 type Reply = { id: string; question_id: string; author_id?: string; body: string; created_at: string };
 type Question = { id: string; author_id?: string; title: string; category?: string; description?: string; status: string; created_at: string; question_replies?: Reply[] };
@@ -416,48 +416,63 @@ function InternDash({ profile, tasks, outreach, announcements, requests, setPage
 function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profile:Profile; interns:Profile[]; tasks:Task[]; setTasks:(t:Task[])=>void; sb:any; addActivity:(a:any)=>void }) {
   const [filter,setFilter]=useState("all");
   const [modal,setModal]=useState(false);
+  const [editTask,setEditTask]=useState<Task|null>(null);
   const [detail,setDetail]=useState<Task|null>(null);
-  const [form,setForm]=useState({ title:"", description:"", assigned_to:"", category:"brand_outreach", priority:"medium", status:"not_started", due_date:"" });
+  const emptyForm = { title:"", description:"", assignees:[] as string[], category:"brand_outreach", priority:"medium", status:"not_started", due_date:"" };
+  const [form,setForm]=useState(emptyForm);
   const [dateTbd,setDateTbd]=useState(false);
   const isAdmin=profile.role==="admin"||profile.role==="wisconsin_admin";
-  const visible=isAdmin ? tasks : tasks.filter(t=>t.assigned_to===profile.id);
-  const filtered=filter==="all" ? visible : visible.filter(t=>t.status===filter);
+
+  // a task is visible to an intern if they are the primary assignee or in co_assignees
+  const isAssignedTo = (t: Task, id: string) => t.assigned_to === id || (t.co_assignees||[]).includes(id);
+  const visible = isAdmin ? tasks : tasks.filter(t => isAssignedTo(t, profile.id));
+  const filtered = filter==="all" ? visible : visible.filter(t=>t.status===filter);
   const SL: Record<string,string> = { not_started:"Not Started", in_progress:"In Progress", submitted:"Submitted", completed:"Completed" };
   const CATS = [{value:"brand_outreach",label:"Brand Outreach"},{value:"creator_outreach",label:"Creator Outreach"},{value:"campus_partnerships",label:"Campus Partnerships"},{value:"content_creation",label:"Content Creation"},{value:"research",label:"Research"},{value:"other",label:"Other"}];
   const iName=(id?:string)=>interns.find(i=>i.id===id)?.full_name||"—";
+  const activeInterns = interns.filter(i=>i.active!==false);
   const [collapsed, setCollapsed] = useState<Record<string,boolean>>({});
   const toggleCollapse = (id: string) => setCollapsed(prev => ({...prev, [id]: !prev[id]}));
 
-  // Group tasks by intern for admin view
-  const grouped = useMemo(() => {
-    if (!isAdmin) return null;
-    const map = new Map<string, { intern: Profile|undefined; tasks: Task[] }>();
-    // Unassigned bucket
-    map.set("__unassigned__", { intern: undefined, tasks: [] });
-    for (const intern of interns.filter(i => i.active !== false)) {
-      map.set(intern.id, { intern, tasks: [] });
-    }
-    for (const t of filtered) {
-      const key = t.assigned_to && map.has(t.assigned_to) ? t.assigned_to : "__unassigned__";
-      map.get(key)!.tasks.push(t);
-    }
-    // Remove empty buckets
-    return Array.from(map.entries())
-      .filter(([, v]) => v.tasks.length > 0)
-      .sort(([, a], [, b]) => {
-        if (!a.intern) return 1;
-        if (!b.intern) return -1;
-        return (a.intern.full_name ?? "").localeCompare(b.intern.full_name ?? "");
-      });
-  }, [isAdmin, interns, filtered]);
-
-  async function create() {
-    if (!form.title.trim()) return;
-    const {data,error}=await sb.from("tasks").insert({...form,due_date:dateTbd?null:(form.due_date||null),created_at:new Date().toISOString()}).select().single();
-    if (error){console.error("[tasks insert]", error.message, error.code, error.details, error.hint);return;}
-    setTasks([data as Task, ...tasks.filter(t => t.id !== data.id)]);setModal(false);setDateTbd(false);
-    setForm({title:"",description:"",assigned_to:"",category:"brand_outreach",priority:"medium",status:"not_started",due_date:""});
+  function openNew() { setEditTask(null); setForm(emptyForm); setDateTbd(false); setModal(true); }
+  function openEdit(t: Task) {
+    const assignees = [t.assigned_to, ...(t.co_assignees||[])].filter(Boolean) as string[];
+    setEditTask(t);
+    setForm({ title:t.title, description:t.description||"", assignees, category:t.category||"brand_outreach", priority:t.priority||"medium", status:t.status, due_date:t.due_date||"" });
+    setDateTbd(!t.due_date);
+    setModal(true);
   }
+  function toggleAssignee(id: string) {
+    setForm(f => {
+      if (f.assignees.includes(id)) return {...f, assignees: f.assignees.filter(a=>a!==id)};
+      if (f.assignees.length >= 5) return f;
+      return {...f, assignees: [...f.assignees, id]};
+    });
+  }
+
+  async function save() {
+    if (!form.title.trim()) return;
+    const [primary, ...co] = form.assignees;
+    const payload = {
+      title: form.title, description: form.description,
+      assigned_to: primary||null, co_assignees: co,
+      category: form.category, priority: form.priority, status: form.status,
+      due_date: dateTbd ? null : (form.due_date||null),
+    };
+    if (editTask) {
+      const {error} = await sb.from("tasks").update(payload).eq("id", editTask.id);
+      if (error) { console.error(error); return; }
+      const updated = {...editTask, ...payload};
+      setTasks(tasks.map(t=>t.id===editTask.id ? updated : t));
+      if (detail?.id===editTask.id) setDetail(updated);
+    } else {
+      const {data,error} = await sb.from("tasks").insert({...payload, created_at:new Date().toISOString()}).select().single();
+      if (error) { console.error(error); return; }
+      setTasks([data as Task, ...tasks]);
+    }
+    setModal(false);
+  }
+
   async function updateStatus(task:Task,status:string) {
     const upd:any={status};
     if (status==="completed") upd.completed_at=new Date().toISOString();
@@ -492,11 +507,31 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
     }).catch(() => {});
   }
 
+  // Admin grouped view: task appears under every intern it's assigned to
+  const grouped = useMemo(() => {
+    if (!isAdmin) return null;
+    const map = new Map<string, { intern: Profile|undefined; tasks: Task[] }>();
+    map.set("__unassigned__", { intern: undefined, tasks: [] });
+    for (const intern of activeInterns) map.set(intern.id, { intern, tasks: [] });
+    for (const t of filtered) {
+      const assignees = [t.assigned_to, ...(t.co_assignees||[])].filter(Boolean) as string[];
+      if (assignees.length === 0) { map.get("__unassigned__")!.tasks.push(t); continue; }
+      let placed = false;
+      for (const aid of assignees) {
+        if (map.has(aid)) { map.get(aid)!.tasks.push(t); placed = true; }
+      }
+      if (!placed) map.get("__unassigned__")!.tasks.push(t);
+    }
+    return Array.from(map.entries())
+      .filter(([, v]) => v.tasks.length > 0)
+      .sort(([, a], [, b]) => { if (!a.intern) return 1; if (!b.intern) return -1; return (a.intern.full_name??"").localeCompare(b.intern.full_name??""); });
+  }, [isAdmin, activeInterns, filtered]);
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-stone-800">{isAdmin?"All Tasks":"My Tasks"}</h1>
-        {isAdmin&&<Btn onClick={()=>setModal(true)}><Plus size={14}/>New Task</Btn>}
+        {isAdmin&&<Btn onClick={openNew}><Plus size={14}/>New Task</Btn>}
       </div>
       <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit flex-wrap">
         {["all","not_started","in_progress","submitted","completed"].map(s=>(
@@ -522,16 +557,26 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
                 </button>
                 {open && (
                   <div className="border-t border-stone-100 flex flex-col divide-y divide-stone-100">
-                    {internTasks.map(t => (
-                      <div key={t.id} onClick={()=>setDetail(t)} className="px-4 py-3 cursor-pointer hover:bg-stone-50 transition-colors flex items-center gap-3">
-                        <SD status={t.status}/>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-stone-800 truncate">{t.title}</p>
-                          {t.due_date&&<p className="text-xs text-stone-400 mt-0.5">Due {fmt(t.due_date)}</p>}
+                    {internTasks.map(t => {
+                      const others = [t.assigned_to,...(t.co_assignees||[])].filter(id=>id&&id!==intern?.id).map(iName);
+                      return (
+                        <div key={t.id} onClick={()=>setDetail(t)} className="px-4 py-3 cursor-pointer hover:bg-stone-50 transition-colors flex items-center gap-3">
+                          <SD status={t.status}/>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-stone-800 truncate">{t.title}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {t.due_date&&<p className="text-xs text-stone-400">Due {fmt(t.due_date)}</p>}
+                              {others.length>0&&<p className="text-xs text-stone-400">+{others.join(", ")}</p>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <PB priority={t.priority}/>
+                            {isAdmin&&<button onClick={e=>{e.stopPropagation();openEdit(t);}} className="p-1 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition-colors"><Pencil size={12}/></button>}
+                          </div>
+                          <ChevronRight size={14} className="text-stone-300"/>
                         </div>
-                        <PB priority={t.priority}/><ChevronRight size={14} className="text-stone-300"/>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -540,23 +585,46 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {filtered.map(t=>(
-            <div key={t.id} onClick={()=>setDetail(t)} className="bg-white border border-stone-200/60 rounded-xl p-4 cursor-pointer hover:border-stone-300 transition-all flex items-center gap-3">
-              <SD status={t.status}/>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-stone-800 truncate">{t.title}</p>
-                {t.due_date&&<span className="text-xs text-stone-400">Due {fmt(t.due_date)}</span>}
+          {filtered.map(t=>{
+            const others = [t.assigned_to,...(t.co_assignees||[])].filter(id=>id&&id!==profile.id).map(iName);
+            return (
+              <div key={t.id} onClick={()=>setDetail(t)} className="bg-white border border-stone-200/60 rounded-xl p-4 cursor-pointer hover:border-stone-300 transition-all flex items-center gap-3">
+                <SD status={t.status}/>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-stone-800 truncate">{t.title}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {t.due_date&&<span className="text-xs text-stone-400">Due {fmt(t.due_date)}</span>}
+                    {others.length>0&&<span className="text-xs text-stone-400">Also assigned to: {others.join(", ")}</span>}
+                  </div>
+                </div>
+                <PB priority={t.priority}/><ChevronRight size={14} className="text-stone-300"/>
               </div>
-              <PB priority={t.priority}/><ChevronRight size={14} className="text-stone-300"/>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
-      <Md open={modal} onClose={()=>{setModal(false);setDateTbd(false);}} title="New Task">
+
+      {/* Create / Edit modal */}
+      <Md open={modal} onClose={()=>setModal(false)} title={editTask?"Edit Task":"New Task"}>
         <div className="flex flex-col gap-3">
           <TI label="Title" value={form.title} onChange={v=>setForm({...form,title:v})} required/>
           <TA label="Description" value={form.description} onChange={v=>setForm({...form,description:v})}/>
-          <Sel label="Assign To" value={form.assigned_to} onChange={v=>setForm({...form,assigned_to:v})} options={[{value:"",label:"— Select intern —"},...interns.filter(i=>i.active!==false).map(i=>({value:i.id,label:i.full_name}))]}/>
+          <div>
+            <label className="text-xs font-medium text-stone-500 uppercase tracking-wide block mb-1.5">
+              Assign To <span className="normal-case font-normal text-stone-400">({form.assignees.length}/5 selected)</span>
+            </label>
+            <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
+              {activeInterns.map(i=>(
+                <label key={i.id} className={`flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-all ${form.assignees.includes(i.id)?"bg-stone-800 text-white":"bg-stone-50 text-stone-700 hover:bg-stone-100"}`}>
+                  <input type="checkbox" checked={form.assignees.includes(i.id)} onChange={()=>toggleAssignee(i.id)} className="sr-only"/>
+                  <Av name={i.full_name} size={22}/>
+                  <span className="text-sm flex-1">{i.full_name}</span>
+                  {i.team&&<span className={`text-[10px] ${form.assignees.includes(i.id)?"text-stone-300":"text-stone-400"}`}>{i.team}</span>}
+                  {form.assignees.includes(i.id)&&<CheckCircle2 size={14} className="text-emerald-400 flex-shrink-0"/>}
+                </label>
+              ))}
+            </div>
+          </div>
           <Sel label="Category" value={form.category} onChange={v=>setForm({...form,category:v})} options={CATS}/>
           <Sel label="Priority" value={form.priority} onChange={v=>setForm({...form,priority:v})} options={["low","medium","high","urgent"].map(p=>({value:p,label:p.charAt(0).toUpperCase()+p.slice(1)}))}/>
           <div>
@@ -567,11 +635,13 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Btn variant="secondary" onClick={()=>{setModal(false);setDateTbd(false);}}>Cancel</Btn>
-            <Btn onClick={create} disabled={!form.title.trim()}>Create Task</Btn>
+            <Btn variant="secondary" onClick={()=>setModal(false)}>Cancel</Btn>
+            <Btn onClick={save} disabled={!form.title.trim()}>{editTask?"Save Changes":"Create Task"}</Btn>
           </div>
         </div>
       </Md>
+
+      {/* Task detail modal */}
       <Md open={!!detail} onClose={()=>setDetail(null)} title="Task Detail">
         {detail&&(
           <div className="flex flex-col gap-4">
@@ -580,11 +650,25 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
               <h3 className="text-base font-semibold text-stone-800">{detail.title}</h3>
               {detail.description&&<p className="text-sm text-stone-500 mt-1">{detail.description}</p>}
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
               <PB priority={detail.priority}/>
-              {isAdmin&&<span className="text-xs text-stone-500">→ {iName(detail.assigned_to)}</span>}
               {detail.due_date&&<span className="text-xs text-stone-400">Due {fmt(detail.due_date)}</span>}
             </div>
+            {/* Assignees */}
+            {[detail.assigned_to,...(detail.co_assignees||[])].filter(Boolean).length>0&&(
+              <div>
+                <p className="text-xs text-stone-400 uppercase tracking-widest mb-2">Assigned To</p>
+                <div className="flex flex-wrap gap-2">
+                  {[detail.assigned_to,...(detail.co_assignees||[])].filter(Boolean).map(id=>(
+                    <div key={id} className="flex items-center gap-1.5 bg-stone-100 rounded-lg px-2.5 py-1">
+                      <Av name={iName(id)} size={18}/>
+                      <span className="text-xs text-stone-700">{iName(id)}</span>
+                      {id===profile.id&&<span className="text-[10px] text-stone-400">(you)</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div>
               <p className="text-xs text-stone-400 uppercase tracking-widest mb-2">Update Status</p>
               <div className="flex flex-wrap gap-2">
@@ -593,7 +677,6 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
                 ))}
               </div>
             </div>
-            {/* Comments / Questions */}
             <div className="border-t border-stone-100 pt-4">
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-3">Questions & Comments</p>
               {(detail.task_comments||[]).length === 0
@@ -612,17 +695,16 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
                   </div>
               }
               <div className="flex gap-2">
-                <input
-                  value={commentText}
-                  onChange={e=>setCommentText(e.target.value)}
-                  onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();submitComment();} }}
-                  placeholder={isAdmin ? "Reply to this task…" : "Ask a question about this task…"}
-                  className="flex-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm text-stone-700 focus:outline-none focus:border-stone-400"
-                />
+                <input value={commentText} onChange={e=>setCommentText(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();submitComment();} }} placeholder={isAdmin ? "Reply to this task…" : "Ask a question about this task…"} className="flex-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm text-stone-700 focus:outline-none focus:border-stone-400"/>
                 <Btn onClick={submitComment} disabled={!commentText.trim()||submittingComment}>Send</Btn>
               </div>
             </div>
-            {isAdmin&&<div className="flex justify-end pt-2 border-t border-stone-100"><Btn variant="danger" onClick={()=>del(detail.id)}><Trash2 size={14}/>Delete</Btn></div>}
+            {isAdmin&&(
+              <div className="flex justify-between pt-2 border-t border-stone-100">
+                <Btn variant="secondary" onClick={()=>{setDetail(null);openEdit(detail);}}><Pencil size={13}/>Edit & Reassign</Btn>
+                <Btn variant="danger" onClick={()=>del(detail.id)}><Trash2 size={14}/>Delete</Btn>
+              </div>
+            )}
           </div>
         )}
       </Md>
