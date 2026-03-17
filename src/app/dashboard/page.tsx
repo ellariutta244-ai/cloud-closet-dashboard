@@ -6860,6 +6860,155 @@ function DirectorDash({ profile, events, ugcSubmissions, ugcCreators, ugcBriefs,
   );
 }
 
+// ── Director Projects Page ─────────────────────────────────────────────────────
+function DirectorProjectsPage({ techProjects: initialTech, designProjects: initialDesign, interns, sb }: {
+  techProjects: TechProject[]; designProjects: DesignProject[]; interns: Profile[]; sb: any;
+}) {
+  const [tab, setTab] = useState<'tech'|'design'>('tech');
+  const [filter, setFilter] = useState('all');
+  const [tech, setTech] = useState<TechProject[]>(initialTech);
+  const [design, setDesign] = useState<DesignProject[]>(initialDesign);
+  const [refreshing, setRefreshing] = useState(false);
+  const [sel, setSel] = useState<TechProject|DesignProject|null>(null);
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    const [{ data: tp }, { data: dp }] = await Promise.all([
+      sb.from('tech_projects').select('*').order('updated_at', { ascending: false }),
+      sb.from('design_projects').select('*').order('updated_at', { ascending: false }),
+    ]);
+    if (tp) setTech(tp as TechProject[]);
+    if (dp) setDesign(dp as DesignProject[]);
+    setRefreshing(false);
+  }, [sb]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const gn = (id?: string) => interns.find(i => i.id === id)?.full_name || '—';
+  const SV: Record<string,BV> = { planning:'warning', in_progress:'info', submitted:'warning', completed:'success' };
+  const SL: Record<string,string> = { planning:'Planning', in_progress:'In Progress', submitted:'Submitted', completed:'Completed' };
+  const DESIGN_CATS: Record<string,string> = { branding:'Branding', social_assets:'Social Assets', merchandise:'Merchandise', campaign:'Campaign', ui_ux:'UI/UX', other:'Other' };
+
+  const projects = tab === 'tech' ? tech : design;
+  const filtered = filter === 'all' ? projects : projects.filter(p => p.status === filter);
+  const submittedCount = projects.filter(p => p.status === 'submitted').length;
+
+  // Sort: submitted first, then in_progress, then planning, then completed
+  const STATUS_ORDER: Record<string,number> = { submitted: 0, in_progress: 1, planning: 2, completed: 3 };
+  const sorted = [...filtered].sort((a, b) => (STATUS_ORDER[a.status]??9) - (STATUS_ORDER[b.status]??9));
+
+  const isTechProject = (p: TechProject|DesignProject): p is TechProject => 'tech_stack' in p;
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-stone-800">Projects</h1>
+          <p className="text-sm text-stone-400 mt-0.5">Tech and design work from the Wisconsin team</p>
+        </div>
+        <button onClick={refresh} className="flex items-center gap-1 text-xs text-stone-400 hover:text-stone-600 transition-colors mt-1">
+          <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''}/>Refresh
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
+        <SC label="In Progress" value={projects.filter(p=>p.status==='in_progress').length}/>
+        <SC label="Awaiting Review" value={submittedCount}/>
+        <SC label="Completed" value={projects.filter(p=>p.status==='completed').length}/>
+      </div>
+
+      {/* Tech / Design tabs */}
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit">
+        <button onClick={()=>{setTab('tech');setFilter('all');setSel(null);}} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${tab==='tech'?'bg-white text-stone-800 shadow-sm':'text-stone-500 hover:text-stone-700'}`}>
+          <Code2 size={12}/>Tech/AI
+        </button>
+        <button onClick={()=>{setTab('design');setFilter('all');setSel(null);}} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${tab==='design'?'bg-white text-stone-800 shadow-sm':'text-stone-500 hover:text-stone-700'}`}>
+          <Palette size={12}/>Design
+        </button>
+      </div>
+
+      {/* Status filter */}
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit flex-wrap">
+        {['all','submitted','in_progress','planning','completed'].map(s=>(
+          <button key={s} onClick={()=>setFilter(s)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filter===s?'bg-white text-stone-800 shadow-sm':'text-stone-500 hover:text-stone-700'}`}>
+            {s==='all'?'All':SL[s]}
+            {s==='submitted'&&submittedCount>0&&<span className="ml-1.5 bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">{submittedCount}</span>}
+          </button>
+        ))}
+      </div>
+
+      {sorted.length===0 ? <ES icon={tab==='tech'?<Code2 size={24}/>:<Palette size={24}/>} message="No projects here"/> : (
+        <div className="flex flex-col gap-3">
+          {sorted.map(pr => (
+            <div key={pr.id} onClick={()=>setSel(pr)} className={`bg-white border rounded-xl p-5 hover:border-stone-300 transition-all cursor-pointer ${pr.status==='submitted'?'border-amber-200 bg-amber-50/30':'border-stone-200/60'}`}>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-sm font-semibold text-stone-800">{pr.title}</span>
+                    <PB priority={pr.priority}/>
+                    {pr.status==='submitted'&&<span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Awaiting Review</span>}
+                  </div>
+                  <p className="text-xs text-stone-400 line-clamp-1">{pr.description}</p>
+                </div>
+                <Bg v={SV[pr.status]||'default'}>{SL[pr.status]||pr.status}</Bg>
+              </div>
+              <div className="flex items-center gap-3 mb-3 flex-wrap text-xs text-stone-400">
+                <span className="flex items-center gap-1"><Av name={gn(pr.owner_id)} size={16}/>{gn(pr.owner_id)}</span>
+                {isTechProject(pr) && pr.tech_stack && <span className="text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">{pr.tech_stack}</span>}
+                {!isTechProject(pr) && pr.category && <span className="text-pink-600 bg-pink-50 px-2 py-0.5 rounded-full">{DESIGN_CATS[pr.category]||pr.category}</span>}
+                {pr.updated_at && <span>Updated {new Date(pr.updated_at).toLocaleDateString()}</span>}
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${pr.progress>=100?'bg-emerald-500':pr.progress>50?'bg-sky-500':'bg-amber-400'}`} style={{width:`${pr.progress}%`}}/>
+                </div>
+                <span className="text-xs font-semibold text-stone-600 w-10 text-right">{pr.progress}%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Detail modal — read-only for director */}
+      <Md open={!!sel} onClose={()=>setSel(null)} title="Project Detail">
+        {sel&&(
+          <div className="flex flex-col gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <PB priority={sel.priority}/>
+                <Bg v={SV[sel.status]||'default'}>{SL[sel.status]||sel.status}</Bg>
+                {!isTechProject(sel)&&sel.category&&<Bg v="default">{DESIGN_CATS[sel.category]||sel.category}</Bg>}
+              </div>
+              <h3 className="text-lg font-bold text-stone-800">{sel.title}</h3>
+              {sel.description&&<p className="text-sm text-stone-500 mt-1 leading-relaxed">{sel.description}</p>}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-stone-50 rounded-lg p-3"><p className="text-xs text-stone-400 mb-1">Owner</p><p className="text-sm font-medium text-stone-700">{gn(sel.owner_id)}</p></div>
+              {isTechProject(sel)
+                ? <div className="bg-stone-50 rounded-lg p-3"><p className="text-xs text-stone-400 mb-1">Tech Stack</p><p className="text-sm font-medium text-stone-700">{sel.tech_stack||'TBD'}</p></div>
+                : <div className="bg-stone-50 rounded-lg p-3"><p className="text-xs text-stone-400 mb-1">Last Updated</p><p className="text-sm font-medium text-stone-700">{sel.updated_at?new Date(sel.updated_at).toLocaleDateString():'—'}</p></div>
+              }
+            </div>
+            {(sel.contributors||[]).length>0&&(
+              <div><p className="text-xs text-stone-400 mb-2">Contributors</p><div className="flex gap-2 flex-wrap">{(sel.contributors||[]).map(id=><span key={id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-stone-50 rounded-lg text-xs text-stone-600"><Av name={gn(id)} size={16}/>{gn(id)}</span>)}</div></div>
+            )}
+            <div>
+              <p className="text-xs font-medium text-stone-500 mb-2">Progress: {sel.progress}%</p>
+              <div className="flex-1 h-3 bg-stone-100 rounded-full overflow-hidden">
+                <div className={`h-full rounded-full ${sel.progress>=100?'bg-emerald-500':sel.progress>50?'bg-sky-500':'bg-amber-400'}`} style={{width:`${sel.progress}%`}}/>
+              </div>
+            </div>
+            {isTechProject(sel)&&sel.github_url&&<a href={sel.github_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700"><ExternalLink size={12}/>View on GitHub</a>}
+            {!isTechProject(sel)&&sel.project_url&&<a href={sel.project_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700"><ExternalLink size={12}/>View Project</a>}
+            {!isTechProject(sel)&&sel.file_url&&<a href={sel.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700"><Image size={12}/>View Attached File</a>}
+          </div>
+        )}
+      </Md>
+    </div>
+  );
+}
+
 // ── Director Analytics ─────────────────────────────────────────────────────────
 function DirectorAnalyticsPage({ ugcSubmissions, setUGCSubmissions, ugcCreators, setUGCCreators, reports, outreach, content, interns, sb }: {
   ugcSubmissions: UGCSubmission[]; setUGCSubmissions: (s: UGCSubmission[]) => void;
@@ -8700,6 +8849,7 @@ export default function DashboardPage() {
       label: "CONTENT LAB",
       items: [
         { id: "director_analytics",        icon: <BarChart3 size={16}/>,  label: "Analytics Overview" },
+        { id: "director_projects",         icon: <FolderOpen size={16}/>, label: "Projects" },
         { id: "director_wisconsin_report", icon: <FileText size={16}/>,   label: "Wisconsin Report" },
         { id: "director_hooks",            icon: <Zap size={16}/>,        label: "Hook Generator" },
         { id: "external-ugc",              icon: <Sparkles size={16}/>,   label: "External UGC" },
@@ -8828,6 +8978,7 @@ export default function DashboardPage() {
       case "external-ugc":      return isSoraaCreator ? <SoraaCreatorView profile={profile!}/> : (isAdmin || isDirector) ? <ExternalUGCPanel/> : null;
       case "director_home":      return isDirector ? <DirectorDash profile={profile!} events={events} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} ugcBriefs={ugcBriefs} smartAlerts={smartAlerts} reports={reports} outreach={outreach} ugcHooks={ugcHooks} settings={settings} techProjects={techProjects} designProjects={designProjects} interns={interns} setPage={setPage} sb={supabase}/> : null;
       case "director_calendar":  return isDirector ? <EventsPage profile={profile!} interns={interns} events={events} setEvents={setEvents} sb={supabase}/> : null;
+      case "director_projects":  return isDirector ? <DirectorProjectsPage techProjects={techProjects} designProjects={designProjects} interns={interns} sb={supabase}/> : null;
       case "director_analytics": return isDirector ? <DirectorAnalyticsPage ugcSubmissions={ugcSubmissions} setUGCSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} reports={reports} outreach={outreach} content={content} interns={interns} sb={supabase}/> : null;
       case "director_brief":            return isDirector ? <DirectorWeeklyBriefPage profile={profile!} ugcBriefs={ugcBriefs} briefComments={briefComments} setBriefComments={setBriefComments} sb={supabase}/> : null;
       case "director_wisconsin_report": return isDirector ? <WisconsinReportPage profile={profile!} reports={wisconsinReports} setReports={setWisconsinReports} setPage={setPage} sb={supabase}/> : null;
