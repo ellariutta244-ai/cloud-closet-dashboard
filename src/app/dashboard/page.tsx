@@ -6664,36 +6664,50 @@ function DirectorDash({ profile, events, ugcSubmissions, ugcCreators, ugcBriefs,
 }
 
 // ── Director Analytics ─────────────────────────────────────────────────────────
-function DirectorAnalyticsPage({ ugcSubmissions, setUGCSubmissions, ugcCreators, setUGCCreators, reports, outreach, sb }: {
+function DirectorAnalyticsPage({ ugcSubmissions, setUGCSubmissions, ugcCreators, setUGCCreators, reports, outreach, content, interns, sb }: {
   ugcSubmissions: UGCSubmission[]; setUGCSubmissions: (s: UGCSubmission[]) => void;
   ugcCreators: UGCCreatorProfile[]; setUGCCreators: (c: UGCCreatorProfile[]) => void;
-  reports: Report[]; outreach: Outreach[]; sb: any;
+  reports: Report[]; outreach: Outreach[];
+  content: ContentVideo[]; interns: Profile[];
+  sb: any;
 }) {
   const [refreshing, setRefreshing] = useState(false);
   const [soraaSubs, setSoraaSubs] = useState<Array<{ views?: number; created_at: string }>>([]);
 
-  useEffect(() => {
-    async function refresh() {
-      setRefreshing(true);
-      const [{ data: subs }, { data: creators }, soraaRes] = await Promise.all([
-        sb.from("ugc_submissions").select("*").order("created_at", { ascending: false }),
-        sb.from("profiles").select("*").eq("role", "ugc_creator").order("full_name"),
-        fetch("/api/soraa/submissions").then(r => r.json()).catch(() => ({ submissions: [] })),
-      ]);
-      if (subs) setUGCSubmissions(subs as UGCSubmission[]);
-      if (creators) setUGCCreators(creators as UGCCreatorProfile[]);
-      setSoraaSubs(soraaRes.submissions || []);
-      setRefreshing(false);
-    }
-    refresh();
-  }, []);
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    const [{ data: subs }, { data: creators }, soraaRes] = await Promise.all([
+      sb.from("ugc_submissions").select("*").order("created_at", { ascending: false }),
+      sb.from("profiles").select("*").eq("role", "ugc_creator").order("full_name"),
+      fetch("/api/soraa/submissions").then(r => r.json()).catch(() => ({ submissions: [] })),
+    ]);
+    if (subs) setUGCSubmissions(subs as UGCSubmission[]);
+    if (creators) setUGCCreators(creators as UGCCreatorProfile[]);
+    setSoraaSubs(soraaRes.submissions || []);
+    setRefreshing(false);
+  }, [sb, setUGCSubmissions, setUGCCreators]);
+
+  useEffect(() => { refresh(); }, [refresh]);
 
   const currentWeek = getMondayOfWeek(new Date());
-  const thisWeekSubs = ugcSubmissions.filter(s => s.week_date === currentWeek);
-  const soraaThisWeek = soraaSubs.filter(s => s.created_at >= currentWeek);
-  const totalViewsThisWeek = thisWeekSubs.reduce((s, x) => s + x.total_views, 0) + soraaThisWeek.reduce((s, x) => s + (x.views || 0), 0);
-  const totalViewsAllTime = ugcSubmissions.reduce((s, x) => s + x.total_views, 0) + soraaSubs.reduce((s, x) => s + (x.views || 0), 0);
-  const submissionsThisWeek = thisWeekSubs.length + soraaThisWeek.length;
+
+  // Views this week — broken down by source
+  const ugcViewsThisWeek = ugcSubmissions.filter(s => s.week_date === currentWeek).reduce((s, x) => s + x.total_views, 0);
+  const wisconsinViewsThisWeek = content.filter(v => v.date_posted && v.date_posted >= currentWeek).reduce((s, v) => s + (v.views || 0), 0);
+  const externalViewsThisWeek = soraaSubs.filter(s => s.created_at >= currentWeek).reduce((s, x) => s + (x.views || 0), 0);
+  const totalViewsThisWeek = ugcViewsThisWeek + wisconsinViewsThisWeek + externalViewsThisWeek;
+
+  // Total views to date — broken down by source
+  const ugcViewsTotal = ugcSubmissions.reduce((s, x) => s + x.total_views, 0);
+  const wisconsinViewsTotal = content.reduce((s, v) => s + (v.views || 0), 0);
+  const externalViewsTotal = soraaSubs.reduce((s, x) => s + (x.views || 0), 0);
+  const totalViewsAllTime = ugcViewsTotal + wisconsinViewsTotal + externalViewsTotal;
+
+  // Active creators — all three groups
+  const activeUGC = ugcCreators.filter(c => c.ugc_status !== "archived").length;
+  const activeExternal = 6; // SORAA_CREATORS
+  const activeWisconsin = interns.filter(i => i.role === "intern").length;
+  const totalActiveCreators = activeUGC + activeExternal + activeWisconsin;
 
   // Benchmark distribution
   const tierCounts = useMemo(() => {
@@ -6711,28 +6725,81 @@ function DirectorAnalyticsPage({ ugcSubmissions, setUGCSubmissions, ugcCreators,
   const trendLabels = weeks.map(w => w.slice(5));
 
   // Wisconsin intern summary
-  const currentMonday = currentWeek;
-  const reportsThisWeek = reports.filter(r => r.week_of === currentMonday).length;
-  const outreachThisWeek = outreach.filter(o => o.date_contacted && o.date_contacted >= currentMonday).length;
+  const reportsThisWeek = reports.filter(r => r.week_of === currentWeek).length;
+  const outreachThisWeek = outreach.filter(o => o.date_contacted && o.date_contacted >= currentWeek).length;
+
+  function ViewBreakdown({ rows }: { rows: { label: string; views: number }[] }) {
+    const max = Math.max(...rows.map(r => r.views), 1);
+    return (
+      <div className="flex flex-col gap-2 mt-3">
+        {rows.map(r => (
+          <div key={r.label} className="flex items-center gap-3">
+            <span className="text-xs text-stone-500 w-32 flex-shrink-0">{r.label}</span>
+            <div className="flex-1 bg-stone-100 rounded-full h-2">
+              <div className="h-2 rounded-full bg-stone-700 transition-all" style={{ width: `${Math.round((r.views / max) * 100)}%` }} />
+            </div>
+            <span className="text-xs font-semibold text-stone-700 w-14 text-right">{fmtViews(r.views)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-stone-800">Analytics Overview</h1>
-        {refreshing && <Loader2 size={14} className="animate-spin text-stone-400" />}
+        <button onClick={refresh} disabled={refreshing} className="flex items-center gap-1.5 text-xs text-stone-400 hover:text-stone-600 transition-colors disabled:opacity-50">
+          <RefreshCw size={13} className={refreshing ? "animate-spin" : ""}/>Refresh
+        </button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <SC label="Views This Week" value={fmtViews(totalViewsThisWeek)} />
-        <SC label="Total Views" value={fmtViews(totalViewsAllTime)} />
-        <SC label="Submissions This Week" value={submissionsThisWeek} />
-        <SC label="Active Creators" value={ugcCreators.filter(c => c.ugc_status !== "archived").length} />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Views This Week */}
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-0.5">Views This Week</p>
+          <p className="text-3xl font-bold text-stone-800">{fmtViews(totalViewsThisWeek)}</p>
+          <ViewBreakdown rows={[
+            { label: "UGC Creators", views: ugcViewsThisWeek },
+            { label: "Wisconsin Creators", views: wisconsinViewsThisWeek },
+            { label: "External Campaign", views: externalViewsThisWeek },
+          ]} />
+        </div>
+
+        {/* Total Views to Date */}
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-0.5">Total Views to Date</p>
+          <p className="text-3xl font-bold text-stone-800">{fmtViews(totalViewsAllTime)}</p>
+          <ViewBreakdown rows={[
+            { label: "UGC Creators", views: ugcViewsTotal },
+            { label: "Wisconsin Creators", views: wisconsinViewsTotal },
+            { label: "External Campaign", views: externalViewsTotal },
+          ]} />
+        </div>
+
+        {/* Active Creators */}
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-0.5">Active Creators</p>
+          <p className="text-3xl font-bold text-stone-800">{totalActiveCreators}</p>
+          <div className="flex flex-col gap-1.5 mt-3">
+            {[
+              { label: "UGC Creators", count: activeUGC },
+              { label: "Wisconsin Creators", count: activeWisconsin },
+              { label: "External Campaign", count: activeExternal },
+            ].map(r => (
+              <div key={r.label} className="flex items-center justify-between">
+                <span className="text-xs text-stone-500">{r.label}</span>
+                <span className="text-xs font-semibold text-stone-700">{r.count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Week-over-week trend */}
       {trendData.length > 1 && (
         <div className="bg-white border border-stone-200/60 rounded-xl p-5">
-          <p className="text-sm font-semibold text-stone-700 mb-4">Views Week over Week</p>
+          <p className="text-sm font-semibold text-stone-700 mb-4">UGC Views Week over Week</p>
           <LineGraph data={trendData} labels={trendLabels} />
         </div>
       )}
@@ -8564,7 +8631,7 @@ export default function DashboardPage() {
       case "external-ugc":      return isSoraaCreator ? <SoraaCreatorView profile={profile!}/> : (isAdmin || isDirector) ? <ExternalUGCPanel/> : null;
       case "director_home":      return isDirector ? <DirectorDash profile={profile!} events={events} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} ugcBriefs={ugcBriefs} smartAlerts={smartAlerts} reports={reports} outreach={outreach} ugcHooks={ugcHooks} settings={settings} setPage={setPage} sb={supabase}/> : null;
       case "director_calendar":  return isDirector ? <EventsPage profile={profile!} interns={interns} events={events} setEvents={setEvents} sb={supabase}/> : null;
-      case "director_analytics": return isDirector ? <DirectorAnalyticsPage ugcSubmissions={ugcSubmissions} setUGCSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} reports={reports} outreach={outreach} sb={supabase}/> : null;
+      case "director_analytics": return isDirector ? <DirectorAnalyticsPage ugcSubmissions={ugcSubmissions} setUGCSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} reports={reports} outreach={outreach} content={content} interns={interns} sb={supabase}/> : null;
       case "director_brief":            return isDirector ? <DirectorWeeklyBriefPage profile={profile!} ugcBriefs={ugcBriefs} briefComments={briefComments} setBriefComments={setBriefComments} sb={supabase}/> : null;
       case "director_wisconsin_report": return isDirector ? <WisconsinReportPage profile={profile!} reports={wisconsinReports} setReports={setWisconsinReports} setPage={setPage} sb={supabase}/> : null;
       case "director_hooks":          return isDirector ? <HookGeneratorPage profile={profile! as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
