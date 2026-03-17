@@ -1094,10 +1094,13 @@ function InternHubPage({ profile, interns, setInterns, techProjects, setTechProj
 function IntMgmt({ interns, setInterns, sb }: { interns:Profile[]; setInterns:(i:Profile[])=>void; sb:any }) {
   const [modal,setModal]=useState(false);
   const [edit,setEdit]=useState<Profile|null>(null);
-  const [form,setForm]=useState({full_name:"",email:"",team:"Tech/AI"});
+  const [form,setForm]=useState({full_name:"",email:"",team:"Tech/AI",role:"intern"});
+  const [generatedSQL,setGeneratedSQL]=useState<string|null>(null);
+  const [copied,setCopied]=useState(false);
   const TEAMS=["Tech/AI","Strategy","Events/Outreach","Design","Curation Team","Content Creation"];
+  const ROLES=[{value:"intern",label:"Intern"},{value:"ugc_creator",label:"UGC Creator"},{value:"soraa_creator",label:"Soraa Creator"},{value:"director",label:"Director"},{value:"wisconsin_admin",label:"Wisconsin Admin"},{value:"admin",label:"Admin"}];
 
-  function open(i?:Profile) { setEdit(i||null); setForm(i?{full_name:i.full_name,email:i.email,team:i.team||"Tech/AI"}:{full_name:"",email:"",team:"Tech/AI"}); setModal(true); }
+  function open(i?:Profile) { setEdit(i||null); setForm(i?{full_name:i.full_name,email:i.email,team:i.team||"Tech/AI",role:i.role||"intern"}:{full_name:"",email:"",team:"Tech/AI",role:"intern"}); setGeneratedSQL(null); setCopied(false); setModal(true); }
   async function save() {
     if (!form.full_name.trim()) return;
     if (edit) {
@@ -1106,6 +1109,44 @@ function IntMgmt({ interns, setInterns, sb }: { interns:Profile[]; setInterns:(i
       setInterns(interns.map(i=>i.id===edit.id?{...i,...form}:i));
     }
     setModal(false);
+  }
+  function generateSQL() {
+    const id = crypto.randomUUID();
+    const name = form.full_name.replace(/'/g,"''");
+    const email = form.email.toLowerCase().trim();
+    const sql = `-- Auth account + profile for ${form.full_name}
+INSERT INTO auth.users (
+  instance_id, id, aud, role, email,
+  encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data,
+  created_at, updated_at,
+  confirmation_token, email_change, email_change_token_new, recovery_token
+) VALUES (
+  '00000000-0000-0000-0000-000000000000',
+  '${id}',
+  'authenticated', 'authenticated', '${email}',
+  crypt('CloudCloset!', gen_salt('bf')), NOW(),
+  '{"provider":"email","providers":["email"]}',
+  '{"full_name":"${name}"}',
+  NOW(), NOW(), '', '', '', ''
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.profiles (id, email, full_name, role, team)
+VALUES (
+  '${id}',
+  '${email}',
+  '${name}',
+  '${form.role}',
+  '${form.team}'
+) ON CONFLICT (id) DO NOTHING;`;
+    setGeneratedSQL(sql);
+    setCopied(false);
+  }
+  async function copySQL() {
+    if (!generatedSQL) return;
+    await navigator.clipboard.writeText(generatedSQL);
+    setCopied(true);
+    setTimeout(()=>setCopied(false), 2000);
   }
   async function toggleActive(id:string,active:boolean) {
     await sb.from("profiles").update({active}).eq("id",id);
@@ -1140,16 +1181,37 @@ function IntMgmt({ interns, setInterns, sb }: { interns:Profile[]; setInterns:(i
           ))}
         </div>
       )}
-      <Md open={modal} onClose={()=>setModal(false)} title={edit?"Edit Intern":"Add Intern"}>
+      <Md open={modal} onClose={()=>setModal(false)} title={edit?"Edit Intern":"Add New User"}>
         <div className="flex flex-col gap-3">
           <TI label="Full Name" value={form.full_name} onChange={v=>setForm({...form,full_name:v})} required/>
           <TI label="Email" value={form.email} onChange={v=>setForm({...form,email:v})} type="email"/>
           <Sel label="Team" value={form.team} onChange={v=>setForm({...form,team:v})} options={TEAMS.map(t=>({value:t,label:t}))}/>
-          {!edit&&<p className="text-xs text-stone-400 bg-stone-50 rounded-lg p-3">New interns need to be invited via Supabase Auth first. You can update profile details for existing interns here.</p>}
-          <div className="flex justify-end gap-2 pt-2">
-            <Btn variant="secondary" onClick={()=>setModal(false)}>Cancel</Btn>
-            <Btn onClick={save} disabled={!form.full_name.trim()}>Save</Btn>
-          </div>
+          {!edit&&<Sel label="Role" value={form.role} onChange={v=>setForm({...form,role:v})} options={ROLES}/>}
+          {edit ? (
+            <div className="flex justify-end gap-2 pt-2">
+              <Btn variant="secondary" onClick={()=>setModal(false)}>Cancel</Btn>
+              <Btn onClick={save} disabled={!form.full_name.trim()}>Save</Btn>
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-end gap-2 pt-1">
+                <Btn variant="secondary" onClick={()=>setModal(false)}>Cancel</Btn>
+                <Btn onClick={generateSQL} disabled={!form.full_name.trim()||!form.email.trim()}><Code2 size={13}/>Generate SQL</Btn>
+              </div>
+              {generatedSQL && (
+                <div className="flex flex-col gap-2 mt-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-stone-600">Paste into Supabase SQL Editor</p>
+                    <button onClick={copySQL} className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${copied?"bg-emerald-50 text-emerald-600":"bg-stone-100 text-stone-600 hover:bg-stone-200"}`}>
+                      <Copy size={11}/>{copied?"Copied!":"Copy"}
+                    </button>
+                  </div>
+                  <pre className="text-[10px] leading-relaxed bg-stone-900 text-stone-200 rounded-xl p-3 overflow-x-auto whitespace-pre-wrap break-all select-all">{generatedSQL}</pre>
+                  <p className="text-[10px] text-stone-400">Password will be set to <span className="font-mono font-semibold text-stone-600">CloudCloset!</span></p>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </Md>
     </div>
@@ -8451,7 +8513,7 @@ export default function DashboardPage() {
     { id: "tasks",     icon: <CheckSquare size={16}/>,     label: isAdmin ? "All Tasks" : "My Tasks" },
     { id: "outreach",  icon: <Mail size={16}/>,            label: "Outreach Log" },
     { id: "requests",  icon: <Inbox size={16}/>,           label: isAdmin ? "Request Inbox" : "Requests" },
-    { id: "events",    icon: <CalendarDays size={16}/>,    label: "Events" },
+    ...(!isTech ? [{ id: "events", icon: <CalendarDays size={16}/>, label: "Events" }] : []),
     { id: "questions", icon: <MessageCircle size={16}/>,   label: "Questions", badge: openQCount || null },
     { id: "reports",   icon: <FileText size={16}/>,        label: "Weekly Report" },
     { id: "resources", icon: <FolderOpen size={16}/>,      label: "Resources" },
