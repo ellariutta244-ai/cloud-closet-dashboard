@@ -21,7 +21,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Role = "admin" | "intern" | "ugc_creator" | "director" | "wisconsin_admin" | "soraa_creator";
-type Profile = { id: string; full_name: string; email: string; role: Role; team?: string; active?: boolean };
+type Profile = { id: string; full_name: string; email: string; role: Role; team?: string; active?: boolean; rush_access?: boolean };
 type TaskComment = { id: string; task_id: string; author_id?: string; body: string; created_at: string };
 type Task = { id: string; title: string; description?: string; assigned_to?: string; co_assignees?: string[]; category?: string; priority?: string; status: string; due_date?: string; created_at: string; completed_at?: string; task_comments?: TaskComment[] };
 type Outreach = { id: string; intern_id?: string; brand_or_creator: string; platform?: string; contact_name?: string; date_contacted?: string; status: string; notes?: string; created_at: string };
@@ -9680,7 +9680,7 @@ export default function DashboardPage() {
   const isUGC = profile.role === "ugc_creator";
   const isDirector = profile.role === "director";
   const isSoraaCreator = profile.role === "soraa_creator";
-  const canSeeRush = ['ellariutta244@gmail.com', 'danica@cloudcloset.com'].includes(authEmail);
+  const canSeeRush = profile.rush_access === true;
   const isIntern = !isAdmin && !isUGC && !isDirector && !isSoraaCreator;
   const isTech = profile.team === "Tech/AI";
   const isDesign = profile.team === "Design";
