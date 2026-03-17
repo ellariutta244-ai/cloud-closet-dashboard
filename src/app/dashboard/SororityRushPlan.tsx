@@ -13,7 +13,7 @@ type Profile = { id: string; full_name: string; email: string; role: string };
 type RushPhase = { id: string; title: string; due_label: string; order_num: number };
 type RushRow = { id: string; phase_id: string; week: string; dates: string; action: string; owner: string; status: string; order_num: number };
 type RushInfluencer = { id: string; school: string; name: string; tiktok: string; instagram: string; followers: string; avg_views: string; audience_demo: string; deliverables: string; fee: string; status: string; notes: string; order_num: number };
-type RushToteItem = { id: string; item: string; purpose: string; cost_low: number | null; cost_high: number | null; quantity: number | null; vendor: string; status: string; order_num: number };
+type RushToteItem = { id: string; item: string; purpose: string; cost_low: number | null; cost_high: number | null; quantity: number | null; vendor: string; link?: string; status: string; order_num: number };
 type RushToteSettings = { num_chapters: number; bags_per_chapter: number };
 type RushStrategySection = { id: string; section_type: string; content: any[] };
 type RushActionItem = { id: string; action: string; owner: string; due_date: string; priority: string; status: string; order_num: number };
@@ -962,6 +962,7 @@ function ToteBagTab({
       cost_high: null,
       quantity: 1,
       vendor: '',
+      link: '',
       status: 'explore',
       order_num: items.length,
       created_at: new Date().toISOString(),
@@ -1051,6 +1052,7 @@ function ToteBagTab({
                   <th className="text-left px-3 py-2 font-medium w-16">Qty</th>
                   <th className="text-left px-3 py-2 font-medium w-28">Total Est.</th>
                   <th className="text-left px-3 py-2 font-medium w-28">Vendor</th>
+                  <th className="text-left px-3 py-2 font-medium w-28">Link</th>
                   <th className="text-left px-3 py-2 font-medium w-32">Status</th>
                   {canEdit && <th className="w-8" />}
                 </tr>
@@ -1111,6 +1113,13 @@ function ToteBagTab({
                       <td className="px-3 py-2 text-stone-600 align-top">
                         <InlineEdit value={item.vendor} onSave={v => updateItemField(item.id, 'vendor', v)} disabled={!canEdit} placeholder="TBD" />
                       </td>
+                      <td className="px-3 py-2 text-stone-600 align-top">
+                        {canEdit ? (
+                          <InlineEdit value={item.link ?? ''} onSave={v => updateItemField(item.id, 'link', v)} disabled={false} placeholder="https://..." />
+                        ) : item.link ? (
+                          <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-rose-600 hover:underline text-xs truncate block max-w-[120px]">Link</a>
+                        ) : <span className="text-stone-300">—</span>}
+                      </td>
                       <td className="px-3 py-2 align-top">
                         {canEdit ? (
                           <StatusSelect
@@ -1170,6 +1179,21 @@ function DownloadCardTab({
     hook_copy: { title: 'Hook Copy Ideas' },
     tracking: { title: 'Chapter Tracking Plan' },
     followup: { title: 'Post-Rush Follow Up' },
+    schools: { title: 'Target Schools' },
+    distribution: { title: 'Getting Cards into PNM Bags' },
+  };
+
+  const SCHOOL_STATUS_OPTIONS = [
+    { value: 'not_contacted', label: 'Not Contacted' },
+    { value: 'outreach_sent', label: 'Outreach Sent' },
+    { value: 'confirmed', label: 'Confirmed' },
+    { value: 'cards_sent', label: 'Cards Sent' },
+  ];
+  const SCHOOL_STATUS_STYLES: Record<string, string> = {
+    not_contacted: 'bg-stone-100 text-stone-500',
+    outreach_sent: 'bg-sky-100 text-sky-700',
+    confirmed: 'bg-violet-100 text-violet-700',
+    cards_sent: 'bg-emerald-100 text-emerald-700',
   };
 
   async function updateSectionContent(sectionId: string, content: any[]) {
@@ -1180,7 +1204,8 @@ function DownloadCardTab({
 
   return (
     <div className="flex gap-4 min-h-0">
-      <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="flex-1 min-w-0 flex flex-col gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {['specs', 'hook_copy', 'tracking', 'followup'].map(type => {
           const section = sections.find(s => s.section_type === type);
           if (!section) return null;
@@ -1357,6 +1382,131 @@ function DownloadCardTab({
             </div>
           );
         })}
+        </div>
+
+        {/* Target Schools — full width */}
+        {(() => {
+          const section = sections.find(s => s.section_type === 'schools');
+          if (!section) return null;
+          const content = (section.content ?? []) as { name: string; contact: string; email: string; status: string; notes: string }[];
+          return (
+            <div className="bg-white border border-stone-200 rounded-xl p-5 flex flex-col gap-3">
+              <h3 className="font-semibold text-stone-800 text-sm">Target Schools</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-rose-700 text-white text-xs">
+                      <th className="text-left px-3 py-2 font-medium">School</th>
+                      <th className="text-left px-3 py-2 font-medium">Panhellenic Contact</th>
+                      <th className="text-left px-3 py-2 font-medium">Email</th>
+                      <th className="text-left px-3 py-2 font-medium w-36">Status</th>
+                      <th className="text-left px-3 py-2 font-medium">Notes</th>
+                      {canEdit && <th className="w-8" />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {content.map((row, i) => (
+                      <tr key={i} className={`border-b border-stone-100 ${i % 2 === 1 ? 'bg-rose-50/30' : ''}`}>
+                        <td className="px-3 py-2 font-medium text-stone-800 align-top">
+                          <InlineEdit value={row.name} onSave={v => { const next = [...content]; next[i] = { ...next[i], name: v }; updateSectionContent(section.id, next); }} disabled={!canEdit} placeholder="School name" />
+                        </td>
+                        <td className="px-3 py-2 text-stone-600 align-top">
+                          <InlineEdit value={row.contact} onSave={v => { const next = [...content]; next[i] = { ...next[i], contact: v }; updateSectionContent(section.id, next); }} disabled={!canEdit} placeholder="Name" />
+                        </td>
+                        <td className="px-3 py-2 text-stone-600 align-top">
+                          <InlineEdit value={row.email} onSave={v => { const next = [...content]; next[i] = { ...next[i], email: v }; updateSectionContent(section.id, next); }} disabled={!canEdit} placeholder="email@school.edu" />
+                        </td>
+                        <td className="px-3 py-2 align-top">
+                          {canEdit ? (
+                            <select
+                              value={row.status}
+                              onChange={e => { const next = [...content]; next[i] = { ...next[i], status: e.target.value }; updateSectionContent(section.id, next); }}
+                              className="text-xs border border-stone-200 rounded-lg px-2 py-1 bg-white outline-none focus:border-rose-400"
+                            >
+                              {[{ value: 'not_contacted', label: 'Not Contacted' }, { value: 'outreach_sent', label: 'Outreach Sent' }, { value: 'confirmed', label: 'Confirmed' }, { value: 'cards_sent', label: 'Cards Sent' }].map(o => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${SCHOOL_STATUS_STYLES[row.status] ?? 'bg-stone-100 text-stone-500'}`}>
+                              {SCHOOL_STATUS_OPTIONS.find(o => o.value === row.status)?.label ?? row.status}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-stone-600 align-top">
+                          <InlineEdit value={row.notes} onSave={v => { const next = [...content]; next[i] = { ...next[i], notes: v }; updateSectionContent(section.id, next); }} disabled={!canEdit} placeholder="—" multiline />
+                        </td>
+                        {canEdit && (
+                          <td className="px-2 py-2 align-top">
+                            <button onClick={() => updateSectionContent(section.id, content.filter((_, idx) => idx !== i))} className="text-stone-300 hover:text-red-400">
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {canEdit && (
+                <div>
+                  <Btn size="sm" variant="ghost" onClick={() => updateSectionContent(section.id, [...content, { name: '', contact: '', email: '', status: 'not_contacted', notes: '' }])}>
+                    <Plus size={12} /> Add School
+                  </Btn>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Distribution Steps — full width */}
+        {(() => {
+          const section = sections.find(s => s.section_type === 'distribution');
+          if (!section) return null;
+          const content = (section.content ?? []) as { text: string; checked: boolean }[];
+          return (
+            <div className="bg-white border border-stone-200 rounded-xl p-5 flex flex-col gap-3">
+              <div>
+                <h3 className="font-semibold text-stone-800 text-sm">Getting Cards into PNM Bags</h3>
+                <p className="text-xs text-stone-400 mt-0.5">Step-by-step process for coordinating with each school's panhellenic</p>
+              </div>
+              <div className="flex flex-col gap-2">
+                {content.map((item, i) => (
+                  <div key={i} className="flex items-start gap-2 group">
+                    <button
+                      onClick={async () => {
+                        const next = [...content];
+                        next[i] = { ...next[i], checked: !next[i].checked };
+                        await updateSectionContent(section.id, next);
+                      }}
+                      className={`flex-shrink-0 w-4 h-4 mt-0.5 rounded border flex items-center justify-center transition-colors ${item.checked ? 'bg-emerald-500 border-emerald-500' : 'border-stone-300 hover:border-rose-400'}`}
+                    >
+                      {item.checked && <Check size={10} className="text-white" />}
+                    </button>
+                    <div className={`flex-1 text-sm ${item.checked ? 'line-through text-stone-400' : 'text-stone-700'}`}>
+                      <InlineEdit
+                        value={item.text}
+                        onSave={v => { const next = [...content]; next[i] = { ...next[i], text: v }; updateSectionContent(section.id, next); }}
+                        disabled={!canEdit}
+                        placeholder="Step description..."
+                      />
+                    </div>
+                    {canEdit && (
+                      <button onClick={() => updateSectionContent(section.id, content.filter((_, idx) => idx !== i))} className="text-stone-300 hover:text-red-400 opacity-0 group-hover:opacity-100">
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {canEdit && (
+                <Btn size="sm" variant="ghost" onClick={() => updateSectionContent(section.id, [...content, { text: '', checked: false }])}>
+                  <Plus size={11} /> Add Step
+                </Btn>
+              )}
+            </div>
+          );
+        })()}
       </div>
       <NotesSidebar subtab={subtab} notes={notes} profile={profile} sb={sb} canAddNotes={profile.role === 'admin' || profile.role === 'director'} onNotesChange={onNotesChange} />
     </div>
@@ -1881,6 +2031,29 @@ function seedStrategySections() {
       ],
       updated_at: now,
     },
+    {
+      id: crypto.randomUUID(),
+      section_type: 'schools',
+      content: [],
+      updated_at: now,
+    },
+    {
+      id: crypto.randomUUID(),
+      section_type: 'distribution',
+      content: [
+        { text: 'Compile list of target schools and find panhellenic director contact for each', checked: false },
+        { text: 'Send initial outreach email to panhellenic directors introducing Cloud Closet', checked: false },
+        { text: 'Follow up with non-responders (1 week after first email)', checked: false },
+        { text: 'Get confirmed shipping address from each participating chapter', checked: false },
+        { text: 'Confirm quantity of PNM bags per chapter so we know how many cards to send', checked: false },
+        { text: 'Ship download cards to panhellenic contacts (allow 1–2 week lead time before rush)', checked: false },
+        { text: 'Confirm cards received by each chapter contact', checked: false },
+        { text: 'Send reminder to chapter contacts the week before rush to include cards in bags', checked: false },
+        { text: 'Check in post-rush to confirm cards were distributed', checked: false },
+        { text: 'Request post-rush download data by chapter (pull from unique QR codes)', checked: false },
+      ],
+      updated_at: now,
+    },
   ];
 }
 
@@ -2002,15 +2175,15 @@ export default function SororityRushPlan({ profile, sb }: { profile: Profile; sb
         setToteSettings({ num_chapters: settingsData[0].num_chapters ?? 0, bags_per_chapter: settingsData[0].bags_per_chapter ?? 0 });
       }
 
-      // Strategy sections
+      // Strategy sections — insert any missing section types
       const { data: sectionData } = await sb.from('rush_strategy_sections').select('*');
-      if (!sectionData || sectionData.length === 0) {
-        const seedSec = seedStrategySections();
-        await sb.from('rush_strategy_sections').insert(seedSec);
-        setStrategySections(seedSec);
-      } else {
-        setStrategySections(sectionData);
+      const existingTypes = new Set((sectionData ?? []).map((s: any) => s.section_type));
+      const missingSeeds = seedStrategySections().filter(s => !existingTypes.has(s.section_type));
+      if (missingSeeds.length > 0) {
+        await sb.from('rush_strategy_sections').insert(missingSeeds);
       }
+      const { data: freshSections } = await sb.from('rush_strategy_sections').select('*');
+      setStrategySections(freshSections ?? []);
 
       // Action items
       const { data: actionData } = await sb.from('rush_action_items').select('*').order('order_num');
