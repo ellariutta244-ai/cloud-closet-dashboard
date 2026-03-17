@@ -9439,6 +9439,7 @@ export default function DashboardPage() {
   const [supabase] = useState(() => createClient());
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [authEmail, setAuthEmail] = useState<string>('');
   const [page, setPage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
@@ -9503,6 +9504,7 @@ export default function DashboardPage() {
       if (!session) { router.push("/auth"); return; }
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
       if (!prof) { router.push("/auth"); return; }
+      setAuthEmail(session.user.email ?? '');
       setProfile(prof as Profile);
       if (prof?.id) supabase.from("profiles").update({ last_seen_at: new Date().toISOString() }).eq("id", prof.id).then(() => {});
       if (prof.role === "ugc_creator") setPage("ugc_dashboard");
@@ -9678,6 +9680,7 @@ export default function DashboardPage() {
   const isUGC = profile.role === "ugc_creator";
   const isDirector = profile.role === "director";
   const isSoraaCreator = profile.role === "soraa_creator";
+  const canSeeRush = ['ellariutta244@gmail.com', 'danica@cloudcloset.com'].includes(authEmail);
   const isIntern = !isAdmin && !isUGC && !isDirector && !isSoraaCreator;
   const isTech = profile.team === "Tech/AI";
   const isDesign = profile.team === "Design";
@@ -9719,7 +9722,7 @@ export default function DashboardPage() {
     ...((isAdmin || isDesign) ? [{ id: "design", icon: <Palette size={16}/>, label: "Design Projects" }] : []),
     ...(isStrategy ? [{ id: "strategy", icon: <BookOpen size={16}/>, label: "Strategy Projects" }] : []),
     ...((isAdmin || isCreator) ? [{ id: "content", icon: <Video size={16}/>, label: "Content" }] : []),
-    ...(isFullAdmin || isDirector ? [{ id: "rush", icon: <Bookmark size={16}/>, label: "Rush Plan" }] : []),
+    ...(canSeeRush ? [{ id: "rush", icon: <Bookmark size={16}/>, label: "Rush Plan" }] : []),
   ];
   const pendingPivotCount = ugcPivotQueue.filter(q => q.status === "pending").length;
   const pendingPlanCount = weeklyPlans.filter(p => p.status === "draft").length;
@@ -9918,7 +9921,7 @@ export default function DashboardPage() {
       case "director_hooks":          return isDirector ? <HookGeneratorPage profile={profile! as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
       case "director_content_studio": return isDirector ? <ContentStudioPage savedIdeas={carolineSavedIdeas} setSavedIdeas={setCarolineSavedIdeas} hookBank={carolineHookBank} setHookBank={setCarolineHookBank} setPage={setPage} sb={supabase}/> : null;
       case "alerts": return isAdmin ? <AlertsPage alerts={smartAlerts} setAlerts={setSmartAlerts} sb={supabase}/> : null;
-      case "rush":   return (isFullAdmin || isDirector) ? <SororityRushPlan profile={p} sb={supabase}/> : null;
+      case "rush":   return canSeeRush ? <SororityRushPlan profile={p} sb={supabase}/> : null;
       default:          return null;
     }
   }
