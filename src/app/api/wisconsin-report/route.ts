@@ -29,6 +29,9 @@ function daysFromNow(n: number): string {
 function buildGeminiPrompt(data: {
   projects: any[];
   stalledProjects: any[];
+  submittedTechProjects: any[];
+  designProjects: any[];
+  submittedDesignProjects: any[];
   requests: any[];
   overdueRequests: any[];
   outreach: any[];
@@ -38,7 +41,9 @@ function buildGeminiPrompt(data: {
   missingInterns: string[];
 }): string {
   const {
-    projects, stalledProjects, requests, overdueRequests,
+    projects, stalledProjects, submittedTechProjects,
+    designProjects, submittedDesignProjects,
+    requests, overdueRequests,
     outreach, thisWeekEvents, upcomingEvents,
     submittedInterns, missingInterns,
   } = data;
@@ -48,25 +53,34 @@ function buildGeminiPrompt(data: {
 Here is the data from this past week:
 
 TECH PROJECTS (${projects.length} active):
-${projects.map(p => `- ${p.title} [${p.status}] — ${p.description ?? 'no description'} (progress: ${p.progress ?? 0}%)`).join('\n') || 'None'}
+${projects.map((p: any) => `- ${p.title} [${p.status}] — ${p.description ?? 'no description'} (progress: ${p.progress ?? 0}%)`).join('\n') || 'None'}
 
-STALLED PROJECTS (no update in 7+ days, ${stalledProjects.length} total):
-${stalledProjects.map(p => `- ${p.title} [last updated: ${p.updated_at ? new Date(p.updated_at).toDateString() : 'unknown'}]`).join('\n') || 'None'}
+TECH PROJECTS AWAITING REVIEW (${submittedTechProjects.length} submitted):
+${submittedTechProjects.map((p: any) => `- ${p.title} — ${p.description ?? 'no description'} (progress: ${p.progress ?? 0}%)`).join('\n') || 'None'}
+
+STALLED TECH PROJECTS (no update in 7+ days, ${stalledProjects.length} total):
+${stalledProjects.map((p: any) => `- ${p.title} [last updated: ${p.updated_at ? new Date(p.updated_at).toDateString() : 'unknown'}]`).join('\n') || 'None'}
+
+DESIGN PROJECTS (${designProjects.length} active):
+${designProjects.map((p: any) => `- ${p.title} [${p.status}] — ${p.description ?? 'no description'} (progress: ${p.progress ?? 0}%)`).join('\n') || 'None'}
+
+DESIGN PROJECTS AWAITING REVIEW (${submittedDesignProjects.length} submitted):
+${submittedDesignProjects.map((p: any) => `- ${p.title} — ${p.description ?? 'no description'} (progress: ${p.progress ?? 0}%)`).join('\n') || 'None'}
 
 OPEN REQUESTS (${requests.length} total):
-${requests.map(r => `- "${r.message}" requested by intern ${r.intern_id ?? 'unknown'} — status: ${r.status} (submitted ${new Date(r.created_at).toDateString()})`).join('\n') || 'None'}
+${requests.map((r: any) => `- "${r.message}" requested by intern ${r.intern_id ?? 'unknown'} — status: ${r.status} (submitted ${new Date(r.created_at).toDateString()})`).join('\n') || 'None'}
 
 OVERDUE REQUESTS (pending 7+ days, ${overdueRequests.length} total):
-${overdueRequests.map(r => `- "${r.message}" — pending since ${new Date(r.created_at).toDateString()}`).join('\n') || 'None'}
+${overdueRequests.map((r: any) => `- "${r.message}" — pending since ${new Date(r.created_at).toDateString()}`).join('\n') || 'None'}
 
 OUTREACH THIS WEEK (${outreach.length} total):
-${outreach.map(o => `- ${o.brand_or_creator} via ${o.platform ?? 'unknown platform'} — status: ${o.status} (logged by intern ${o.intern_id ?? 'unknown'})`).join('\n') || 'None'}
+${outreach.map((o: any) => `- ${o.brand_or_creator} via ${o.platform ?? 'unknown platform'} — status: ${o.status} (logged by intern ${o.intern_id ?? 'unknown'})`).join('\n') || 'None'}
 
 EVENTS THIS WEEK (${thisWeekEvents.length} added/updated):
-${thisWeekEvents.map(e => `- ${e.title} on ${e.date ?? 'TBD'} [${e.status}]`).join('\n') || 'None'}
+${thisWeekEvents.map((e: any) => `- ${e.title} on ${e.date ?? 'TBD'} [${e.status}]`).join('\n') || 'None'}
 
 UPCOMING EVENTS NEXT 14 DAYS (${upcomingEvents.length} total):
-${upcomingEvents.map(e => `- ${e.date}: ${e.title}${e.notes ? ` — ${e.notes}` : ''}`).join('\n') || 'None'}
+${upcomingEvents.map((e: any) => `- ${e.date}: ${e.title}${e.notes ? ` — ${e.notes}` : ''}`).join('\n') || 'None'}
 
 WEEKLY REPORT SUBMISSIONS:
 Submitted: ${submittedInterns.length > 0 ? submittedInterns.join(', ') : 'none'}
@@ -78,7 +92,7 @@ SUMMARY: [3-4 sentences in Cloud Closet brand voice — confident, warm, specifi
 ACTION_ITEMS:
 - [one clear direct sentence]
 - [one clear direct sentence]
-(list every item that needs Caroline's attention — stalled projects, overdue requests, missing reports, anything flagged)`;
+(list every item that needs Caroline's attention — submitted projects awaiting review, stalled projects, overdue requests, missing reports, anything flagged)`;
 }
 
 function parseGeminiResponse(raw: string): { summary: string; actionItems: string[] } {
@@ -124,12 +138,23 @@ export async function GET(req: NextRequest) {
     .order('updated_at', { ascending: false });
 
   const projects = allProjects ?? [];
+  const submittedTechProjects = projects.filter((p: any) => p.status === 'submitted');
   const stalledProjects = projects.filter((p: any) =>
-    !p.updated_at || new Date(p.updated_at) < new Date(sevenDaysAgo)
+    p.status !== 'submitted' && (!p.updated_at || new Date(p.updated_at) < new Date(sevenDaysAgo))
   );
   const activeThisWeek = projects.filter((p: any) =>
     p.updated_at && new Date(p.updated_at) >= new Date(sevenDaysAgo)
   );
+
+  // ── 1b. Design Projects ──────────────────────────────────────────────────────
+  const { data: allDesignProjects } = await supabase
+    .from('design_projects')
+    .select('*')
+    .neq('status', 'completed')
+    .order('updated_at', { ascending: false });
+
+  const designProjects = allDesignProjects ?? [];
+  const submittedDesignProjects = designProjects.filter((p: any) => p.status === 'submitted');
 
   // ── 2. Requests ─────────────────────────────────────────────────────────────
   const { data: allRequests } = await supabase
@@ -196,6 +221,12 @@ export async function GET(req: NextRequest) {
     worked_this_week: activeThisWeek.some((a: any) => a.id === p.id),
   }));
 
+  const designProjectsSnapshot = designProjects.map((p: any) => ({
+    id: p.id, title: p.title, status: p.status, progress: p.progress,
+    description: p.description, owner_id: p.owner_id, category: p.category,
+    updated_at: p.updated_at,
+  }));
+
   const requestsSnapshot = requests.map((r: any) => ({
     id: r.id, message: r.message, intern_id: r.intern_id,
     status: r.status, created_at: r.created_at,
@@ -231,7 +262,9 @@ export async function GET(req: NextRequest) {
 
   // ── Call Gemini ─────────────────────────────────────────────────────────────
   const prompt = buildGeminiPrompt({
-    projects, stalledProjects, requests, overdueRequests,
+    projects, stalledProjects, submittedTechProjects,
+    designProjects, submittedDesignProjects,
+    requests, overdueRequests,
     outreach, thisWeekEvents, upcomingEvents,
     submittedInterns, missingInterns,
   });
@@ -268,6 +301,7 @@ export async function GET(req: NextRequest) {
     .upsert({
       week_date: weekDate,
       projects_snapshot: projectsSnapshot,
+      design_projects_snapshot: designProjectsSnapshot,
       requests_snapshot: requestsSnapshot,
       outreach_snapshot: outreachSnapshot,
       events_snapshot: eventsSnapshot,

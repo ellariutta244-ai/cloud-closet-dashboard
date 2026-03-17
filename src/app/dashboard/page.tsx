@@ -6674,10 +6674,11 @@ function UGCBriefPage({ briefs, setBriefs, sb }: {
 }
 
 // ── Director Dashboard (home) ──────────────────────────────────────────────────
-function DirectorDash({ profile, events, ugcSubmissions, ugcCreators, ugcBriefs, smartAlerts, reports, outreach, ugcHooks, settings, setPage, sb }: {
+function DirectorDash({ profile, events, ugcSubmissions, ugcCreators, ugcBriefs, smartAlerts, reports, outreach, ugcHooks, settings, techProjects, designProjects, interns, setPage, sb }: {
   profile: Profile; events: CCEvent[]; ugcSubmissions: UGCSubmission[];
   ugcCreators: UGCCreatorProfile[]; ugcBriefs: UGCBrief[]; smartAlerts: SmartAlert[];
   reports: Report[]; outreach: Outreach[]; ugcHooks: UGCHook[]; settings: AppSettings;
+  techProjects: TechProject[]; designProjects: DesignProject[]; interns: Profile[];
   setPage: (p: string) => void; sb: any;
 }) {
   const hour = new Date().getHours();
@@ -6723,6 +6724,10 @@ function DirectorDash({ profile, events, ugcSubmissions, ugcCreators, ugcBriefs,
   const eventTypeColor: Record<string, string> = {
     planning: "#F59E0B", upcoming: "#8B5CF6", completed: "#10B981", cancelled: "#EF4444",
   };
+
+  const submittedTech = techProjects.filter(p => p.status === 'submitted');
+  const submittedDesign = designProjects.filter(p => p.status === 'submitted');
+  const ownerName = (id?: string) => interns.find(i => i.id === id)?.full_name || '—';
 
   // suppress unused sb warning
   void sb;
@@ -6801,6 +6806,38 @@ function DirectorDash({ profile, events, ugcSubmissions, ugcCreators, ugcBriefs,
           )}
         </div>
       </div>
+
+      {/* Submitted projects awaiting review */}
+      {(submittedTech.length > 0 || submittedDesign.length > 0) && (
+        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Submitted Projects — Awaiting Review</p>
+            <span className="text-xs bg-amber-100 text-amber-700 font-semibold px-2 py-0.5 rounded-full">{submittedTech.length + submittedDesign.length} pending</span>
+          </div>
+          <div className="flex flex-col gap-2">
+            {submittedTech.map(p => (
+              <div key={p.id} className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0 mt-0.5"/>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-stone-800 truncate">{p.title}</p>
+                  <p className="text-xs text-stone-400">{ownerName(p.owner_id)} · Tech/AI · {p.progress ?? 0}% complete</p>
+                </div>
+                <span className="text-[10px] font-semibold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full whitespace-nowrap">Tech</span>
+              </div>
+            ))}
+            {submittedDesign.map(p => (
+              <div key={p.id} className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl">
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0 mt-0.5"/>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-stone-800 truncate">{p.title}</p>
+                  <p className="text-xs text-stone-400">{ownerName(p.owner_id)} · Design · {p.progress ?? 0}% complete</p>
+                </div>
+                <span className="text-[10px] font-semibold bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full whitespace-nowrap">Design</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Action items */}
       {actionAlerts.length > 0 && (
@@ -8789,7 +8826,7 @@ export default function DashboardPage() {
       case "ugc_pivot_history": return isFullAdmin ? <UGCPivotHistoryPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_brief":         return isFullAdmin ? <UGCBriefPage briefs={ugcBriefs} setBriefs={setUGCBriefs} sb={supabase}/> : null;
       case "external-ugc":      return isSoraaCreator ? <SoraaCreatorView profile={profile!}/> : (isAdmin || isDirector) ? <ExternalUGCPanel/> : null;
-      case "director_home":      return isDirector ? <DirectorDash profile={profile!} events={events} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} ugcBriefs={ugcBriefs} smartAlerts={smartAlerts} reports={reports} outreach={outreach} ugcHooks={ugcHooks} settings={settings} setPage={setPage} sb={supabase}/> : null;
+      case "director_home":      return isDirector ? <DirectorDash profile={profile!} events={events} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} ugcBriefs={ugcBriefs} smartAlerts={smartAlerts} reports={reports} outreach={outreach} ugcHooks={ugcHooks} settings={settings} techProjects={techProjects} designProjects={designProjects} interns={interns} setPage={setPage} sb={supabase}/> : null;
       case "director_calendar":  return isDirector ? <EventsPage profile={profile!} interns={interns} events={events} setEvents={setEvents} sb={supabase}/> : null;
       case "director_analytics": return isDirector ? <DirectorAnalyticsPage ugcSubmissions={ugcSubmissions} setUGCSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} reports={reports} outreach={outreach} content={content} interns={interns} sb={supabase}/> : null;
       case "director_brief":            return isDirector ? <DirectorWeeklyBriefPage profile={profile!} ugcBriefs={ugcBriefs} briefComments={briefComments} setBriefComments={setBriefComments} sb={supabase}/> : null;
