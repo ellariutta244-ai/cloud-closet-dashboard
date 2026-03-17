@@ -136,9 +136,9 @@ Remember: rank by Conversion Score > Views. All analysis must be through the len
 
 export async function POST(req: NextRequest) {
   try {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: 'ANTHROPIC_API_KEY not configured' }, { status: 500 });
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (!geminiKey) {
+      return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 500 });
     }
 
     const body = await req.json() as {
@@ -153,44 +153,40 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Must provide either submission or submissions array' }, { status: 400 });
     }
 
+    const systemPrompt = isBatch
+      ? 'You are a UGC campaign analyst for Cloud Closet. Always rank by Conversion Score > Views. All recommendations must be through the lens of app downloads, not vanity metrics. Produce clear, actionable weekly campaign reports.\n\n'
+      : 'You are a UGC campaign analyst for Cloud Closet. Always rank by Conversion Score > Views. All recommendations must be through the lens of app downloads, not vanity metrics.\n\n';
+
     const userContent = isBatch
       ? buildBatchAnalysisPrompt(body.submissions!)
       : buildSingleAnalysisPrompt(body.submission!);
 
-    const systemPrompt = isBatch
-      ? 'You are a UGC campaign analyst for Cloud Closet. Always rank by Conversion Score > Views. All recommendations must be through the lens of app downloads, not vanity metrics. Produce clear, actionable weekly campaign reports.'
-      : 'You are a UGC campaign analyst for Cloud Closet. Always rank by Conversion Score > Views. All recommendations must be through the lens of app downloads, not vanity metrics.';
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
-        system: systemPrompt,
-        messages: [
-          { role: 'user', content: userContent },
-        ],
-      }),
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: systemPrompt + userContent }] }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 4096,
+            thinkingConfig: { thinkingBudget: 0 },
+          },
+        }),
+      }
+    );
 
     if (!response.ok) {
       const errText = await response.text();
-      return NextResponse.json({ error: `Anthropic API error: ${errText}` }, { status: 502 });
+      return NextResponse.json({ error: `Gemini API error: ${errText}` }, { status: 502 });
     }
 
-    const result = await response.json() as {
-      content: Array<{ type: string; text: string }>;
+    const geminiJson = await response.json() as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
     };
 
-    const analysis = result.content
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text)
-      .join('\n');
+    const analysis = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 
     return NextResponse.json({ analysis });
   } catch (e: unknown) {

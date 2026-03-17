@@ -93,22 +93,41 @@ function fmtDate(d?: string) {
 
 type PayStatus = 'unpaid' | 'approved' | 'paid';
 const PAY_COLORS: Record<PayStatus, string> = { unpaid: 'bg-red-50 text-red-600', approved: 'bg-amber-50 text-amber-600', paid: 'bg-emerald-50 text-emerald-600' };
-const DEL_STATUS_COLORS: Record<string, string> = { pending: 'bg-stone-100 text-stone-500', submitted: 'bg-blue-50 text-blue-600', approved: 'bg-emerald-50 text-emerald-600' };
+const DEL_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-stone-100 text-stone-500',
+  submitted: 'bg-blue-50 text-blue-600',
+  complete: 'bg-emerald-50 text-emerald-600',
+};
+
+function isConnectDel(del: string) {
+  return del.toLowerCase().includes('connect');
+}
 
 // ── Sub-tab: Creator Overview ─────────────────────────────────────────────────
-function CreatorOverview({ submissions, statuses, onStatusChange, onViewSubs }: {
+function CreatorOverview({ submissions, statuses, onStatusChange, onMarkAllPaid, onViewSubs }: {
   submissions: SoraaSubmission[];
   statuses: SoraaDeliverableStatus[];
   onStatusChange: (email: string, deliverable: string, field: 'status' | 'payment_status', value: string) => Promise<void>;
+  onMarkAllPaid: (email: string, paid: boolean) => Promise<void>;
   onViewSubs: (email: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-4">
       {SORAA_CREATORS.map(c => {
         const creatorStatuses = statuses.filter(s => s.creator_email === c.email);
-        const totalDone = creatorStatuses.filter(s => s.status === 'approved').length;
+        const contentDels = c.deliverables.filter(d => !isConnectDel(d));
+        const allPaid = contentDels.length > 0 && contentDels.every(del => {
+          const st = creatorStatuses.find(s => s.deliverable === del);
+          return st?.payment_status === 'paid';
+        });
+        const submittedCount = c.deliverables.filter(del => {
+          if (isConnectDel(del)) return false;
+          return submissions.some(s => s.creator_email === c.email && s.deliverable === del);
+        }).length;
+
         return (
           <div key={c.email} className="bg-white border border-stone-200/60 rounded-2xl p-5">
+            {/* Card header */}
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
                 <p className="text-sm font-bold text-stone-800">{c.name}</p>
@@ -117,18 +136,36 @@ function CreatorOverview({ submissions, statuses, onStatusChange, onViewSubs }: 
                   {c.ig && <span className="text-xs text-stone-400">{c.ig}</span>}
                 </div>
               </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-lg font-bold text-stone-800">${c.fee}</p>
-                <p className="text-xs text-stone-400">campaign fee</p>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                {/* Paid checkbox */}
+                <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={allPaid}
+                    onChange={e => onMarkAllPaid(c.email, e.target.checked)}
+                    className="w-3.5 h-3.5 rounded accent-emerald-600 cursor-pointer"
+                  />
+                  <span className={`text-xs font-medium ${allPaid ? 'text-emerald-600' : 'text-stone-400'}`}>Paid</span>
+                </label>
+                <div className="text-right">
+                  <p className="text-lg font-bold text-stone-800">${c.fee}</p>
+                  <p className="text-xs text-stone-400">campaign fee</p>
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 mb-4">
+            <div className="flex flex-col gap-0 mb-4">
               {c.deliverables.map(del => {
                 const st = creatorStatuses.find(s => s.deliverable === del);
-                const delStatus = (st?.status || 'pending') as string;
+                const isConnect = isConnectDel(del);
+                const hasSub = !isConnect && submissions.some(s => s.creator_email === c.email && s.deliverable === del);
+
+                // Auto-derive status for content deliverables
+                let delStatus = st?.status || 'pending';
+                if (!isConnect && hasSub && delStatus === 'pending') delStatus = 'submitted';
+
                 const payStatus = (st?.payment_status || 'unpaid') as PayStatus;
-                const hasSub = submissions.some(s => s.creator_email === c.email && s.deliverable === del);
+
                 return (
                   <div key={del} className="flex items-center justify-between gap-2 py-2 border-b border-stone-50 last:border-0">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -136,27 +173,40 @@ function CreatorOverview({ submissions, statuses, onStatusChange, onViewSubs }: 
                         {delStatus}
                       </span>
                       <span className="text-xs text-stone-600 truncate">{del}</span>
-                      {hasSub && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">analytics in</span>}
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <select
-                        value={delStatus}
-                        onChange={e => onStatusChange(c.email, del, 'status', e.target.value)}
-                        className="text-[10px] border border-stone-200 rounded-lg px-1.5 py-1 text-stone-600 bg-stone-50 focus:outline-none"
-                      >
-                        <option value="pending">Pending</option>
-                        <option value="submitted">Submitted</option>
-                        <option value="approved">Approved</option>
-                      </select>
-                      <select
-                        value={payStatus}
-                        onChange={e => onStatusChange(c.email, del, 'payment_status', e.target.value)}
-                        className={`text-[10px] border border-stone-200 rounded-lg px-1.5 py-1 focus:outline-none ${PAY_COLORS[payStatus]}`}
-                      >
-                        <option value="unpaid">Unpaid</option>
-                        <option value="approved">Pay Approved</option>
-                        <option value="paid">Paid</option>
-                      </select>
+                      {isConnect ? (
+                        /* Connect with founder: Pending / Complete, no payment dropdown */
+                        <select
+                          value={delStatus}
+                          onChange={e => onStatusChange(c.email, del, 'status', e.target.value)}
+                          className="text-[10px] border border-stone-200 rounded-lg px-1.5 py-1 text-stone-600 bg-stone-50 focus:outline-none"
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="complete">Complete</option>
+                        </select>
+                      ) : (
+                        /* Content deliverable: Pending / Submitted + payment dropdown */
+                        <>
+                          <select
+                            value={delStatus}
+                            onChange={e => onStatusChange(c.email, del, 'status', e.target.value)}
+                            className="text-[10px] border border-stone-200 rounded-lg px-1.5 py-1 text-stone-600 bg-stone-50 focus:outline-none"
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="submitted">Submitted</option>
+                          </select>
+                          <select
+                            value={payStatus}
+                            onChange={e => onStatusChange(c.email, del, 'payment_status', e.target.value)}
+                            className={`text-[10px] border border-stone-200 rounded-lg px-1.5 py-1 focus:outline-none ${PAY_COLORS[payStatus]}`}
+                          >
+                            <option value="unpaid">Unpaid</option>
+                            <option value="approved">Pay Approved</option>
+                            <option value="paid">Paid</option>
+                          </select>
+                        </>
+                      )}
                     </div>
                   </div>
                 );
@@ -164,7 +214,7 @@ function CreatorOverview({ submissions, statuses, onStatusChange, onViewSubs }: 
             </div>
 
             <div className="flex items-center justify-between">
-              <p className="text-xs text-stone-400">{totalDone}/{c.deliverables.length} deliverables approved</p>
+              <p className="text-xs text-stone-400">{submittedCount}/{contentDels.length} analytics submitted</p>
               <button
                 onClick={() => onViewSubs(c.email)}
                 className="text-xs font-medium text-stone-600 hover:text-stone-900 underline underline-offset-2 transition-colors"
@@ -562,6 +612,15 @@ export default function SoraaAdminPanel() {
     }
   }
 
+  async function markAllPaid(email: string, paid: boolean) {
+    const creator = SORAA_CREATORS.find(c => c.email === email);
+    if (!creator) return;
+    const contentDels = creator.deliverables.filter(d => !isConnectDel(d));
+    await Promise.all(contentDels.map(del =>
+      updateStatus(email, del, 'payment_status', paid ? 'paid' : 'unpaid')
+    ));
+  }
+
   function viewSubmissions(email: string) {
     setFilterEmail(email);
     setTab('submissions');
@@ -639,7 +698,7 @@ export default function SoraaAdminPanel() {
       ) : (
         <>
           {tab === 'overview' && (
-            <CreatorOverview submissions={submissions} statuses={statuses} onStatusChange={updateStatus} onViewSubs={viewSubmissions}/>
+            <CreatorOverview submissions={submissions} statuses={statuses} onStatusChange={updateStatus} onMarkAllPaid={markAllPaid} onViewSubs={viewSubmissions}/>
           )}
           {tab === 'submissions' && (
             <AllSubmissions submissions={submissions} filterEmail={filterEmail} onAnalyze={analyzeSingle} onAnalyzeAll={analyzeAll} analyzing={analyzing}/>

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { PwaSetup } from "@/components/PwaSetup";
-import SoraaAdminPanel from "./SoraaAdminPanel";
+import ExternalUGCPanel from "./ExternalUGCPanel";
 import {
   LayoutDashboard, CheckSquare, Mail, MessageCircle, FileText,
   FolderOpen, Users, BarChart3, Plus, Search, Bell,
@@ -2562,6 +2562,25 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
   const [generateResult, setGenerateResult] = useState<{ generated: number; skipped: number; protected_: number; errors: number; firstError?: string } | null>(null);
   const [samplePlans, setSamplePlans] = useState<WeeklyPlan[] | null>(null);
   const currentWeek = getMondayOfWeek(new Date());
+  // selectedWeek defaults to the most recent week that has plans, falling back to current week
+  const [selectedWeek, setSelectedWeek] = useState<string>(() => {
+    if (weeklyPlans.length > 0) {
+      return [...weeklyPlans].sort((a, b) => b.week_date.localeCompare(a.week_date))[0].week_date;
+    }
+    return currentWeek;
+  });
+  // When plans first load (async), update selectedWeek to the most recent week with plans
+  useEffect(() => {
+    if (weeklyPlans.length > 0) {
+      setSelectedWeek(prev => {
+        const mostRecent = [...weeklyPlans].sort((a, b) => b.week_date.localeCompare(a.week_date))[0].week_date;
+        // Only auto-jump if still on the default current week and there are plans on a different week
+        if (prev === currentWeek && mostRecent !== currentWeek) return mostRecent;
+        return prev;
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeklyPlans.length]);
 
   function loadSampleData() {
     const phases: WeeklyPlan["phase"][] = ["setup", "volume", "optimize", "scale"];
@@ -2725,7 +2744,21 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
     setGeneratingAll(false);
   }
 
-  const plansForCurrentWeek = activePlans.filter(p => p.week_date === currentWeek);
+  const plansForCurrentWeek = activePlans.filter(p => p.week_date === selectedWeek);
+  const allWeekDates = [...new Set(activePlans.map(p => p.week_date))].sort().reverse();
+  const weekIndex = allWeekDates.indexOf(selectedWeek);
+  function shiftWeek(dir: -1 | 1) {
+    // dir -1 = older week, dir 1 = newer week
+    const newIndex = weekIndex - dir;
+    if (newIndex >= 0 && newIndex < allWeekDates.length) {
+      setSelectedWeek(allWeekDates[newIndex]);
+    } else {
+      // Step by 7 days outside the known list (for future weeks)
+      const d = new Date(selectedWeek + "T12:00:00");
+      d.setDate(d.getDate() + dir * 7);
+      setSelectedWeek(getMondayOfWeek(d));
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -2746,7 +2779,15 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
               <h1 className="text-xl font-bold text-stone-800">Content Plans</h1>
-              <p className="text-sm text-stone-400 mt-0.5">Week of {currentWeek} · {plansForCurrentWeek.length} plan{plansForCurrentWeek.length !== 1 ? "s" : ""}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <button onClick={() => shiftWeek(-1)} className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors" title="Previous week">‹</button>
+                <span className="text-sm text-stone-500 min-w-[110px] text-center">
+                  {selectedWeek === currentWeek ? `This week · ${selectedWeek}` : `Week of ${selectedWeek}`}
+                  {selectedWeek === currentWeek && <span className="ml-1 text-[10px] text-emerald-600 font-semibold">●</span>}
+                </span>
+                <button onClick={() => shiftWeek(1)} className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors" title="Next week">›</button>
+                <span className="text-xs text-stone-400 ml-1">{plansForCurrentWeek.length} plan{plansForCurrentWeek.length !== 1 ? "s" : ""}</span>
+              </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               {samplePlans && (
@@ -2755,10 +2796,11 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
               <button
                 onClick={generateAllPlans}
                 disabled={generatingAll}
+                title={`Generate plans for week of ${currentWeek}`}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 disabled:opacity-50 transition-all"
               >
                 <RefreshCw size={12} className={generatingAll ? "animate-spin" : ""} />
-                {generatingAll ? "Generating…" : "Generate Plans"}
+                {generatingAll ? "Generating…" : `Generate Plans (${currentWeek})`}
               </button>
               {draftCount > 0 && (
                 <Btn onClick={approveAll}>Approve All ({draftCount})</Btn>
@@ -2785,18 +2827,24 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
 
           {plansForCurrentWeek.length === 0 ? (
             <div className="flex flex-col items-center gap-4 py-12">
-              <ES icon={<FileText size={24}/>} message="No content plans for this week yet. Generate them now or they'll auto-generate Monday morning." />
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={generateAllPlans}
-                  disabled={generatingAll}
-                  className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-stone-800 text-white hover:bg-stone-700 disabled:opacity-50 transition-all"
-                >
-                  <RefreshCw size={13} className={generatingAll ? "animate-spin" : ""} />
-                  {generatingAll ? "Generating…" : "Generate Plans Now"}
-                </button>
-                <button onClick={loadSampleData} className="text-sm px-4 py-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-all">Try with sample data</button>
-              </div>
+              <ES icon={<FileText size={24}/>} message={
+                selectedWeek === currentWeek
+                  ? `No content plans for this week yet. Generate them when you're ready.`
+                  : `No plans for week of ${selectedWeek}. Use the arrows to navigate.`
+              } />
+              {selectedWeek === currentWeek && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={generateAllPlans}
+                    disabled={generatingAll}
+                    className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-stone-800 text-white hover:bg-stone-700 disabled:opacity-50 transition-all"
+                  >
+                    <RefreshCw size={13} className={generatingAll ? "animate-spin" : ""} />
+                    {generatingAll ? "Generating…" : `Generate Plans for ${currentWeek}`}
+                  </button>
+                  <button onClick={loadSampleData} className="text-sm px-4 py-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 transition-all">Try with sample data</button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -3474,10 +3522,18 @@ function timeAgo(dt: string): string {
 }
 
 function getMondayOfWeek(d: Date): string {
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const mon = new Date(d.setDate(diff));
-  return mon.toISOString().split("T")[0];
+  // Use local date parts to avoid UTC/local timezone boundary mismatches
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const date = d.getDate();
+  const day = d.getDay(); // 0=Sun … 6=Sat
+  const diff = day === 0 ? -6 : 1 - day; // how many days back to Monday
+  const mon = new Date(year, month, date + diff);
+  // Format as YYYY-MM-DD using local parts
+  const y = mon.getFullYear();
+  const m = String(mon.getMonth() + 1).padStart(2, "0");
+  const dd = String(mon.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
 }
 
 function LineGraph({ data, labels, color = "#1C1917", height = 120 }: { data: number[]; labels?: string[]; color?: string; height?: number }) {
@@ -7856,6 +7912,27 @@ function CreatorWeeklyBriefPage({ profile, briefs, setBriefs, weeklyPlans, setWe
   const [tab, setTab] = useState<"brief" | "plan">("brief");
   const currentWeek = getMondayOfWeek(new Date());
 
+  // Week navigation for the plan tab — default to current week (or most recent with a plan)
+  const approvedPlans = weeklyPlans.filter(p => p.status === "approved");
+  const planWeekDates = [...new Set(approvedPlans.map(p => p.week_date))].sort().reverse();
+  const [selectedPlanWeek, setSelectedPlanWeek] = useState<string>(() =>
+    planWeekDates.includes(currentWeek) ? currentWeek : (planWeekDates[0] ?? currentWeek)
+  );
+  // When new approved plans arrive, jump to current week if a new one landed there
+  useEffect(() => {
+    const dates = [...new Set(weeklyPlans.filter(p => p.status === "approved").map(p => p.week_date))].sort().reverse();
+    if (dates.includes(currentWeek)) setSelectedPlanWeek(currentWeek);
+    else if (dates.length > 0) setSelectedPlanWeek(prev => dates.includes(prev) ? prev : dates[0]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeklyPlans.length]);
+
+  function shiftPlanWeek(dir: -1 | 1) {
+    const allDates = [...new Set(weeklyPlans.filter(p => p.status === "approved").map(p => p.week_date))].sort().reverse();
+    const idx = allDates.indexOf(selectedPlanWeek);
+    const newIdx = idx - dir; // dir 1 = newer (lower index), dir -1 = older (higher index)
+    if (newIdx >= 0 && newIdx < allDates.length) setSelectedPlanWeek(allDates[newIdx]);
+  }
+
   // Track current values in refs so the poll interval closure can compare without stale state
   const briefsRef = useRef<UGCBrief[]>(briefs);
   const plansRef  = useRef<WeeklyPlan[]>(weeklyPlans);
@@ -7883,8 +7960,11 @@ function CreatorWeeklyBriefPage({ profile, briefs, setBriefs, weeklyPlans, setWe
     const id = setInterval(poll, 30_000);
     return () => clearInterval(id);
   }, [profile.id]);
+
   const currentBrief = briefs.find(b => b.week_date === currentWeek) ?? briefs[0] ?? null;
-  const myPlan = weeklyPlans.find(p => p.week_date === currentWeek) ?? weeklyPlans[0] ?? null;
+  const myPlan = weeklyPlans.find(p => p.week_date === selectedPlanWeek && p.status === "approved")
+    ?? weeklyPlans.find(p => p.week_date === selectedPlanWeek)
+    ?? null;
 
   const DAYS: { key: keyof WeeklyPlan; label: string }[] = [
     { key: "monday", label: "Monday" }, { key: "tuesday", label: "Tuesday" },
@@ -7943,8 +8023,28 @@ function CreatorWeeklyBriefPage({ profile, briefs, setBriefs, weeklyPlans, setWe
 
       {tab === "plan" && (
         <div className="flex flex-col gap-4">
+          {/* Week navigation */}
+          {planWeekDates.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => shiftPlanWeek(-1)}
+                disabled={planWeekDates.indexOf(selectedPlanWeek) >= planWeekDates.length - 1}
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 disabled:opacity-30 transition-colors"
+                title="Older week"
+              >‹</button>
+              <span className="text-sm text-stone-500 min-w-[130px] text-center">
+                {selectedPlanWeek === currentWeek ? `This week · ${selectedPlanWeek}` : `Week of ${selectedPlanWeek}`}
+              </span>
+              <button
+                onClick={() => shiftPlanWeek(1)}
+                disabled={planWeekDates.indexOf(selectedPlanWeek) <= 0}
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 disabled:opacity-30 transition-colors"
+                title="Newer week"
+              >›</button>
+            </div>
+          )}
           {!myPlan ? (
-            <ES icon={<CalendarDays size={24}/>} message="Your content plan for this week hasn't been generated yet. It'll be ready Monday morning." />
+            <ES icon={<CalendarDays size={24}/>} message={selectedPlanWeek === currentWeek ? "Your content plan for this week hasn't been sent yet. Check back soon!" : `No plan for week of ${selectedPlanWeek}.`} />
           ) : myPlan.status === "draft" ? (
             <ES icon={<CalendarDays size={24}/>} message="Your plan is being reviewed by the team. It'll appear here once approved." />
           ) : (
@@ -8095,6 +8195,7 @@ export default function DashboardPage() {
       if (prof?.id) supabase.from("profiles").update({ last_seen_at: new Date().toISOString() }).eq("id", prof.id).then(() => {});
       if (prof.role === "ugc_creator") setPage("ugc_dashboard");
       if (prof.role === "director") setPage("director_home");
+      if (prof.role === "soraa_creator") setPage("external-ugc");
       const [
         { data: iD }, { data: tD }, { data: oD }, { data: qD },
         { data: rD }, { data: resD }, { data: aD }, { data: actD },
@@ -8255,7 +8356,8 @@ export default function DashboardPage() {
   const isAdmin = isFullAdmin || isWisconsinAdmin;
   const isUGC = profile.role === "ugc_creator";
   const isDirector = profile.role === "director";
-  const isIntern = !isAdmin && !isUGC && !isDirector;
+  const isSoraaCreator = profile.role === "soraa_creator";
+  const isIntern = !isAdmin && !isUGC && !isDirector && !isSoraaCreator;
   const isTech = profile.team === "Tech/AI";
   const isDesign = profile.team === "Design";
   const isCreator = profile.team === "Content Creation";
@@ -8264,6 +8366,11 @@ export default function DashboardPage() {
   const newBriefCount = isUGC ? ugcBriefs.filter(b => new Date(b.created_at).getTime() > briefSeenAt).length : 0;
   const newPivotCount = isUGC ? ugcPivots.filter(p => p.creator_id === profile.id && new Date(p.created_at).getTime() > pivotSeenAt).length : 0;
   const newQACount = isUGC ? ugcQuestions.filter(q => q.creator_id !== profile.id && new Date(q.created_at).getTime() > qaSeenAt).length : 0;
+
+  const SORAA_NAV = [
+    { id: "external-ugc", icon: <Sparkles size={16}/>, label: "Soraa Campaign" },
+    { id: "questions",    icon: <MessageCircle size={16}/>, label: "Questions", badge: openQCount || null },
+  ];
 
   const NAV = isUGC ? [
     { id: "ugc_dashboard",      icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
@@ -8331,9 +8438,9 @@ export default function DashboardPage() {
       ],
     },
     {
-      label: "SORAA CAMPAIGN",
+      label: "EXTERNAL UGC CAMPAIGN",
       items: [
-        { id: "soraa", icon: <Sparkles size={16}/>, label: "Soraa UGC" },
+        { id: "external-ugc", icon: <Sparkles size={16}/>, label: "External UGC" },
       ],
     },
   ];
@@ -8408,6 +8515,8 @@ export default function DashboardPage() {
               {section.items.map(item => <NavItem key={item.id} item={item} />)}
             </div>
           ))
+        ) : isSoraaCreator ? (
+          SORAA_NAV.map(item => <NavItem key={item.id} item={item} />)
         ) : (
           NAV.map(item => <NavItem key={item.id} item={item} />)
         )}
@@ -8417,7 +8526,7 @@ export default function DashboardPage() {
           <Av name={profile.full_name} size={32}/>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-stone-800 truncate">{profile.full_name}</p>
-            <p className="text-xs text-stone-400 capitalize">{isWisconsinAdmin ? "Wisconsin Admin" : isFullAdmin ? "Admin" : isDirector ? "Director" : isUGC ? "UGC Creator" : (profile.team || "Intern")}</p>
+            <p className="text-xs text-stone-400 capitalize">{isWisconsinAdmin ? "Wisconsin Admin" : isFullAdmin ? "Admin" : isDirector ? "Director" : isUGC ? "UGC Creator" : isSoraaCreator ? "Soraa Creator" : (profile.team || "Intern")}</p>
           </div>
           <button onClick={handleSignOut} className="p-1.5 rounded-lg text-stone-300 hover:text-stone-600 hover:bg-stone-100 transition-colors" title="Sign out"><LogOut size={14}/></button>
         </div>
@@ -8472,7 +8581,7 @@ export default function DashboardPage() {
       case "ugc_analytics":     return isFullAdmin ? <UGCAnalyticsOverview submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} pivotQueue={ugcPivotQueue} smartAlerts={smartAlerts} sb={supabase}/> : null;
       case "ugc_pivot_history": return isFullAdmin ? <UGCPivotHistoryPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_brief":         return isFullAdmin ? <UGCBriefPage briefs={ugcBriefs} setBriefs={setUGCBriefs} sb={supabase}/> : null;
-      case "soraa":             return isAdmin ? <SoraaAdminPanel/> : null;
+      case "external-ugc":      return (isAdmin || isSoraaCreator) ? <ExternalUGCPanel/> : null;
       case "director_home":      return isDirector ? <DirectorDash profile={profile!} events={events} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} ugcBriefs={ugcBriefs} smartAlerts={smartAlerts} reports={reports} outreach={outreach} ugcHooks={ugcHooks} settings={settings} setPage={setPage} sb={supabase}/> : null;
       case "director_calendar":  return isDirector ? <EventsPage profile={profile!} interns={interns} events={events} setEvents={setEvents} sb={supabase}/> : null;
       case "director_analytics": return isDirector ? <DirectorAnalyticsPage ugcSubmissions={ugcSubmissions} setUGCSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} reports={reports} outreach={outreach} sb={supabase}/> : null;

@@ -4,7 +4,6 @@
     { "path": "/api/ugc-alerts-cron?type=missed_submission", "schedule": "0 9 * * 5" },
     { "path": "/api/ugc-alerts-cron?type=missed_submission", "schedule": "0 18 * * 5" },
     { "path": "/api/ugc-alerts-cron?type=creator_inactive", "schedule": "0 10 * * *" },
-    { "path": "/api/ugc-weekly-plan-cron", "schedule": "0 14 * * 1" },
     { "path": "/api/wisconsin-report", "schedule": "0 0 * * 1" },
     { "path": "/api/caroline-remind-cron", "schedule": "0 10 * * *" }
   ]
