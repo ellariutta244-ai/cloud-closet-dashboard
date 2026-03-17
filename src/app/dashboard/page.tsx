@@ -1106,7 +1106,7 @@ function IntMgmt({ interns, setInterns, sb }: { interns:Profile[]; setInterns:(i
     if (edit) {
       const {error}=await sb.from("profiles").update({full_name:form.full_name,email:form.email,team:form.team}).eq("id",edit.id);
       if(error){console.error(error);return;}
-      setInterns(interns.map(i=>i.id===edit.id?{...i,...form}:i));
+      setInterns(interns.map(i=>i.id===edit.id?{...i,...form,role:form.role as Role}:i));
     }
     setModal(false);
   }
