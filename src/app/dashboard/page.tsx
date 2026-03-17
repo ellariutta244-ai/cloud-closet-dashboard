@@ -178,9 +178,9 @@ function AdminDash({ interns, tasks, outreach, questions, activity, announcement
   const currentWeek = getMondayOfWeek(new Date());
   const activeCreatorIds = new Set(ugcCreators.filter(c => c.ugc_status !== "archived").map(c => c.id));
   const activeSubs = ugcSubmissions.filter(s => activeCreatorIds.has(s.creator_id ?? ""));
-  const submittedThisWeek = activeSubs.filter(s => s.week_date === currentWeek);
-  const killRuleAlerts = activeSubs.filter(s => s.week_date === currentWeek && s.total_views < 1000);
-  const scaleRuleAlerts = activeSubs.filter(s => s.week_date === currentWeek && s.total_views >= 10000);
+  const submittedThisWeek = activeSubs.filter(s => inWeek(s.week_date, currentWeek));
+  const killRuleAlerts = activeSubs.filter(s => inWeek(s.week_date, currentWeek) && s.total_views < 1000);
+  const scaleRuleAlerts = activeSubs.filter(s => inWeek(s.week_date, currentWeek) && s.total_views >= 10000);
   const TEAMS = ["Tech/AI","Strategy","Events/Outreach","Design","Curation Team","Content Creation","UGC Creators"];
 
   // Auto-refresh UGC submissions every 60s so new data appears without a page reload
@@ -3536,6 +3536,21 @@ function getMondayOfWeek(d: Date): string {
   const dd = String(mon.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
 }
+// Returns the Sunday (end of week) for a given Monday string "YYYY-MM-DD"
+function getSundayOfWeek(monday: string): string {
+  const [y, m, d] = monday.split("-").map(Number);
+  const sun = new Date(y, m - 1, d + 6);
+  const sy = sun.getFullYear();
+  const sm = String(sun.getMonth() + 1).padStart(2, "0");
+  const sd = String(sun.getDate()).padStart(2, "0");
+  return `${sy}-${sm}-${sd}`;
+}
+// Returns true if a date string falls within the Mon–Sun week
+function inWeek(date: string | undefined | null, monday: string): boolean {
+  if (!date) return false;
+  const d = date.slice(0, 10); // handles both "YYYY-MM-DD" and full ISO timestamps
+  return d >= monday && d <= getSundayOfWeek(monday);
+}
 
 function LineGraph({ data, labels, color = "#1C1917", height = 120 }: { data: number[]; labels?: string[]; color?: string; height?: number }) {
   if (data.length < 2) return <div className="flex items-center justify-center h-20 text-xs text-stone-400">Not enough data</div>;
@@ -3628,15 +3643,15 @@ function UGCDashboard({ profile, ugcCreators, setUGCCreators, submissions, pivot
   const myPivots = isAdmin ? pivots : pivots.filter(p => p.creator_id === profile.id);
   const pinned = announcements.filter(a => a.pinned);
   const currentWeek = getMondayOfWeek(new Date());
-  const hasSubmittedThisWeek = mySubmissions.some(s => s.week_date === currentWeek);
+  const hasSubmittedThisWeek = mySubmissions.some(s => inWeek(s.week_date, currentWeek));
   const latestBrief = briefs[0];
   const latestPivot = myPivots[0];
 
   // Views stats
-  const thisWeekSubs = mySubmissions.filter(s => s.week_date === currentWeek);
+  const thisWeekSubs = mySubmissions.filter(s => inWeek(s.week_date, currentWeek));
   const lastWeek = new Date(); lastWeek.setDate(lastWeek.getDate() - 7);
   const lastWeekStr = getMondayOfWeek(lastWeek);
-  const lastWeekSubs = mySubmissions.filter(s => s.week_date === lastWeekStr);
+  const lastWeekSubs = mySubmissions.filter(s => inWeek(s.week_date, lastWeekStr));
   const thisViews = thisWeekSubs.reduce((s, x) => s + x.total_views, 0);
   const lastViews = lastWeekSubs.reduce((s, x) => s + x.total_views, 0);
   const viewsDiff = lastViews > 0 ? Math.round(((thisViews - lastViews) / lastViews) * 100) : 0;
@@ -6276,7 +6291,7 @@ function UGCAnalyticsOverview({ submissions, setSubmissions, ugcCreators, pivotQ
   const currentWeek = getMondayOfWeek(new Date());
   const activeCreatorIds = new Set(ugcCreators.filter(c => c.ugc_status !== "archived").map(c => c.id));
   const activeSubs = submissions.filter(s => activeCreatorIds.has(s.creator_id ?? ""));
-  const thisWeekSubs = activeSubs.filter(s => s.week_date === currentWeek);
+  const thisWeekSubs = activeSubs.filter(s => inWeek(s.week_date, currentWeek));
 
   // Fall back to most recent week that has data if this week has no submissions yet
   const recentWeek = thisWeekSubs.length > 0
@@ -6526,7 +6541,7 @@ function DirectorDash({ profile, events, ugcSubmissions, ugcCreators, ugcBriefs,
   const currentWeek = getMondayOfWeek(new Date());
 
   // This week at a glance — fall back to most recent week if this week has no submissions yet
-  const thisWeekSubs = ugcSubmissions.filter(s => s.week_date === currentWeek);
+  const thisWeekSubs = ugcSubmissions.filter(s => inWeek(s.week_date, currentWeek));
   const recentSubs = thisWeekSubs.length > 0
     ? thisWeekSubs
     : (() => {
@@ -6692,9 +6707,9 @@ function DirectorAnalyticsPage({ ugcSubmissions, setUGCSubmissions, ugcCreators,
   const currentWeek = getMondayOfWeek(new Date());
 
   // Views this week — broken down by source
-  const ugcViewsThisWeek = ugcSubmissions.filter(s => s.week_date === currentWeek).reduce((s, x) => s + x.total_views, 0);
-  const wisconsinViewsThisWeek = content.filter(v => v.date_posted && v.date_posted >= currentWeek).reduce((s, v) => s + (v.views || 0), 0);
-  const externalViewsThisWeek = soraaSubs.filter(s => s.created_at >= currentWeek).reduce((s, x) => s + (x.views || 0), 0);
+  const ugcViewsThisWeek = ugcSubmissions.filter(s => inWeek(s.week_date, currentWeek)).reduce((s, x) => s + x.total_views, 0);
+  const wisconsinViewsThisWeek = content.filter(v => inWeek(v.date_posted, currentWeek)).reduce((s, v) => s + (v.views || 0), 0);
+  const externalViewsThisWeek = soraaSubs.filter(s => inWeek(s.created_at, currentWeek)).reduce((s, x) => s + (x.views || 0), 0);
   const totalViewsThisWeek = ugcViewsThisWeek + wisconsinViewsThisWeek + externalViewsThisWeek;
 
   // Total views to date — broken down by source
@@ -6725,8 +6740,8 @@ function DirectorAnalyticsPage({ ugcSubmissions, setUGCSubmissions, ugcCreators,
   const trendLabels = weeks.map(w => w.slice(5));
 
   // Wisconsin intern summary
-  const reportsThisWeek = reports.filter(r => r.week_of === currentWeek).length;
-  const outreachThisWeek = outreach.filter(o => o.date_contacted && o.date_contacted >= currentWeek).length;
+  const reportsThisWeek = reports.filter(r => inWeek(r.week_of, currentWeek)).length;
+  const outreachThisWeek = outreach.filter(o => inWeek(o.date_contacted, currentWeek)).length;
 
   function ViewBreakdown({ rows }: { rows: { label: string; views: number }[] }) {
     const max = Math.max(...rows.map(r => r.views), 1);
