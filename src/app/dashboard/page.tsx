@@ -781,7 +781,7 @@ function MeetingRequestsAdmin({ profile, interns, meetingRequests, setMeetingReq
 
 // ── Tasks Page ─────────────────────────────────────────────────────────────────
 function TasksPg({ profile, interns, tasks, setTasks, meetingRequests, setMeetingRequests, sb, addActivity }: { profile:Profile; interns:Profile[]; tasks:Task[]; setTasks:(t:Task[])=>void; meetingRequests:MeetingRequest[]; setMeetingRequests:(m:MeetingRequest[])=>void; sb:any; addActivity:(a:any)=>void }) {
-  const [tab, setTab] = useState<'tasks'|'meetings'>('tasks');
+  const [tab, setTab] = useState<'tasks'|'meetings'|'extensions'>('tasks');
   const [filter,setFilter]=useState("all");
   const [modal,setModal]=useState(false);
   const [editTask,setEditTask]=useState<Task|null>(null);
@@ -871,6 +871,31 @@ function TasksPg({ profile, interns, tasks, setTasks, meetingRequests, setMeetin
 
   const [commentText, setCommentText] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [showExtensionForm, setShowExtensionForm] = useState(false);
+  const [extensionNote, setExtensionNote] = useState("");
+  const [submittingExt, setSubmittingExt] = useState(false);
+
+  async function requestExtension() {
+    if (!extensionNote.trim() || !detail) return;
+    setSubmittingExt(true);
+    const body = `🗓️ Extension requested: ${extensionNote.trim()}`;
+    const { data, error } = await sb.from("task_comments").insert({
+      task_id: detail.id, author_id: profile.id, body, created_at: new Date().toISOString()
+    }).select().single();
+    setSubmittingExt(false);
+    if (error) { console.error(error); return; }
+    const comment = data as TaskComment;
+    const updatedTask = { ...detail, task_comments: [...(detail.task_comments || []), comment] };
+    setDetail(updatedTask);
+    setTasks(tasks.map(t => t.id === detail.id ? updatedTask : t));
+    setShowExtensionForm(false);
+    setExtensionNote("");
+    fetch("/api/send-notification", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "admin", title: "Extension Requested ⏰", body: `${profile.full_name} requested an extension on "${detail.title}"` })
+    }).catch(() => {});
+  }
+
   async function submitComment() {
     if (!commentText.trim() || !detail) return;
     setSubmittingComment(true);
@@ -910,6 +935,21 @@ function TasksPg({ profile, interns, tasks, setTasks, meetingRequests, setMeetin
       .sort(([, a], [, b]) => { if (!a.intern) return 1; if (!b.intern) return -1; return (a.intern.full_name??"").localeCompare(b.intern.full_name??""); });
   }, [isAdmin, activeInterns, filtered]);
 
+  // Extension requests: tasks with at least one "🗓️ Extension requested:" comment
+  const extensionRequests = useMemo(() => {
+    if (!isAdmin) return [];
+    return tasks
+      .filter(t => (t.task_comments||[]).some(c => c.body.startsWith("🗓️ Extension requested:")))
+      .map(t => {
+        const extComments = (t.task_comments||[]).filter(c => c.body.startsWith("🗓️ Extension requested:"));
+        const latest = extComments[extComments.length - 1];
+        const note = latest.body.replace("🗓️ Extension requested: ", "");
+        const intern = interns.find(i => i.id === latest.author_id);
+        return { task: t, note, intern, requestedAt: latest.created_at };
+      })
+      .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+  }, [isAdmin, tasks, interns]);
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -924,11 +964,37 @@ function TasksPg({ profile, interns, tasks, setTasks, meetingRequests, setMeetin
             <CalendarClock size={12}/>Request Meeting
             {meetingRequests.filter(m=>m.status==='open').length>0&&<span className="bg-amber-100 text-amber-700 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">{meetingRequests.filter(m=>m.status==='open').length}</span>}
           </button>
+          <button onClick={()=>setTab('extensions')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${tab==='extensions'?'bg-white text-stone-800 shadow-sm':'text-stone-500 hover:text-stone-700'}`}>
+            <CalendarDays size={12}/>Extensions
+            {extensionRequests.length>0&&<span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${tab==='extensions'?'bg-amber-100 text-amber-700':'bg-amber-100 text-amber-700'}`}>{extensionRequests.length}</span>}
+          </button>
         </div>
       )}
       {/* Admin: meetings subtab */}
       {isAdmin && tab==='meetings' && (
         <MeetingRequestsAdmin profile={profile} interns={interns} meetingRequests={meetingRequests} setMeetingRequests={setMeetingRequests} sb={sb}/>
+      )}
+      {/* Admin: extension requests subtab */}
+      {isAdmin && tab==='extensions' && (
+        <div className="flex flex-col gap-3">
+          {extensionRequests.length === 0 ? (
+            <ES icon={<CalendarDays size={24}/>} message="No extension requests"/>
+          ) : extensionRequests.map(({ task, note, intern, requestedAt }) => (
+            <div key={task.id} onClick={()=>setDetail(task)} className="bg-white border border-amber-200 rounded-xl p-4 cursor-pointer hover:border-amber-300 transition-all">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-stone-800 truncate">{task.title}</p>
+                  {task.due_date && <p className="text-xs text-stone-400 mt-0.5">Due {fmt(task.due_date)}</p>}
+                </div>
+                <PB priority={task.priority}/>
+              </div>
+              <div className="bg-amber-50 rounded-lg px-3 py-2 text-xs text-amber-800">
+                <span className="font-semibold">{intern?.full_name ?? "Intern"}: </span>{note}
+              </div>
+              <p className="text-[10px] text-stone-400 mt-2">{fmt(requestedAt)}</p>
+            </div>
+          ))}
+        </div>
       )}
       {/* Intern: meeting requests banner at top */}
       {!isAdmin && myMeetingRequests.length>0 && (
@@ -974,7 +1040,60 @@ function TasksPg({ profile, interns, tasks, setTasks, meetingRequests, setMeetin
         })}
       </div>
       )}
-      {(!isAdmin || tab==='tasks') && (filtered.length===0 ? <ES icon={<CheckSquare size={24}/>} message="No tasks here"/> : isAdmin && grouped ? (
+      {/* Unassigned tab: interns with no tasks + tasks with no assignee */}
+      {isAdmin && tab==='tasks' && filter==='unassigned' && (() => {
+        const internsWithNoTasks = activeInterns.filter(i =>
+          !tasks.some(t => t.assigned_to===i.id || (t.co_assignees||[]).includes(i.id))
+        );
+        const unassignedTasks = tasks.filter(isUnassigned);
+        return (
+          <div className="flex flex-col gap-5">
+            {/* Interns with zero tasks */}
+            <div>
+              <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <Users size={12}/>Interns with no tasks ({internsWithNoTasks.length})
+              </p>
+              {internsWithNoTasks.length===0
+                ? <p className="text-xs text-stone-400 italic">All interns have at least one task assigned.</p>
+                : <div className="flex flex-col gap-2">
+                    {internsWithNoTasks.map(i=>(
+                      <div key={i.id} className="bg-red-50 border border-red-200/60 rounded-xl px-4 py-3 flex items-center gap-3">
+                        <Av name={i.full_name} size={28}/>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-stone-800">{i.full_name}</p>
+                          {i.team&&<p className="text-xs text-stone-400">{i.team}</p>}
+                        </div>
+                        <button onClick={()=>{setForm({...emptyForm,assignees:[i.id]});setEditTask(null);setDateTbd(false);setModal(true);}} className="text-xs text-stone-500 hover:text-stone-800 border border-stone-200 hover:border-stone-400 rounded-lg px-2.5 py-1.5 transition-all flex items-center gap-1"><Plus size={11}/>Assign Task</button>
+                      </div>
+                    ))}
+                  </div>
+              }
+            </div>
+            {/* Tasks with no assignee */}
+            {unassignedTasks.length>0 && (
+              <div>
+                <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                  <AlertTriangle size={12}/>Tasks with no assignee ({unassignedTasks.length})
+                </p>
+                <div className="flex flex-col gap-2">
+                  {unassignedTasks.map(t=>(
+                    <div key={t.id} onClick={()=>setDetail(t)} className="bg-white border border-red-200/60 rounded-xl p-4 cursor-pointer hover:border-red-300 transition-all flex items-center gap-3">
+                      <SD status={t.status}/>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-stone-800 truncate">{t.title}</p>
+                        {t.due_date&&<p className="text-xs text-stone-400">Due {fmt(t.due_date)}</p>}
+                      </div>
+                      <PB priority={t.priority}/>
+                      <button onClick={e=>{e.stopPropagation();openEdit(t);}} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition-colors"><Pencil size={13}/></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+      {(!isAdmin || tab==='tasks') && filter!=='unassigned' && (filtered.length===0 ? <ES icon={<CheckSquare size={24}/>} message="No tasks here"/> : isAdmin && grouped ? (
         <div className="flex flex-col gap-3">
           {grouped.map(([key, { intern, tasks: internTasks }]) => {
             const open = collapsed[key] === true;
@@ -1076,7 +1195,7 @@ function TasksPg({ profile, interns, tasks, setTasks, meetingRequests, setMeetin
       </Md>
 
       {/* Task detail modal */}
-      <Md open={!!detail} onClose={()=>setDetail(null)} title="Task Detail">
+      <Md open={!!detail} onClose={()=>{ setDetail(null); setShowExtensionForm(false); setExtensionNote(""); }} title="Task Detail">
         {detail&&(
           <div className="flex flex-col gap-4">
             <div>
@@ -1111,6 +1230,26 @@ function TasksPg({ profile, interns, tasks, setTasks, meetingRequests, setMeetin
                 ))}
               </div>
             </div>
+            {!isAdmin && (
+              <div className="border-t border-stone-100 pt-3">
+                {!showExtensionForm ? (
+                  <button onClick={() => setShowExtensionForm(true)} className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-700 font-medium transition-colors">
+                    <CalendarClock size={13}/>Request Extension
+                  </button>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Request Extension</p>
+                    <TA label="" value={extensionNote} onChange={v => setExtensionNote(v)} placeholder="Explain why you need more time..." rows={2}/>
+                    <div className="flex gap-2 justify-end">
+                      <Btn variant="secondary" size="sm" onClick={() => { setShowExtensionForm(false); setExtensionNote(""); }}>Cancel</Btn>
+                      <Btn size="sm" onClick={requestExtension} disabled={!extensionNote.trim() || submittingExt}>
+                        <Send size={12}/>{submittingExt ? "Sending..." : "Send Request"}
+                      </Btn>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="border-t border-stone-100 pt-4">
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide mb-3">Questions & Comments</p>
               {(detail.task_comments||[]).length === 0
@@ -1255,6 +1394,9 @@ function QPg({ profile, interns, questions, setQuestions, sb, addActivity }: { p
     if(error){console.error(error);return;}
     setQuestions([{...data,question_replies:[]}, ...questions.filter(q => q.id !== data.id)]);
     addActivity({user_id:profile.id,user_name:profile.full_name,activity:"question_posted",metadata:{title:form.title}});
+    if (profile.role !== "admin" && profile.role !== "wisconsin_admin") {
+      fetch("/api/send-notification",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"admin",title:"New Question ❓",body:`${profile.full_name} posted: "${data.title}"`})}).catch(()=>{});
+    }
     setModal(false);setForm({title:"",category:"outreach",description:""});
   }
   async function sendReply() {
@@ -2327,6 +2469,9 @@ function EventsPage({ profile, interns, events, setEvents, sb }: { profile:Profi
     setEvents([data,...events]);setShowC(false);setDateTbd(false);setEventFile(null);setNe(emptyForm);
     const dateStr = data.date ? ` on ${data.date}` : "";
     fetch("/api/send-notification",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"director",title:"New Event Added 📅",body:`${ne.title}${dateStr} has been added to the calendar.`})}).catch(()=>{});
+    if (profile.role !== "admin" && profile.role !== "wisconsin_admin") {
+      fetch("/api/send-notification",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"admin",title:"New Event Added 📅",body:`${profile.full_name} added: ${ne.title}${dateStr}`})}).catch(()=>{});
+    }
   }
   async function saveEdit() {
     if (!editEv?.id) return;
@@ -2660,6 +2805,9 @@ function TechProjectsPage({ profile, interns, projects, setProjects, sb }: { pro
     if(error){console.error(error);return;}
     setProjects([data,...projects]);setShowC(false);setProjectFile(null);
     setNp({title:"",description:"",tech_stack:"",priority:"medium",project_url:""});
+    if (profile.role !== "admin" && profile.role !== "wisconsin_admin") {
+      fetch("/api/send-notification",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"admin",title:"New Tech Project 💻",body:`${profile.full_name} added "${data.title}"`})}).catch(()=>{});
+    }
   }
   async function updateProgress(id:string,progress:number) {
     const status=progress>=100?"completed":progress>0?"in_progress":"planning";
@@ -2820,6 +2968,9 @@ function DesignProjectsPage({ profile, interns, projects, setProjects, sb }: { p
     setProjects([data, ...projects]);
     setShowC(false); setProjectFile(null);
     setNp({ title:"", description:"", category:"branding", priority:"medium", project_url:"" });
+    if (profile.role !== "admin" && profile.role !== "wisconsin_admin") {
+      fetch("/api/send-notification",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"admin",title:"New Design Project 🎨",body:`${profile.full_name} added "${data.title}"`})}).catch(()=>{});
+    }
   }
 
   async function updateProgress(id:string, progress:number) {

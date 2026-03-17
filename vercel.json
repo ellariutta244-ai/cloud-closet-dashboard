@@ -6,6 +6,7 @@
     { "path": "/api/ugc-alerts-cron?type=creator_inactive", "schedule": "0 10 * * *" },
     { "path": "/api/wisconsin-report", "schedule": "0 0 * * 1" },
     { "path": "/api/caroline-remind-cron", "schedule": "0 10 * * *" },
-    { "path": "/api/intern-friday-reminder", "schedule": "0 14 * * 5" }
+    { "path": "/api/intern-friday-reminder", "schedule": "0 14 * * 5" },
+    { "path": "/api/task-due-soon-cron", "schedule": "0 10 * * *" }
   ]
 }
