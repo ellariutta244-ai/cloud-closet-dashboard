@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ExternalLink, RefreshCw, Sparkles, MessageCircle, ChevronDown, ChevronUp, Send } from 'lucide-react';
+import { ExternalLink, RefreshCw, Sparkles, MessageCircle, ChevronDown, ChevronUp, Send, Trash2 } from 'lucide-react';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface SoraaSubmission {
@@ -230,14 +230,16 @@ function CreatorOverview({ submissions, statuses, onStatusChange, onMarkAllPaid,
 }
 
 // ── Sub-tab: All Submissions ───────────────────────────────────────────────────
-function AllSubmissions({ submissions, filterEmail, onAnalyze, onAnalyzeAll, analyzing }: {
+function AllSubmissions({ submissions, filterEmail, onAnalyze, onAnalyzeAll, analyzing, onDelete }: {
   submissions: SoraaSubmission[];
   filterEmail?: string;
   onAnalyze: (sub: SoraaSubmission) => void;
   onAnalyzeAll: () => void;
   analyzing: string | null;
+  onDelete: (id: string) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const filtered = filterEmail ? submissions.filter(s => s.creator_email === filterEmail) : submissions;
 
   return (
@@ -340,14 +342,30 @@ function AllSubmissions({ submissions, filterEmail, onAnalyze, onAnalyzeAll, ana
                       </div>
                     )}
 
-                    <button
-                      onClick={() => onAnalyze(s)}
-                      disabled={analyzing === s.id}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-stone-800 text-white text-xs font-medium rounded-xl hover:bg-stone-700 disabled:opacity-50 w-fit transition-colors"
-                    >
-                      <Sparkles size={12}/>
-                      {analyzing === s.id ? 'Analyzing…' : s.ai_analysis ? 'Re-analyze' : 'Analyze with AI'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onAnalyze(s)}
+                        disabled={analyzing === s.id}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-stone-800 text-white text-xs font-medium rounded-xl hover:bg-stone-700 disabled:opacity-50 transition-colors"
+                      >
+                        <Sparkles size={12}/>
+                        {analyzing === s.id ? 'Analyzing…' : s.ai_analysis ? 'Re-analyze' : 'Analyze with AI'}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!confirm('Delete this submission?')) return;
+                          setDeleting(s.id);
+                          await onDelete(s.id);
+                          setDeleting(null);
+                          setExpanded(null);
+                        }}
+                        disabled={deleting === s.id}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-600 text-xs font-medium rounded-xl hover:bg-red-100 disabled:opacity-50 transition-colors"
+                      >
+                        <Trash2 size={12}/>
+                        {deleting === s.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -517,7 +535,7 @@ function QuestionsPanel({ questions, onRefresh }: {
 }
 
 // ── Main Admin Panel ───────────────────────────────────────────────────────────
-export default function SoraaAdminPanel() {
+export default function SoraaAdminPanel({ onSubmissionsChange }: { onSubmissionsChange?: (subs: SoraaSubmission[]) => void } = {}) {
   const [tab, setTab] = useState<'overview' | 'submissions' | 'analysis' | 'questions'>('overview');
   const [submissions, setSubmissions] = useState<SoraaSubmission[]>([]);
   const [questions, setQuestions] = useState<SoraaQuestion[]>([]);
@@ -535,11 +553,13 @@ export default function SoraaAdminPanel() {
       fetch('/api/soraa/questions').then(r => r.json()).catch(() => ({ questions: [] })),
       fetch('/api/soraa/status').then(r => r.json()).catch(() => ({ statuses: [] })),
     ]);
-    setSubmissions(subRes.submissions || []);
+    const subs = subRes.submissions || [];
+    setSubmissions(subs);
+    onSubmissionsChange?.(subs);
     setQuestions(qRes.questions || []);
     setStatuses(stRes.statuses || []);
     setLoading(false);
-  }, []);
+  }, [onSubmissionsChange]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -621,6 +641,13 @@ export default function SoraaAdminPanel() {
     ));
   }
 
+  async function deleteSubmission(id: string) {
+    await fetch(`/api/soraa/submissions?id=${id}`, { method: 'DELETE' });
+    const next = submissions.filter(s => s.id !== id);
+    setSubmissions(next);
+    onSubmissionsChange?.(next);
+  }
+
   function viewSubmissions(email: string) {
     setFilterEmail(email);
     setTab('submissions');
@@ -635,7 +662,13 @@ export default function SoraaAdminPanel() {
 
   const totalFees = SORAA_CREATORS.reduce((s, c) => s + c.fee, 0);
   const paidCount = statuses.filter(s => s.payment_status === 'paid').length;
-  const approvedCount = statuses.filter(s => s.status === 'approved').length;
+  const doneCount = SORAA_CREATORS.reduce((total, c) => {
+    const done = c.deliverables.filter(d => {
+      if (isConnectDel(d)) return statuses.some(s => s.creator_email === c.email && s.deliverable === d && s.status === 'complete');
+      return submissions.some(s => s.creator_email === c.email && s.deliverable === d);
+    }).length;
+    return total + done;
+  }, 0);
   const totalDeliverables = SORAA_CREATORS.reduce((s, c) => s + c.deliverables.length, 0);
 
   return (
@@ -658,7 +691,7 @@ export default function SoraaAdminPanel() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: 'Creators', value: '6' },
-          { label: 'Deliverables done', value: `${approvedCount}/${totalDeliverables}` },
+          { label: 'Deliverables done', value: `${doneCount}/${totalDeliverables}` },
           { label: 'Submissions', value: submissions.length.toString() },
           { label: 'Payments out', value: `${paidCount} paid` },
         ].map(s => (
@@ -701,7 +734,7 @@ export default function SoraaAdminPanel() {
             <CreatorOverview submissions={submissions} statuses={statuses} onStatusChange={updateStatus} onMarkAllPaid={markAllPaid} onViewSubs={viewSubmissions}/>
           )}
           {tab === 'submissions' && (
-            <AllSubmissions submissions={submissions} filterEmail={filterEmail} onAnalyze={analyzeSingle} onAnalyzeAll={analyzeAll} analyzing={analyzing}/>
+            <AllSubmissions submissions={submissions} filterEmail={filterEmail} onAnalyze={analyzeSingle} onAnalyzeAll={analyzeAll} analyzing={analyzing} onDelete={deleteSubmission}/>
           )}
           {tab === 'analysis' && (
             <AIAnalysisPanel report={fullReport} loading={reportLoading} onGenerate={generateFullReport} submissions={submissions}/>

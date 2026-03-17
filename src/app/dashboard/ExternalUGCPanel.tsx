@@ -90,7 +90,7 @@ export default function ExternalUGCPanel() {
       </div>
 
       {/* Campaign content */}
-      {campaign === 'soraa' && <SoraaAdminPanel/>}
+      {campaign === 'soraa' && <SoraaAdminPanel onSubmissionsChange={subs => { setTotalViews(subs.reduce((a, s) => a + (s.views || 0), 0)); setSubmissionCount(subs.length); }}/>}
       {campaign === 'new' && <NewCampaignManager/>}
     </div>
   );

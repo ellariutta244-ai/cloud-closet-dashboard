@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Send, RefreshCw, CheckCircle2, Instagram } from 'lucide-react';
+import { Send, RefreshCw, CheckCircle2, Instagram, Trash2 } from 'lucide-react';
 
 interface SoraaCreator {
   email: string;
@@ -59,7 +59,7 @@ function AnalyticsForm({
 }: {
   creator: SoraaCreator;
   deliverable: string;
-  onSubmitted: () => void;
+  onSubmitted: (newId: string) => void;
 }) {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
@@ -109,13 +109,13 @@ function AnalyticsForm({
           created_at: new Date().toISOString(),
         }),
       });
+      const resData = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setError(d.error || 'Submission failed.');
+        setError(resData.error || 'Submission failed.');
         return;
       }
       setDone(true);
-      onSubmitted();
+      onSubmitted(resData.submission?.id || '');
     } catch (e) {
       setError(String(e));
     } finally {
@@ -299,12 +299,15 @@ function AnalyticsForm({
   );
 }
 
+interface SubmittedSub { id: string; deliverable: string; }
+
 export default function SoraaCreatorView({ profile }: { profile: Profile }) {
   const email = profile.email?.toLowerCase();
   const creator = SORAA_CREATORS.find(c => c.email.toLowerCase() === email);
-  const [submittedDels, setSubmittedDels] = useState<string[]>([]);
+  const [submissions, setSubmissions] = useState<SubmittedSub[]>([]);
   const [selectedDel, setSelectedDel] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const contentDels = creator ? creator.deliverables.filter(d => !isConnectDel(d)) : [];
 
@@ -314,11 +317,18 @@ export default function SoraaCreatorView({ profile }: { profile: Profile }) {
       .then(r => r.json())
       .catch(() => ({ submissions: [] }))
       .then(data => {
-        const subs = data.submissions || [];
-        setSubmittedDels(subs.map((s: { deliverable: string }) => s.deliverable));
+        setSubmissions((data.submissions || []).map((s: { id: string; deliverable: string }) => ({ id: s.id, deliverable: s.deliverable })));
         setLoading(false);
       });
   }, [creator]);
+
+  async function handleDelete(subId: string) {
+    if (!confirm('Delete this submission?')) return;
+    setDeleting(subId);
+    await fetch(`/api/soraa/submissions?id=${subId}`, { method: 'DELETE' });
+    setSubmissions(prev => prev.filter(s => s.id !== subId));
+    setDeleting(null);
+  }
 
   if (!creator) {
     return (
@@ -344,20 +354,23 @@ export default function SoraaCreatorView({ profile }: { profile: Profile }) {
           )}
         </div>
         <div className="flex gap-2 mt-4 flex-wrap">
-          {creator.deliverables.map(del => (
-            <span
-              key={del}
-              className={`text-[10px] px-2.5 py-1 rounded-full font-medium ${
-                isConnectDel(del)
-                  ? 'bg-stone-700 text-stone-300'
-                  : submittedDels.includes(del)
-                  ? 'bg-emerald-900/50 text-emerald-400'
-                  : 'bg-amber-900/40 text-amber-400'
-              }`}
-            >
-              {del}{!isConnectDel(del) && submittedDels.includes(del) ? ' ✓' : ''}
-            </span>
-          ))}
+          {creator.deliverables.map(del => {
+            const hasSub = submissions.some(s => s.deliverable === del);
+            return (
+              <span
+                key={del}
+                className={`text-[10px] px-2.5 py-1 rounded-full font-medium ${
+                  isConnectDel(del)
+                    ? 'bg-stone-700 text-stone-300'
+                    : hasSub
+                    ? 'bg-emerald-900/50 text-emerald-400'
+                    : 'bg-amber-900/40 text-amber-400'
+                }`}
+              >
+                {del}{!isConnectDel(del) && hasSub ? ' ✓' : ''}
+              </span>
+            );
+          })}
         </div>
       </div>
 
@@ -376,7 +389,8 @@ export default function SoraaCreatorView({ profile }: { profile: Profile }) {
           </div>
 
           {contentDels.map(del => {
-            const submitted = submittedDels.includes(del);
+            const delSubs = submissions.filter(s => s.deliverable === del);
+            const submitted = delSubs.length > 0;
             const isOpen = selectedDel === del;
             return (
               <div key={del} className="bg-white border border-stone-200/60 rounded-2xl overflow-hidden">
@@ -397,13 +411,31 @@ export default function SoraaCreatorView({ profile }: { profile: Profile }) {
                   </div>
                   <span className="text-xs text-stone-400">{isOpen ? 'Close' : submitted ? 'Submit again' : 'Submit'}</span>
                 </button>
+                {/* Existing submissions with delete */}
+                {submitted && (
+                  <div className="border-t border-stone-50 px-5 py-3 flex flex-col gap-2">
+                    {delSubs.map(sub => (
+                      <div key={sub.id} className="flex items-center justify-between gap-2 bg-stone-50 rounded-xl px-3 py-2">
+                        <span className="text-xs text-stone-500">Submission on file</span>
+                        <button
+                          onClick={() => handleDelete(sub.id)}
+                          disabled={deleting === sub.id}
+                          className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 disabled:opacity-50 transition-colors"
+                        >
+                          <Trash2 size={11}/>
+                          {deleting === sub.id ? 'Deleting…' : 'Delete'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {isOpen && (
                   <div className="border-t border-stone-100 p-5">
                     <AnalyticsForm
                       creator={creator}
                       deliverable={del}
-                      onSubmitted={() => {
-                        setSubmittedDels(prev => [...prev, del]);
+                      onSubmitted={(newId: string) => {
+                        setSubmissions(prev => [...prev, { id: newId, deliverable: del }]);
                         setSelectedDel(null);
                       }}
                     />
