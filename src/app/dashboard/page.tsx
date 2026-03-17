@@ -462,7 +462,7 @@ function TasksPg({ profile, interns, tasks, setTasks, sb, addActivity }: { profi
     if (editTask) {
       const {error} = await sb.from("tasks").update(payload).eq("id", editTask.id);
       if (error) { console.error(error); return; }
-      const updated = {...editTask, ...payload};
+      const updated: Task = {...editTask, ...payload, assigned_to: payload.assigned_to ?? undefined, due_date: payload.due_date ?? undefined};
       setTasks(tasks.map(t=>t.id===editTask.id ? updated : t));
       if (detail?.id===editTask.id) setDetail(updated);
     } else {
