@@ -2266,15 +2266,15 @@ function DesignProjectsPage({ profile, interns, projects, setProjects, sb }: { p
 function ContentPage({ profile, interns, content, setContent, ugcHooks, setUGCHooks, savedHooks, setSavedHooks, settings, sb }: { profile:Profile; interns:Profile[]; content:ContentVideo[]; setContent:(c:ContentVideo[])=>void; ugcHooks:UGCHook[]; setUGCHooks:(h:UGCHook[])=>void; savedHooks:SavedHook[]; setSavedHooks:(h:SavedHook[])=>void; settings:AppSettings; sb:any }) {
   const [view, setView] = useState("leaderboard");
   const [showC, setShowC] = useState(false);
-  const [nc, setNc] = useState({title:"",tiktok_url:"",views:"",likes:"",comments:""});
+  const [nc, setNc] = useState({title:"",tiktok_url:"",views:"",likes:"",comments:"",date_posted:new Date().toISOString().split("T")[0]});
   const creators=interns.filter(i=>i.team==="Content Creation"&&i.active!==false);
   const fmtN=(n:number)=>{ if(n>=1000000)return(n/1000000).toFixed(1)+"M"; if(n>=1000)return(n/1000).toFixed(1)+"K"; return n.toString(); };
 
   async function submit() {
-    const {data,error}=await sb.from("content_videos").insert({...nc,creator_id:profile.id,views:parseInt(nc.views)||0,likes:parseInt(nc.likes)||0,comments:parseInt(nc.comments)||0,date_posted:new Date().toISOString().split("T")[0],status:nc.tiktok_url?"published":"draft",created_at:new Date().toISOString()}).select().single();
+    const {data,error}=await sb.from("content_videos").insert({...nc,creator_id:profile.id,views:parseInt(nc.views)||0,likes:parseInt(nc.likes)||0,comments:parseInt(nc.comments)||0,date_posted:nc.date_posted||new Date().toISOString().split("T")[0],status:nc.tiktok_url?"published":"draft",created_at:new Date().toISOString()}).select().single();
     if(error){console.error(error);return;}
     setContent([data,...content]);setShowC(false);
-    setNc({title:"",tiktok_url:"",views:"",likes:"",comments:""});
+    setNc({title:"",tiktok_url:"",views:"",likes:"",comments:"",date_posted:new Date().toISOString().split("T")[0]});
   }
 
   const leaderboard=useMemo(()=>creators.map(c=>{
@@ -2368,6 +2368,7 @@ function ContentPage({ profile, interns, content, setContent, ugcHooks, setUGCHo
         <div className="flex flex-col gap-3">
           <TI label="Title" value={nc.title} onChange={v=>setNc({...nc,title:v})} required/>
           <TI label="TikTok URL" value={nc.tiktok_url} onChange={v=>setNc({...nc,tiktok_url:v})} placeholder="https://tiktok.com/@cloudcloset/..."/>
+          <TI label="Date Posted" value={nc.date_posted} onChange={v=>setNc({...nc,date_posted:v})} type="date"/>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <TI label="Views" value={nc.views} onChange={v=>setNc({...nc,views:v})}/>
             <TI label="Likes" value={nc.likes} onChange={v=>setNc({...nc,likes:v})}/>
