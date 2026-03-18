@@ -2127,12 +2127,6 @@ function InternRequests({ requests, setRequests, profile, sb, settings }: { requ
     setSending(false);
     if (error) { console.error("[requests insert]", error.message, error.code, error.details); return; }
     setRequests([data as Request, ...myRequests.filter(r => r.id !== data.id)]);
-    // Auto-email Caroline
-    if (isCaroline && settings.caroline_email) {
-      const subject = encodeURIComponent(`Meeting Request from ${profile.full_name}`);
-      const body = encodeURIComponent(`Hi Caroline,\n\n${profile.full_name} would like to meet with you.\n\nReason: ${reason.trim()}\n\nAvailability: ${availability.trim()}\n\nThis request was submitted via Cloud Closet Ops.`);
-      window.open(`mailto:${settings.caroline_email}?subject=${subject}&body=${body}`, "_blank");
-    }
     closeModal();
   }
 
@@ -2182,7 +2176,7 @@ function InternRequests({ requests, setRequests, profile, sb, settings }: { requ
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-stone-800">{opt.label}</p>
                   <p className="text-xs text-stone-400 mt-0.5">
-                    {opt.value === "caroline_meeting" ? "Share availability & reason" : isCalendar ? "Opens booking link" : "Send a message"}
+                    {isCalendar ? "Opens booking link" : "Send a message"}
                   </p>
                 </div>
                 <ChevronRight size={14} className="text-stone-300 group-hover:text-stone-500 shrink-0"/>
@@ -2216,9 +2210,9 @@ function InternRequests({ requests, setRequests, profile, sb, settings }: { requ
           <div className="flex flex-col gap-4">
             {isCaroline ? (
               <>
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700 flex items-start gap-2">
-                  <Mail size={13} className="mt-0.5 shrink-0"/>
-                  <span>After submitting, a meeting request email will be sent directly to Caroline.</span>
+                <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 text-xs text-stone-500 flex items-start gap-2">
+                  <CalendarClock size={13} className="mt-0.5 shrink-0"/>
+                  <span>Your request will go to the admin inbox. We'll reach out to schedule the meeting with Caroline.</span>
                 </div>
                 <TA label="Reason for meeting" placeholder="What would you like to discuss?" value={reason} onChange={v=>setReason(v)}/>
                 <TA label="Your availability" placeholder="e.g. Mon/Wed afternoons, anytime after 2pm this week..." value={availability} onChange={v=>setAvailability(v)}/>
