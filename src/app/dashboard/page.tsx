@@ -1308,6 +1308,7 @@ function OutPg({ profile, interns, outreach, setOutreach, sb, addActivity }: { p
     if(error){console.error(error);return;}
     setOutreach([data,...outreach]);
     addActivity({user_id:profile.id,user_name:profile.full_name,activity:"outreach_logged",metadata:{detail:form.brand_or_creator}});
+    fetch("/api/send-notification",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"admin",title:"Outreach Logged 📬",body:`${profile.full_name} logged outreach to ${form.brand_or_creator}`})}).catch(()=>{});
     setModal(false);setForm({brand_or_creator:"",platform:"email",contact_name:"",date_contacted:"",status:"contacted",notes:""});
   }
   async function updateSt(id:string,status:string) {
@@ -1540,7 +1541,7 @@ function RPg({ profile, interns, reports, setReports, sb, addActivity, settings 
     if(error){console.error(error);return;}
     setReports([data,...reports]);
     addActivity({user_id:profile.id,user_name:profile.full_name,activity:"report_submitted",metadata:{week:form.week_of}});
-    fetch("/api/send-notification",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"admin",title:"New Analytics Report 📊",body:`${profile.full_name} just submitted their week of ${form.week_of} analytics report.`})}).catch(()=>{});
+    fetch("/api/send-notification",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"admin",title:"Weekly Report Submitted 📝",body:`${profile.full_name} submitted their report for week of ${form.week_of}`})}).catch(()=>{});
     setModal(false);setReportFile(null);setCustomData({});
     setForm({week_of:"",tasks_completed:"",outreach_sent:"",responses_received:"",wins:"",challenges:"",ideas:""});
   }
@@ -2127,6 +2128,7 @@ function InternRequests({ requests, setRequests, profile, sb, settings }: { requ
     setSending(false);
     if (error) { console.error("[requests insert]", error.message, error.code, error.details); return; }
     setRequests([data as Request, ...myRequests.filter(r => r.id !== data.id)]);
+    fetch("/api/send-notification",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"admin",title:`New Request: ${selOpt.label} 📥`,body:`${profile.full_name} submitted a request`})}).catch(()=>{});
     closeModal();
   }
 
