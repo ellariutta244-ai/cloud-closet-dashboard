@@ -516,7 +516,7 @@ function OverviewTab({
           </Btn>
         )}
       </div>
-      <NotesSidebar subtab={subtab} notes={notes} profile={profile} sb={sb} canAddNotes={profile.role === 'admin' || profile.role === 'director'} onNotesChange={onNotesChange} />
+      <NotesSidebar subtab={subtab} notes={notes} profile={profile} sb={sb} canAddNotes={profile.role === 'admin' || profile.role === 'director' || profile.role === 'cc_exec'} onNotesChange={onNotesChange} />
     </div>
   );
 }
@@ -705,7 +705,7 @@ function TimelineTab({
           </Btn>
         )}
       </div>
-      <NotesSidebar subtab={subtab} notes={notes} profile={profile} sb={sb} canAddNotes={profile.role === 'admin' || profile.role === 'director'} onNotesChange={onNotesChange} />
+      <NotesSidebar subtab={subtab} notes={notes} profile={profile} sb={sb} canAddNotes={profile.role === 'admin' || profile.role === 'director' || profile.role === 'cc_exec'} onNotesChange={onNotesChange} />
     </div>
   );
 }
@@ -910,7 +910,7 @@ function InfluencerTab({
           </div>
         )}
       </div>
-      <NotesSidebar subtab={subtab} notes={notes} profile={profile} sb={sb} canAddNotes={profile.role === 'admin' || profile.role === 'director'} onNotesChange={onNotesChange} />
+      <NotesSidebar subtab={subtab} notes={notes} profile={profile} sb={sb} canAddNotes={profile.role === 'admin' || profile.role === 'director' || profile.role === 'cc_exec'} onNotesChange={onNotesChange} />
     </div>
   );
 }
@@ -1155,7 +1155,7 @@ function ToteBagTab({
           )}
         </div>
       </div>
-      <NotesSidebar subtab={subtab} notes={notes} profile={profile} sb={sb} canAddNotes={profile.role === 'admin' || profile.role === 'director'} onNotesChange={onNotesChange} />
+      <NotesSidebar subtab={subtab} notes={notes} profile={profile} sb={sb} canAddNotes={profile.role === 'admin' || profile.role === 'director' || profile.role === 'cc_exec'} onNotesChange={onNotesChange} />
     </div>
   );
 }
@@ -1510,7 +1510,7 @@ function DownloadCardTab({
           );
         })()}
       </div>
-      <NotesSidebar subtab={subtab} notes={notes} profile={profile} sb={sb} canAddNotes={profile.role === 'admin' || profile.role === 'director'} onNotesChange={onNotesChange} />
+      <NotesSidebar subtab={subtab} notes={notes} profile={profile} sb={sb} canAddNotes={profile.role === 'admin' || profile.role === 'director' || profile.role === 'cc_exec'} onNotesChange={onNotesChange} />
     </div>
   );
 }
@@ -1696,7 +1696,7 @@ function ActionItemsTab({
           )}
         </div>
       </div>
-      <NotesSidebar subtab={subtab} notes={notes} profile={profile} sb={sb} canAddNotes={profile.role === 'admin' || profile.role === 'director'} onNotesChange={onNotesChange} />
+      <NotesSidebar subtab={subtab} notes={notes} profile={profile} sb={sb} canAddNotes={profile.role === 'admin' || profile.role === 'director' || profile.role === 'cc_exec'} onNotesChange={onNotesChange} />
     </div>
   );
 }
@@ -1742,7 +1742,7 @@ function NotesTab({
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [notes, filter]);
 
-  const canAddNotes = profile.role === 'admin' || profile.role === 'director';
+  const canAddNotes = profile.role === 'admin' || profile.role === 'director' || profile.role === 'cc_exec';
 
   async function submitNote() {
     if (!text.trim() || submitting) return;
@@ -2359,8 +2359,8 @@ export default function SororityRushPlan({ profile, sb }: { profile: Profile; sb
   const [loading, setLoading] = useState(true);
   const [overviewId, setOverviewId] = useState<string | null>(null);
 
-  const canEdit = profile.role === 'admin';
-  const canAddNotes = profile.role === 'admin' || profile.role === 'director';
+  const canEdit = profile.role === 'admin' || profile.role === 'cc_exec';
+  const canAddNotes = profile.role === 'admin' || profile.role === 'director' || profile.role === 'cc_exec';
 
   async function loadNotes() {
     const { data, error } = await sb.from('rush_notes').select('*').order('created_at', { ascending: true });
