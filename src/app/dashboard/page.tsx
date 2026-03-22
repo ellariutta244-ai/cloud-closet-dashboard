@@ -7,6 +7,7 @@ import { PwaSetup } from "@/components/PwaSetup";
 import ExternalUGCPanel from "./ExternalUGCPanel";
 import SoraaCreatorView, { SoraaCreatorQuestionsPage } from "./SoraaCreatorView";
 import SororityRushPlan from "./SororityRushPlan";
+import TikTokContent from "./TikTokContent";
 import {
   LayoutDashboard, CheckSquare, Mail, MessageCircle, FileText,
   FolderOpen, Users, BarChart3, Plus, Search, Bell,
@@ -9773,6 +9774,12 @@ export default function DashboardPage() {
         { id: "external-ugc", icon: <Sparkles size={16}/>, label: "External UGC" },
       ],
     },
+    {
+      label: "TIKTOK",
+      items: [
+        { id: "tiktok_content", icon: <Video size={16}/>, label: "TikTok Content" },
+      ],
+    },
     ...(canSeeRush ? [{
       label: "SORORITY RUSH",
       items: [
@@ -9932,6 +9939,7 @@ export default function DashboardPage() {
       case "director_hooks":          return isDirector ? <HookGeneratorPage profile={profile! as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
       case "director_content_studio": return isDirector ? <ContentStudioPage savedIdeas={carolineSavedIdeas} setSavedIdeas={setCarolineSavedIdeas} hookBank={carolineHookBank} setHookBank={setCarolineHookBank} setPage={setPage} sb={supabase}/> : null;
       case "alerts": return isAdmin ? <AlertsPage alerts={smartAlerts} setAlerts={setSmartAlerts} sb={supabase}/> : null;
+      case "tiktok_content": return isAdmin ? <TikTokContent profile={p} sb={supabase}/> : null;
       case "rush":   return canSeeRush ? <SororityRushPlan profile={p} sb={supabase}/> : null;
       default:          return null;
     }
