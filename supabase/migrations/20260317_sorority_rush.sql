@@ -20,8 +20,8 @@ INSERT INTO auth.users (
   NOW(), NOW(), '', '', '', ''
 ) ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO public.profiles (id, email, full_name, role, team)
-VALUES ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'danica.sorge13@gmail.com', 'Danica', 'admin', NULL)
+INSERT INTO public.profiles (id, email, full_name, role, team, rush_access)
+VALUES ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'danica.sorge13@gmail.com', 'Danica', 'cc_exec', NULL, true)
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================

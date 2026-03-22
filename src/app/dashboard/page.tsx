@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Role = "admin" | "intern" | "ugc_creator" | "director" | "wisconsin_admin" | "soraa_creator";
+type Role = "admin" | "intern" | "ugc_creator" | "director" | "wisconsin_admin" | "soraa_creator" | "cc_exec";
 type Profile = { id: string; full_name: string; email: string; role: Role; team?: string; active?: boolean; rush_access?: boolean };
 type TaskComment = { id: string; task_id: string; author_id?: string; body: string; created_at: string };
 type Task = { id: string; title: string; description?: string; assigned_to?: string; co_assignees?: string[]; category?: string; priority?: string; status: string; due_date?: string; created_at: string; completed_at?: string; task_comments?: TaskComment[] };
@@ -9506,6 +9506,7 @@ export default function DashboardPage() {
       if (prof.role === "ugc_creator") setPage("ugc_dashboard");
       if (prof.role === "director") setPage("director_home");
       if (prof.role === "soraa_creator") setPage("external-ugc");
+      if (prof.role === "cc_exec") setPage("rush");
       const [
         { data: iD }, { data: tD }, { data: oD }, { data: qD },
         { data: rD }, { data: resD }, { data: aD }, { data: actD },
@@ -9676,8 +9677,9 @@ export default function DashboardPage() {
   const isUGC = profile.role === "ugc_creator";
   const isDirector = profile.role === "director";
   const isSoraaCreator = profile.role === "soraa_creator";
+  const isCCExec = profile.role === "cc_exec";
   const canSeeRush = profile.rush_access === true;
-  const isIntern = !isAdmin && !isUGC && !isDirector && !isSoraaCreator;
+  const isIntern = !isAdmin && !isUGC && !isDirector && !isSoraaCreator && !isCCExec;
   const isTech = profile.team === "Tech/AI";
   const isDesign = profile.team === "Design";
   const isStrategy = profile.team === "Strategy";
@@ -9691,6 +9693,11 @@ export default function DashboardPage() {
   const SORAA_NAV = [
     { id: "external-ugc", icon: <Sparkles size={16}/>, label: "Soraa Campaign" },
     { id: "questions",    icon: <MessageCircle size={16}/>, label: "Questions", badge: openQCount || null },
+  ];
+
+  const CC_EXEC_NAV = [
+    { id: "resources", icon: <FolderOpen size={16}/>, label: "Resources" },
+    { id: "rush",      icon: <Bookmark size={16}/>,   label: "Rush Plan" },
   ];
 
   const NAV = isUGC ? [
@@ -9848,6 +9855,8 @@ export default function DashboardPage() {
           ))
         ) : isSoraaCreator ? (
           SORAA_NAV.map(item => <NavItem key={item.id} item={item} />)
+        ) : isCCExec ? (
+          CC_EXEC_NAV.map(item => <NavItem key={item.id} item={item} />)
         ) : (
           NAV.map(item => <NavItem key={item.id} item={item} />)
         )}
@@ -9857,7 +9866,7 @@ export default function DashboardPage() {
           <Av name={profile.full_name} size={32}/>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-stone-800 truncate">{profile.full_name}</p>
-            <p className="text-xs text-stone-400 capitalize">{isWisconsinAdmin ? "Wisconsin Admin" : isFullAdmin ? "Admin" : isDirector ? "Director" : isUGC ? "UGC Creator" : isSoraaCreator ? "Soraa Creator" : (profile.team || "Intern")}</p>
+            <p className="text-xs text-stone-400 capitalize">{isWisconsinAdmin ? "Wisconsin Admin" : isFullAdmin ? "Admin" : isDirector ? "Director" : isUGC ? "UGC Creator" : isSoraaCreator ? "Soraa Creator" : isCCExec ? "CC Exec" : (profile.team || "Intern")}</p>
           </div>
           <button onClick={handleSignOut} className="p-1.5 rounded-lg text-stone-300 hover:text-stone-600 hover:bg-stone-100 transition-colors" title="Sign out"><LogOut size={14}/></button>
         </div>
