@@ -7042,6 +7042,8 @@ function UGCPivotQueuePage({ profile, pivotQueue, setPivotQueue, ugcCreators, sb
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [confirmDeleteQueue, setConfirmDeleteQueue] = useState<string | null>(null);
+  const [showApproved, setShowApproved] = useState(false);
+  const [showRejected, setShowRejected] = useState(false);
 
   async function deleteQueueItem(id: string) {
     await sb.from("ugc_pivot_queue").delete().eq("id", id);
@@ -7191,15 +7193,21 @@ function UGCPivotQueuePage({ profile, pivotQueue, setPivotQueue, ugcCreators, sb
 
       {approved.length > 0 && (
         <div className="flex flex-col gap-3">
-          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Recently Approved ({approved.length})</p>
-          {approved.slice(0, 5).map(item => <QueueCard key={item.id} item={item} />)}
+          <button onClick={() => setShowApproved(v => !v)} className="flex items-center gap-2 group w-fit">
+            <ChevronDown size={14} className={`text-stone-400 transition-transform duration-200 ${showApproved ? "" : "-rotate-90"}`} />
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest group-hover:text-stone-700 transition-colors">Recently Approved ({approved.length})</p>
+          </button>
+          {showApproved && approved.slice(0, 5).map(item => <QueueCard key={item.id} item={item} />)}
         </div>
       )}
 
       {rejected.length > 0 && (
         <div className="flex flex-col gap-3">
-          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Rejected ({rejected.length})</p>
-          {rejected.slice(0, 3).map(item => <QueueCard key={item.id} item={item} />)}
+          <button onClick={() => setShowRejected(v => !v)} className="flex items-center gap-2 group w-fit">
+            <ChevronDown size={14} className={`text-stone-400 transition-transform duration-200 ${showRejected ? "" : "-rotate-90"}`} />
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest group-hover:text-stone-700 transition-colors">Rejected ({rejected.length})</p>
+          </button>
+          {showRejected && rejected.slice(0, 3).map(item => <QueueCard key={item.id} item={item} />)}
         </div>
       )}
     </div>
