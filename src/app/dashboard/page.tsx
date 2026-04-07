@@ -3544,7 +3544,7 @@ function UGCPivotsHubPage({ profile, pivotQueue, setPivotQueue, pivots, setPivot
   pivots: UGCPivot[]; setPivots: (p: UGCPivot[]) => void; ugcCreators: UGCCreatorProfile[]; sb: any;
 }) {
   const [tab, setTab] = useState<"queue" | "history">("queue");
-  const isAdmin = profile.role === "admin" || profile.role === "wisconsin_admin";
+  const isAdmin = profile.role === "admin" || profile.role === "wisconsin_admin" || profile.role === "ugc_manager";
   const pendingCount = pivotQueue.filter(q => q.status === "pending").length;
   return (
     <div className="flex flex-col gap-4">
