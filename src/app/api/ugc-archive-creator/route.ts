@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   if (!serviceKey) return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY not configured' }, { status: 500 });
 
   const body = await req.json();
-  const { id, archived, updateFields, full_name, tiktok_handle, tiktok_url } = body;
+  const { id, archived, updateFields, full_name, tiktok_handle, tiktok_url, creator_tags } = body;
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
 
   const supabase = createClient(SUPABASE_URL, serviceKey, {
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
 
   let updates: Record<string, unknown>;
   if (updateFields) {
-    updates = { full_name, tiktok_handle, tiktok_url };
+    updates = { full_name, tiktok_handle, tiktok_url, creator_tags };
   } else {
     updates = { ugc_status: archived ? 'archived' : 'active' };
   }

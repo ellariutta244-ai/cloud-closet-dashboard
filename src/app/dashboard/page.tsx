@@ -6817,20 +6817,18 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
   async function saveEdit() {
     if (!editTarget) return;
     setEditSaving(true);
-    await Promise.all([
-      fetch("/api/ugc-archive-creator", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editTarget.id,
-          full_name: editForm.full_name.trim(),
-          tiktok_handle: editForm.tiktok_handle.trim() || null,
-          tiktok_url: editForm.tiktok_url.trim() || null,
-          updateFields: true,
-        }),
+    await fetch("/api/ugc-archive-creator", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: editTarget.id,
+        full_name: editForm.full_name.trim(),
+        tiktok_handle: editForm.tiktok_handle.trim() || null,
+        tiktok_url: editForm.tiktok_url.trim() || null,
+        creator_tags: editForm.creator_tags,
+        updateFields: true,
       }),
-      sb.from("profiles").update({ creator_tags: editForm.creator_tags }).eq("id", editTarget.id),
-    ]);
+    });
     setUGCCreators(ugcCreators.map(c => c.id === editTarget.id
       ? { ...c, full_name: editForm.full_name.trim(), tiktok_handle: editForm.tiktok_handle.trim() || undefined, tiktok_url: editForm.tiktok_url.trim() || undefined, creator_tags: editForm.creator_tags }
       : c
