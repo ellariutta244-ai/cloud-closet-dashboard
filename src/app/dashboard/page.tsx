@@ -4867,16 +4867,34 @@ function UGCDashboard({ profile, ugcCreators, setUGCCreators, submissions, pivot
         </div>
       )}
 
-      {latestBrief && (
-        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
-          <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Current Weekly Brief — {latestBrief.week_date}</p>
-          <div className="flex flex-col gap-3">
-            {latestBrief.hooks && <div><p className="text-xs text-stone-400 uppercase tracking-widest mb-1">Hooks</p><p className="text-sm text-stone-700 whitespace-pre-wrap">{latestBrief.hooks}</p></div>}
-            {latestBrief.format_recs && <div><p className="text-xs text-stone-400 uppercase tracking-widest mb-1">Format Recs</p><p className="text-sm text-stone-700 whitespace-pre-wrap">{latestBrief.format_recs}</p></div>}
-            {latestBrief.brand_guidelines && <div><p className="text-xs text-stone-400 uppercase tracking-widest mb-1">Brand Guidelines</p><p className="text-sm text-stone-700 whitespace-pre-wrap">{latestBrief.brand_guidelines}</p></div>}
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+        <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Weekly Brief</p>
+        {!latestBrief ? (
+          <p className="text-sm text-stone-400 italic">Nothing new. You're all up to date.</p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <p className="text-xs text-stone-400">Week of {latestBrief.week_date}</p>
+            {latestBrief.hooks && (
+              <div>
+                <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-1.5">Hooks</p>
+                <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{latestBrief.hooks}</p>
+              </div>
+            )}
+            {latestBrief.format_recs && (
+              <div>
+                <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-1.5">Format Recs</p>
+                <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{latestBrief.format_recs}</p>
+              </div>
+            )}
+            {latestBrief.brand_guidelines && (
+              <div>
+                <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-1.5">Brand Guidelines</p>
+                <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{latestBrief.brand_guidelines}</p>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {latestPivot && (
         <button
@@ -9536,116 +9554,6 @@ function WisconsinReportPage({ profile, reports, setReports, setPage, sb }: {
 }
 
 // ── Creator Weekly Brief + Plan page ───────────────────────────────────────────
-function CreatorWeeklyBriefPage({ profile, briefs, setBriefs, weeklyPlans, setWeeklyPlans, sb }: {
-  profile: UGCCreatorProfile; briefs: UGCBrief[]; setBriefs: (b: UGCBrief[]) => void;
-  weeklyPlans: WeeklyPlan[]; setWeeklyPlans: (p: WeeklyPlan[]) => void; sb: any;
-}) {
-  const [tab, setTab] = useState<"brief" | "plan">("brief");
-  const currentWeek = getMondayOfWeek(new Date());
-
-  // Week navigation for the plan tab — default to current week (or most recent with a plan)
-  const approvedPlans = weeklyPlans.filter(p => p.status === "approved");
-  const planWeekDates = [...new Set(approvedPlans.map(p => p.week_date))].sort().reverse();
-  const [selectedPlanWeek, setSelectedPlanWeek] = useState<string>(() =>
-    planWeekDates.includes(currentWeek) ? currentWeek : (planWeekDates[0] ?? currentWeek)
-  );
-  // When new approved plans arrive, jump to current week if a new one landed there
-  useEffect(() => {
-    const dates = [...new Set(weeklyPlans.filter(p => p.status === "approved").map(p => p.week_date))].sort().reverse();
-    if (dates.includes(currentWeek)) setSelectedPlanWeek(currentWeek);
-    else if (dates.length > 0) setSelectedPlanWeek(prev => dates.includes(prev) ? prev : dates[0]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyPlans.length]);
-
-  function shiftPlanWeek(dir: -1 | 1) {
-    const allDates = [...new Set(weeklyPlans.filter(p => p.status === "approved").map(p => p.week_date))].sort().reverse();
-    const idx = allDates.indexOf(selectedPlanWeek);
-    const newIdx = idx - dir; // dir 1 = newer (lower index), dir -1 = older (higher index)
-    if (newIdx >= 0 && newIdx < allDates.length) setSelectedPlanWeek(allDates[newIdx]);
-  }
-
-  // Track current values in refs so the poll interval closure can compare without stale state
-  const briefsRef = useRef<UGCBrief[]>(briefs);
-  const plansRef  = useRef<WeeklyPlan[]>(weeklyPlans);
-  useEffect(() => { briefsRef.current = briefs; }, [briefs]);
-  useEffect(() => { plansRef.current  = weeklyPlans; }, [weeklyPlans]);
-
-  // Poll every 30 seconds for new briefs or newly approved plans
-  useEffect(() => {
-    const poll = async () => {
-      const [{ data: newBriefs }, { data: newPlans }] = await Promise.all([
-        sb.from("ugc_briefs").select("*").order("week_date", { ascending: false }).limit(10),
-        sb.from("weekly_plans").select("*").eq("creator_id", profile.id).order("week_date", { ascending: false }),
-      ]);
-      if (newBriefs) {
-        const prevIds = briefsRef.current.map((b: UGCBrief) => b.id).join();
-        const nextIds = (newBriefs as UGCBrief[]).map(b => b.id).join();
-        if (prevIds !== nextIds) { setBriefs(newBriefs as UGCBrief[]); setTab("brief"); }
-      }
-      if (newPlans) {
-        const prevApproved = plansRef.current.filter((p: WeeklyPlan) => p.status === "approved").map(p => p.id).sort().join();
-        const nextApproved = (newPlans as WeeklyPlan[]).filter(p => p.status === "approved").map(p => p.id).sort().join();
-        if (prevApproved !== nextApproved) { setWeeklyPlans(newPlans as WeeklyPlan[]); setTab("plan"); }
-      }
-    };
-    const id = setInterval(poll, 30_000);
-    return () => clearInterval(id);
-  }, [profile.id]);
-
-  const currentBrief = briefs.find(b => b.week_date === currentWeek) ?? briefs[0] ?? null;
-  const myPlan = weeklyPlans.find(p => p.week_date === selectedPlanWeek && p.status === "approved")
-    ?? weeklyPlans.find(p => p.week_date === selectedPlanWeek)
-    ?? null;
-
-  const DAYS: { key: keyof WeeklyPlan; label: string }[] = [
-    { key: "monday", label: "Monday" }, { key: "tuesday", label: "Tuesday" },
-    { key: "wednesday", label: "Wednesday" }, { key: "thursday", label: "Thursday" },
-    { key: "friday", label: "Friday" }, { key: "saturday", label: "Saturday" },
-    { key: "sunday", label: "Sunday" },
-  ];
-
-  async function toggleDay(day: string) {
-    if (!myPlan) return;
-    const current: string[] = Array.isArray(myPlan.completed_days) ? myPlan.completed_days : [];
-    const next = current.includes(day) ? current.filter(d => d !== day) : [...current, day];
-    await sb.from("weekly_plans").update({ completed_days: next }).eq("id", myPlan.id);
-    setWeeklyPlans(weeklyPlans.map(p => p.id === myPlan.id ? { ...p, completed_days: next } : p));
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      {!currentBrief ? (
-        <ES icon={<FileText size={24}/>} message="No brief published for this week yet. Check back Monday!" />
-      ) : (
-        <div className="flex flex-col gap-4">
-          <div>
-            <h1 className="text-xl font-bold text-stone-800">Weekly Brief</h1>
-            <p className="text-sm text-stone-400 mt-0.5">Week of {currentBrief.week_date}</p>
-          </div>
-          {currentBrief.hooks && (
-            <div className="bg-white border border-stone-200/60 rounded-xl p-5">
-              <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Hooks This Week</p>
-              <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{currentBrief.hooks}</p>
-            </div>
-          )}
-          {currentBrief.format_recs && (
-            <div className="bg-white border border-stone-200/60 rounded-xl p-5">
-              <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Format Recommendations</p>
-              <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{currentBrief.format_recs}</p>
-            </div>
-          )}
-          {currentBrief.brand_guidelines && (
-            <div className="bg-white border border-stone-200/60 rounded-xl p-5">
-              <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Brand Guidelines</p>
-              <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{currentBrief.brand_guidelines}</p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Content Cloud (creator hub) ────────────────────────────────────────────────
 type ContentCloudTab = "ideas" | "hooks" | "captions" | "tutorials" | "resources";
 function ContentCloudPage({ profile, weeklyPlans, ugcCreators, ugcHooks, setUGCHooks, savedHooks, setSavedHooks, tutorials, setTutorials, savedCaptions, setSavedCaptions, resources, setResources, settings, sb }: {
@@ -9860,13 +9768,11 @@ export default function DashboardPage() {
   const [carolineHookBank, setCarolineHookBank] = useState<CarolineHook[]>([]);
   const [tutorials, setTutorials] = useState<Tutorial[]>([]);
   const [savedCaptions, setSavedCaptions] = useState<SavedCaption[]>([]);
-  const [briefSeenAt, setBriefSeenAt] = useState(() => parseInt(typeof window !== "undefined" ? (localStorage.getItem("ugc_brief_seen") || "0") : "0"));
   const [qaSeenAt, setQaSeenAt] = useState(() => parseInt(typeof window !== "undefined" ? (localStorage.getItem("ugc_qa_seen") || "0") : "0"));
   const [pivotSeenAt, setPivotSeenAt] = useState(() => parseInt(typeof window !== "undefined" ? (localStorage.getItem("ugc_pivots_seen") || "0") : "0"));
 
   useEffect(() => {
     const mark = (key: string, set: (t: number) => void) => { const t = Date.now(); localStorage.setItem(key, t.toString()); set(t); };
-    if (page === "ugc_weekly_brief") mark("ugc_brief_seen", setBriefSeenAt);
     if (page === "ugc_qa") mark("ugc_qa_seen", setQaSeenAt);
     if (page === "ugc_pivots") mark("ugc_pivots_seen", setPivotSeenAt);
   }, [page]);
@@ -10074,7 +9980,6 @@ export default function DashboardPage() {
   const isCreator = profile.team === "Content Creation";
   const openQCount = questions.filter(q => q.status === "open").length;
   const activeAlertCount = smartAlerts.filter(a => !a.dismissed).length;
-  const newBriefCount = isUGC ? ugcBriefs.filter(b => new Date(b.created_at).getTime() > briefSeenAt).length : 0;
   const newPivotCount = isUGC ? ugcPivots.filter(p => p.creator_id === profile.id && new Date(p.created_at).getTime() > pivotSeenAt).length : 0;
   const newQACount = isUGC ? ugcQuestions.filter(q => q.creator_id !== profile.id && new Date(q.created_at).getTime() > qaSeenAt).length : 0;
 
@@ -10092,7 +9997,6 @@ export default function DashboardPage() {
     { id: "ugc_dashboard",      icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
     { id: "ugc_submit",         icon: <BarChart3 size={16}/>,       label: "Submit Analytics" },
     { id: "ugc_pivots",         icon: <TrendingUp size={16}/>,      label: "My Pivots",       badge: newPivotCount || null },
-    { id: "ugc_weekly_brief",   icon: <FileText size={16}/>,        label: "Weekly Brief",    badge: newBriefCount || null },
     { id: "ugc_content_cloud",  icon: <Sparkles size={16}/>,        label: "Content Cloud" },
     { id: "ugc_leaderboard",    icon: <Trophy size={16}/>,          label: "Leaderboard" },
     { id: "ugc_qa",             icon: <MessageCircle size={16}/>,   label: "Community Q&A",   badge: newQACount || null },
@@ -10330,7 +10234,6 @@ export default function DashboardPage() {
       case "ugc_announcements": return (isFullAdmin || isUGCManager) ? <UGCAnnouncementsPage profile={p as UGCCreatorProfile} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
       case "ugc_pivots_hub":            return (isFullAdmin || isUGCManager) ? <UGCPivotsHubPage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_briefs_announcements":  return (isFullAdmin || isUGCManager) ? <UGCBriefsAnnouncementsPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} ugcCreators={ugcCreators} sb={supabase}/> : null;
-      case "ugc_weekly_brief":          return isUGC ? <CreatorWeeklyBriefPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} sb={supabase}/> : null;
       case "ugc_content_ideas":         return (isUGC || isFullAdmin || isUGCManager) ? <ContentIdeasPage profile={p as UGCCreatorProfile} weeklyPlans={weeklyPlans}/> : null;
       case "ugc_history":       return (isFullAdmin || isUGCManager || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_resources":     return (isFullAdmin || isUGCManager || isUGC) ? <UGCResourcesPage profile={p as UGCCreatorProfile} resources={ugcResources} setResources={setUGCResources} sb={supabase}/> : null;
