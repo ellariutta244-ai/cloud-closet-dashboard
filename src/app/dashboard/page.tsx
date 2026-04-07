@@ -9638,7 +9638,7 @@ function CreatorWeeklyBriefPage({ profile, briefs, setBriefs, weeklyPlans, setWe
 }
 
 // ── Content Cloud (creator hub) ────────────────────────────────────────────────
-type ContentCloudTab = "ideas" | "hooks" | "captions" | "tutorials" | "saved_hooks" | "resources";
+type ContentCloudTab = "ideas" | "hooks" | "captions" | "tutorials" | "resources";
 function ContentCloudPage({ profile, weeklyPlans, ugcCreators, ugcHooks, setUGCHooks, savedHooks, setSavedHooks, tutorials, setTutorials, savedCaptions, setSavedCaptions, resources, setResources, settings, sb }: {
   profile: UGCCreatorProfile; weeklyPlans: WeeklyPlan[];
   ugcCreators: UGCCreatorProfile[]; ugcHooks: UGCHook[]; setUGCHooks: (h: UGCHook[]) => void;
@@ -9655,7 +9655,6 @@ function ContentCloudPage({ profile, weeklyPlans, ugcCreators, ugcHooks, setUGCH
     { id: "hooks",      icon: <Zap size={15}/>,          label: "Hook Generator" },
     { id: "captions",   icon: <MessageSquare size={15}/>,label: "Caption Generator" },
     { id: "tutorials",  icon: <BookOpen size={15}/>,     label: "Tutorial Library" },
-    { id: "saved_hooks",icon: <Bookmark size={15}/>,     label: "Saved Hooks" },
     { id: "resources",  icon: <FolderOpen size={15}/>,   label: "Other Resources" },
   ];
 
@@ -9690,7 +9689,6 @@ function ContentCloudPage({ profile, weeklyPlans, ugcCreators, ugcHooks, setUGCH
         {tab === "hooks" && <HookGeneratorPage profile={profile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={sb} />}
         {tab === "captions" && <TutorialLibraryPage profile={profile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={sb} initialTab="captions" hideTabBar />}
         {tab === "tutorials" && <TutorialLibraryPage profile={profile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={sb} initialTab="guides" hideTabBar />}
-        {tab === "saved_hooks" && <UGCHooksPage profile={profile} hooks={ugcHooks} setHooks={setUGCHooks} ugcCreators={ugcCreators} sb={sb} />}
         {tab === "resources" && <UGCResourcesPage profile={profile} resources={resources} setResources={setResources} sb={sb} />}
       </div>
     </div>
