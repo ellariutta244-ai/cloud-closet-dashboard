@@ -9783,7 +9783,7 @@ export default function DashboardPage() {
   const UGC_MANAGER_SECTIONS = [{
     label: "UGC TEAM",
     items: ADMIN_SECTIONS.find(s => s.label === "UGC TEAM")!.items.filter(
-      i => i.id !== "ugc_pivots_hub" && i.id !== "ugc_pivot_history"
+      i => i.id !== "ugc_pivot_history"
     ).sort((a, b) => a.id === "ugc_analytics" ? -1 : b.id === "ugc_analytics" ? 1 : 0),
   }];
 
@@ -9935,7 +9935,7 @@ export default function DashboardPage() {
       case "ugc_qa":            return (isFullAdmin || isUGCManager || isUGC) ? <UGCQAPage profile={p as UGCCreatorProfile} questions={ugcQuestions} setQuestions={setUGCQuestions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_meeting":       return isUGC ? <UGCMeetingPage profile={p as UGCCreatorProfile}/> : null;
       case "ugc_announcements": return (isFullAdmin || isUGCManager) ? <UGCAnnouncementsPage profile={p as UGCCreatorProfile} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
-      case "ugc_pivots_hub":            return isFullAdmin ? <UGCPivotsHubPage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_pivots_hub":            return (isFullAdmin || isUGCManager) ? <UGCPivotsHubPage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_briefs_announcements":  return (isFullAdmin || isUGCManager) ? <UGCBriefsAnnouncementsPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_weekly_brief":          return isUGC ? <CreatorWeeklyBriefPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} sb={supabase}/> : null;
       case "ugc_history":       return (isFullAdmin || isUGCManager || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
