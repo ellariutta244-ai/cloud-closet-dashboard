@@ -9646,7 +9646,16 @@ export default function DashboardPage() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "requests" }, p => setRequests(prev => prev.some(r => r.id === p.new.id) ? prev : [{ ...(p.new as any), replies: (p.new as any).replies || [] } as Request, ...prev]))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "requests" }, p => setRequests(prev => prev.map(r => r.id === p.new.id ? { ...(p.new as any), replies: (p.new as any).replies || [] } as Request : r)))
       .subscribe();
-    return () => { supabase.removeChannel(tasksCh); supabase.removeChannel(qCh); supabase.removeChannel(rCh); supabase.removeChannel(reqCh); };
+    const pivotQueueCh = supabase.channel("pivot-queue-rt")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ugc_pivot_queue" }, p => setUGCPivotQueue(prev => prev.some(q => q.id === p.new.id) ? prev : [p.new as UGCPivotQueue, ...prev]))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "ugc_pivot_queue" }, p => setUGCPivotQueue(prev => prev.map(q => q.id === p.new.id ? p.new as UGCPivotQueue : q)))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "ugc_pivot_queue" }, p => setUGCPivotQueue(prev => prev.filter(q => q.id !== (p.old as any).id)))
+      .subscribe();
+    const pivotsRtCh = supabase.channel("pivots-rt")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ugc_pivots" }, p => setUGCPivots(prev => prev.some(pv => pv.id === p.new.id) ? prev : [p.new as UGCPivot, ...prev]))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "ugc_pivots" }, p => setUGCPivots(prev => prev.map(pv => pv.id === p.new.id ? p.new as UGCPivot : pv)))
+      .subscribe();
+    return () => { supabase.removeChannel(tasksCh); supabase.removeChannel(qCh); supabase.removeChannel(rCh); supabase.removeChannel(reqCh); supabase.removeChannel(pivotQueueCh); supabase.removeChannel(pivotsRtCh); };
   }, [loading, supabase]);
 
   const addActivity = useCallback(async (a: any) => {
