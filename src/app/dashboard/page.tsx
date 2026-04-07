@@ -4466,7 +4466,7 @@ type UGCAnnouncement = { id: string; title: string; body?: string; pinned?: bool
 type UGCResource = { id: string; title: string; description?: string; category?: string; file_url?: string; link?: string; created_at: string };
 type UGCQuestion = { id: string; creator_id?: string; question: string; created_at: string; ugc_qa_replies?: UGCReply[] };
 type UGCReply = { id: string; question_id: string; creator_id?: string; reply: string; created_at: string };
-type UGCCreatorProfile = Profile & { tiktok_handle?: string; tiktok_url?: string; ugc_status?: string };
+type UGCCreatorProfile = Profile & { tiktok_handle?: string; tiktok_url?: string; ugc_status?: string; creator_tags?: string[] };
 type SmartAlert = { id: string; creator_id?: string; alert_type: string; message: string; urgency: 'red' | 'orange' | 'yellow' | 'purple'; dismissed: boolean; week_date?: string; created_at: string; };
 type CarolineSavedIdea = { id: string; hook?: string; concept_title?: string; full_concept?: any; caption?: string; format?: string; series_name?: string; series_episodes?: any[]; sound_notes?: string; mood?: string; audience?: string[]; notes?: string; filmed: boolean; saved_at: string; tiktok_url?: string; recreation_guide?: any; content_type?: string };
 type Tutorial = { id: string; title: string; description?: string; steps: string[]; pro_tips: string[]; best_for_tags: string[]; difficulty: string; sort_order?: number; created_at: string };
@@ -6804,32 +6804,35 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
   const [form, setForm] = useState({ full_name: "", email: "", tiktok_handle: "" });
   const [saving, setSaving] = useState(false);
   const [editTarget, setEditTarget] = useState<UGCCreatorProfile | null>(null);
-  const [editForm, setEditForm] = useState({ full_name: "", tiktok_handle: "", tiktok_url: "" });
+  const [editForm, setEditForm] = useState({ full_name: "", tiktok_handle: "", tiktok_url: "", creator_tags: [] as string[] });
   const [editSaving, setEditSaving] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   function openEdit(c: UGCCreatorProfile) {
     setEditTarget(c);
-    setEditForm({ full_name: c.full_name, tiktok_handle: c.tiktok_handle ?? "", tiktok_url: c.tiktok_url ?? "" });
+    setEditForm({ full_name: c.full_name, tiktok_handle: c.tiktok_handle ?? "", tiktok_url: c.tiktok_url ?? "", creator_tags: c.creator_tags ?? [] });
   }
 
   async function saveEdit() {
     if (!editTarget) return;
     setEditSaving(true);
-    await fetch("/api/ugc-archive-creator", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: editTarget.id,
-        full_name: editForm.full_name.trim(),
-        tiktok_handle: editForm.tiktok_handle.trim() || null,
-        tiktok_url: editForm.tiktok_url.trim() || null,
-        updateFields: true,
+    await Promise.all([
+      fetch("/api/ugc-archive-creator", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editTarget.id,
+          full_name: editForm.full_name.trim(),
+          tiktok_handle: editForm.tiktok_handle.trim() || null,
+          tiktok_url: editForm.tiktok_url.trim() || null,
+          updateFields: true,
+        }),
       }),
-    });
+      sb.from("profiles").update({ creator_tags: editForm.creator_tags }).eq("id", editTarget.id),
+    ]);
     setUGCCreators(ugcCreators.map(c => c.id === editTarget.id
-      ? { ...c, full_name: editForm.full_name.trim(), tiktok_handle: editForm.tiktok_handle.trim() || undefined, tiktok_url: editForm.tiktok_url.trim() || undefined }
+      ? { ...c, full_name: editForm.full_name.trim(), tiktok_handle: editForm.tiktok_handle.trim() || undefined, tiktok_url: editForm.tiktok_url.trim() || undefined, creator_tags: editForm.creator_tags }
       : c
     ));
     setEditSaving(false);
@@ -6922,9 +6925,15 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
                       </div>
                       <TikTokLink creator={c} />
                       <p className="text-xs text-stone-400">{c.email}</p>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <Bg v="success">Active</Bg>
                         {tier && <BenchmarkBadge tier={tier} />}
+                        {(c.creator_tags || []).includes("needs_coaching") && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-orange-100 text-orange-700">Needs Coaching</span>
+                        )}
+                        {(c.creator_tags || []).includes("high_potential") && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-violet-100 text-violet-700">High Potential</span>
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-col gap-1 items-end">
@@ -7004,6 +7013,30 @@ function UGCCreatorMgmtPage({ profile, ugcCreators, setUGCCreators, submissions,
           <TI label="Full Name" value={editForm.full_name} onChange={v => setEditForm({ ...editForm, full_name: v })} required />
           <TI label="TikTok Handle" value={editForm.tiktok_handle} onChange={v => setEditForm({ ...editForm, tiktok_handle: v })} placeholder="username (without @)" />
           <TI label="TikTok Profile URL" value={editForm.tiktok_url} onChange={v => setEditForm({ ...editForm, tiktok_url: v })} placeholder="https://tiktok.com/@username" />
+          <div className="flex flex-col gap-1.5">
+            <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Tags</p>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { id: "needs_coaching", label: "Needs Coaching", active: "bg-orange-100 text-orange-700 border-orange-200", inactive: "bg-stone-50 text-stone-500 border-stone-200" },
+                { id: "high_potential", label: "High Potential", active: "bg-violet-100 text-violet-700 border-violet-200", inactive: "bg-stone-50 text-stone-500 border-stone-200" },
+              ].map(tag => {
+                const on = editForm.creator_tags.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => setEditForm(f => ({
+                      ...f,
+                      creator_tags: on ? f.creator_tags.filter(t => t !== tag.id) : [...f.creator_tags, tag.id],
+                    }))}
+                    className={`text-xs px-3 py-1.5 rounded-full border font-semibold transition-all ${on ? tag.active : tag.inactive}`}
+                  >
+                    {tag.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Btn variant="secondary" onClick={() => setEditTarget(null)}>Cancel</Btn>
             <Btn onClick={saveEdit} disabled={!editForm.full_name.trim() || editSaving}>{editSaving ? "Saving..." : "Save Changes"}</Btn>
