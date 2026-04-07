@@ -7439,16 +7439,6 @@ function UGCAnalyticsOverview({ submissions, setSubmissions, ugcCreators, pivotQ
         {c2 && g2 && <div className="flex items-center gap-2 mt-1"><span className="w-3 h-1 bg-violet-600 rounded inline-block"/><span className="text-xs text-stone-500">{ugcCreators.find(c => c.id === c2)?.full_name}</span></div>}
       </div>
 
-      {/* Smart Alert Warnings */}
-      {(smartAlerts || []).filter(a => ['no_post', 'declining_performance'].includes(a.alert_type)).map(alert => (
-        <div key={alert.id} className="border rounded-xl p-3 flex items-start gap-2" style={{
-          borderColor: alert.urgency === 'orange' ? '#fdba74' : '#fde68a',
-          backgroundColor: alert.urgency === 'orange' ? '#fff7ed' : '#fffbeb',
-        }}>
-          <span className="text-sm">{alert.urgency === 'orange' ? '📉' : '⚠️'}</span>
-          <p className="text-sm font-medium" style={{ color: alert.urgency === 'orange' ? '#c2410c' : '#92400e' }}>{alert.message}</p>
-        </div>
-      ))}
 
       <div className="bg-white border border-stone-200/60 rounded-xl p-5 overflow-x-auto">
         <p className="text-sm font-semibold text-stone-700 mb-4">All Submissions</p>
@@ -9508,7 +9498,7 @@ export default function DashboardPage() {
       if (prof.role === "director") setPage("director_home");
       if (prof.role === "soraa_creator") setPage("external-ugc");
       if (prof.role === "cc_exec") setPage("rush");
-      if (prof.role === "ugc_manager") setPage("ugc_creators");
+      if (prof.role === "ugc_manager") setPage("ugc_analytics");
       const [
         { data: iD }, { data: tD }, { data: oD }, { data: qD },
         { data: rD }, { data: resD }, { data: aD }, { data: actD },
@@ -9790,7 +9780,12 @@ export default function DashboardPage() {
     }] : []),
   ];
 
-  const UGC_MANAGER_SECTIONS = ADMIN_SECTIONS.filter(s => s.label === "UGC TEAM");
+  const UGC_MANAGER_SECTIONS = [{
+    label: "UGC TEAM",
+    items: ADMIN_SECTIONS.find(s => s.label === "UGC TEAM")!.items.filter(
+      i => i.id !== "ugc_pivots_hub" && i.id !== "ugc_pivot_history"
+    ).sort((a, b) => a.id === "ugc_analytics" ? -1 : b.id === "ugc_analytics" ? 1 : 0),
+  }];
 
   const DIRECTOR_SECTIONS = [
     {
@@ -9940,7 +9935,7 @@ export default function DashboardPage() {
       case "ugc_qa":            return (isFullAdmin || isUGCManager || isUGC) ? <UGCQAPage profile={p as UGCCreatorProfile} questions={ugcQuestions} setQuestions={setUGCQuestions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_meeting":       return isUGC ? <UGCMeetingPage profile={p as UGCCreatorProfile}/> : null;
       case "ugc_announcements": return (isFullAdmin || isUGCManager) ? <UGCAnnouncementsPage profile={p as UGCCreatorProfile} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
-      case "ugc_pivots_hub":            return (isFullAdmin || isUGCManager) ? <UGCPivotsHubPage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_pivots_hub":            return isFullAdmin ? <UGCPivotsHubPage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_briefs_announcements":  return (isFullAdmin || isUGCManager) ? <UGCBriefsAnnouncementsPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_weekly_brief":          return isUGC ? <CreatorWeeklyBriefPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} sb={supabase}/> : null;
       case "ugc_history":       return (isFullAdmin || isUGCManager || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
@@ -9950,7 +9945,7 @@ export default function DashboardPage() {
       case "ugc_creators":      return (isFullAdmin || isUGCManager) ? <UGCCreatorMgmtPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} smartAlerts={smartAlerts} sb={supabase}/> : null;
       case "ugc_pivot_queue":   return (isFullAdmin || isUGCManager) ? <UGCPivotQueuePage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_analytics":     return (isFullAdmin || isUGCManager) ? <UGCAnalyticsOverview submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} pivotQueue={ugcPivotQueue} smartAlerts={smartAlerts} sb={supabase}/> : null;
-      case "ugc_pivot_history": return (isFullAdmin || isUGCManager) ? <UGCPivotHistoryPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_pivot_history": return isFullAdmin ? <UGCPivotHistoryPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_brief":         return (isFullAdmin || isUGCManager) ? <UGCBriefPage briefs={ugcBriefs} setBriefs={setUGCBriefs} sb={supabase}/> : null;
       case "external-ugc":      return isSoraaCreator ? <SoraaCreatorView profile={profile!}/> : (isAdmin || isDirector) ? <ExternalUGCPanel/> : null;
       case "director_home":      return isDirector ? <DirectorDash profile={profile!} events={events} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} ugcBriefs={ugcBriefs} smartAlerts={smartAlerts} reports={reports} outreach={outreach} ugcHooks={ugcHooks} settings={settings} techProjects={techProjects} designProjects={designProjects} interns={interns} setPage={setPage} sb={supabase}/> : null;
