@@ -4928,26 +4928,20 @@ function UGCMeetingPage({ profile }: { profile: UGCCreatorProfile }) {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-xl font-bold text-stone-800">Book a Meeting</h1>
-        <p className="text-sm text-stone-400 mt-0.5">Schedule a 1-on-1 with Ella to talk strategy, content, or anything on your mind.</p>
+        <p className="text-sm text-stone-400 mt-0.5">Schedule a 1-on-1 with Jake to talk strategy, content, or anything on your mind.</p>
       </div>
       <div className="bg-white border border-stone-200/60 rounded-xl p-6 flex flex-col items-center gap-5 text-center">
         <div className="w-14 h-14 bg-stone-100 rounded-full flex items-center justify-center">
           <CalendarClock size={26} className="text-stone-600" />
         </div>
         <div>
-          <p className="text-base font-semibold text-stone-800">30-Minute Meeting with Ella</p>
+          <p className="text-base font-semibold text-stone-800">30-Minute Meeting with Jake</p>
           <p className="text-sm text-stone-400 mt-1">Pick a time that works for you. Use this for content check-ins, pivot questions, or anything you want to talk through.</p>
         </div>
-        <a
-          href="https://calendly.com/ellariutta244/30min"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-stone-800 text-white text-sm font-medium rounded-xl hover:bg-stone-700 transition-colors"
-        >
+        <div className="flex items-center gap-2 px-5 py-2.5 bg-stone-100 text-stone-400 text-sm font-medium rounded-xl cursor-not-allowed">
           <CalendarClock size={15} />
-          Book a Time
-          <ExternalLink size={13} className="opacity-60" />
-        </a>
+          Booking link coming soon
+        </div>
       </div>
     </div>
   );
