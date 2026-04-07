@@ -6198,8 +6198,17 @@ function TutorialLibraryPage({ profile, tutorials, setTutorials, savedCaptions, 
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-xl font-bold text-stone-800">Tutorial Library</h1>
-          <p className="text-sm text-stone-400 mt-0.5">Learn to film and edit entirely inside TikTok</p>
+          {hideTabBar && tab === "captions" ? (
+            <>
+              <h1 className="text-xl font-bold text-stone-800">Caption & Hashtag Generator</h1>
+              <p className="text-sm text-stone-400 mt-0.5">Generate captions and hashtag sets optimized for your video</p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-xl font-bold text-stone-800">Tutorial Library</h1>
+              <p className="text-sm text-stone-400 mt-0.5">Learn to film and edit entirely inside TikTok</p>
+            </>
+          )}
         </div>
         {!hideTabBar && (
           <div className="flex gap-1 bg-stone-100 p-1 rounded-xl">
