@@ -6081,12 +6081,13 @@ function UGCHooksPage({ profile, hooks, setHooks, ugcCreators, sb }: {
 }
 
 // ── Tutorial Library ───────────────────────────────────────────────────────────
-function TutorialLibraryPage({ profile, tutorials, setTutorials, savedCaptions, setSavedCaptions, sb }: {
+function TutorialLibraryPage({ profile, tutorials, setTutorials, savedCaptions, setSavedCaptions, sb, initialTab }: {
   profile: UGCCreatorProfile; tutorials: Tutorial[]; setTutorials: (t: Tutorial[]) => void;
   savedCaptions: SavedCaption[]; setSavedCaptions: (c: SavedCaption[]) => void; sb: any;
+  initialTab?: "guides" | "captions";
 }) {
   const isAdmin = profile.role === "admin" || profile.role === "wisconsin_admin";
-  const [tab, setTab] = useState<"guides" | "captions">("guides");
+  const [tab, setTab] = useState<"guides" | "captions">(initialTab ?? "guides");
 
   // ── Guides tab ────────────────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
@@ -9640,6 +9641,66 @@ function CreatorWeeklyBriefPage({ profile, briefs, setBriefs, weeklyPlans, setWe
   );
 }
 
+// ── Content Cloud (creator hub) ────────────────────────────────────────────────
+type ContentCloudTab = "ideas" | "hooks" | "captions" | "tutorials" | "saved_hooks" | "resources";
+function ContentCloudPage({ profile, weeklyPlans, ugcCreators, ugcHooks, setUGCHooks, savedHooks, setSavedHooks, tutorials, setTutorials, savedCaptions, setSavedCaptions, resources, setResources, settings, sb }: {
+  profile: UGCCreatorProfile; weeklyPlans: WeeklyPlan[];
+  ugcCreators: UGCCreatorProfile[]; ugcHooks: UGCHook[]; setUGCHooks: (h: UGCHook[]) => void;
+  savedHooks: SavedHook[]; setSavedHooks: (h: SavedHook[]) => void;
+  tutorials: Tutorial[]; setTutorials: (t: Tutorial[]) => void;
+  savedCaptions: SavedCaption[]; setSavedCaptions: (c: SavedCaption[]) => void;
+  resources: UGCResource[]; setResources: (r: UGCResource[]) => void;
+  settings: AppSettings; sb: any;
+}) {
+  const [tab, setTab] = useState<ContentCloudTab>("ideas");
+
+  const TABS: { id: ContentCloudTab; icon: React.ReactNode; label: string }[] = [
+    { id: "ideas",      icon: <Sparkles size={15}/>,    label: "Content Ideas" },
+    { id: "hooks",      icon: <Zap size={15}/>,          label: "Hook Generator" },
+    { id: "captions",   icon: <MessageSquare size={15}/>,label: "Caption Generator" },
+    { id: "tutorials",  icon: <BookOpen size={15}/>,     label: "Tutorial Library" },
+    { id: "saved_hooks",icon: <Bookmark size={15}/>,     label: "Saved Hooks" },
+    { id: "resources",  icon: <FolderOpen size={15}/>,   label: "Other Resources" },
+  ];
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-bold text-stone-800">Content Cloud</h1>
+        <p className="text-sm text-stone-400 mt-0.5">Everything you need to create great content</p>
+      </div>
+
+      {/* Subtab bar */}
+      <div className="flex gap-1.5 flex-wrap">
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all border ${
+              tab === t.id
+                ? "bg-stone-800 text-white border-stone-800 shadow-sm"
+                : "bg-white text-stone-500 border-stone-200 hover:border-stone-300 hover:text-stone-700"
+            }`}
+          >
+            {t.icon}
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="min-h-0">
+        {tab === "ideas" && <ContentIdeasPage profile={profile} weeklyPlans={weeklyPlans} />}
+        {tab === "hooks" && <HookGeneratorPage profile={profile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={sb} />}
+        {tab === "captions" && <TutorialLibraryPage profile={profile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={sb} initialTab="captions" />}
+        {tab === "tutorials" && <TutorialLibraryPage profile={profile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={sb} initialTab="guides" />}
+        {tab === "saved_hooks" && <UGCHooksPage profile={profile} hooks={ugcHooks} setHooks={setUGCHooks} ugcCreators={ugcCreators} sb={sb} />}
+        {tab === "resources" && <UGCResourcesPage profile={profile} resources={resources} setResources={setResources} sb={sb} />}
+      </div>
+    </div>
+  );
+}
+
 // ── Content Ideas Page (creator) ───────────────────────────────────────────────
 function ContentIdeasPage({ profile, weeklyPlans }: {
   profile: UGCCreatorProfile; weeklyPlans: WeeklyPlan[];
@@ -10029,14 +10090,11 @@ export default function DashboardPage() {
     { id: "ugc_submit",         icon: <BarChart3 size={16}/>,       label: "Submit Analytics" },
     { id: "ugc_pivots",         icon: <TrendingUp size={16}/>,      label: "My Pivots",       badge: newPivotCount || null },
     { id: "ugc_weekly_brief",   icon: <FileText size={16}/>,        label: "Weekly Brief",    badge: newBriefCount || null },
-    { id: "ugc_content_ideas",  icon: <Sparkles size={16}/>,        label: "Content Ideas" },
-    { id: "ugc_hook_generator", icon: <Zap size={16}/>,             label: "Hook Generator" },
-    { id: "ugc_tutorials",      icon: <BookOpen size={16}/>,        label: "Tutorial Library" },
+    { id: "ugc_content_cloud",  icon: <Sparkles size={16}/>,        label: "Content Cloud" },
     { id: "ugc_leaderboard",    icon: <Trophy size={16}/>,          label: "Leaderboard" },
     { id: "ugc_qa",             icon: <MessageCircle size={16}/>,   label: "Community Q&A",   badge: newQACount || null },
     { id: "ugc_meeting",        icon: <CalendarClock size={16}/>,   label: "Book a Meeting" },
     { id: "ugc_history",        icon: <FileText size={16}/>,        label: "Submission History" },
-    { id: "ugc_resources",      icon: <FolderOpen size={16}/>,      label: "Resources" },
   ] : [
     { id: "dashboard", icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
     { id: "tasks",     icon: <CheckSquare size={16}/>,     label: isAdmin ? "All Tasks" : "My Tasks" },
@@ -10260,6 +10318,7 @@ export default function DashboardPage() {
       case "ugc_dashboard":     return (isFullAdmin || isUGCManager || isUGC) ? <UGCDashboard profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} pivots={ugcPivots} briefs={ugcBriefs} announcements={ugcAnnouncements} sb={supabase} setPage={setPage}/> : null;
       case "ugc_submit":        return (isFullAdmin || isUGCManager || isUGC) ? <UGCSubmitPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_pivots":        return (isFullAdmin || isUGCManager || isUGC) ? <UGCMyPivotsPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} submissions={ugcSubmissions} sb={supabase}/> : null;
+      case "ugc_content_cloud":  return (isFullAdmin || isUGCManager || isUGC) ? <ContentCloudPage profile={p as UGCCreatorProfile} weeklyPlans={weeklyPlans} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} resources={ugcResources} setResources={setUGCResources} settings={settings} sb={supabase}/> : null;
       case "ugc_hook_generator": return (isFullAdmin || isUGCManager || isUGC) ? <HookGeneratorPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
       case "ugc_hooks":         return (isFullAdmin || isUGCManager || isUGC) ? <UGCHooksPage profile={p as UGCCreatorProfile} hooks={ugcHooks} setHooks={setUGCHooks} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_leaderboard":   return (isFullAdmin || isUGCManager || isUGC) ? <UGCLeaderboardPage submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
