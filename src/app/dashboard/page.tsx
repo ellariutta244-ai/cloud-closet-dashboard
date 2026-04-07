@@ -4960,6 +4960,73 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<"idle" | "generating" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [screenshotReading, setScreenshotReading] = useState(false);
+  const [screenshotFilled, setScreenshotFilled] = useState<string[]>([]);
+  const [screenshotError, setScreenshotError] = useState("");
+  const screenshotInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleScreenshot(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setScreenshotReading(true);
+    setScreenshotError("");
+    setScreenshotFilled([]);
+
+    // Process up to 3 screenshots — send each individually and merge results
+    const merged: Record<string, any> = {};
+    for (let i = 0; i < Math.min(files.length, 3); i++) {
+      const file = files[i];
+      const base64 = await new Promise<string>((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = () => res((reader.result as string).split(",")[1]);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+      try {
+        const resp = await fetch("/api/ugc-screenshot-parse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: base64, mimeType: file.type }),
+        });
+        const json = await resp.json();
+        if (json.ok && json.fields) {
+          for (const [k, v] of Object.entries(json.fields)) {
+            if (v !== null && v !== undefined && v !== "" && merged[k] == null) {
+              merged[k] = v;
+            }
+          }
+        }
+      } catch {}
+    }
+
+    const filled: string[] = [];
+    setForm(prev => {
+      const next = { ...prev };
+      const strFields = [
+        "total_views", "best_video_views", "worst_video_views", "profile_visits",
+        "video_length_seconds", "avg_watch_time_seconds", "watch_completion_rate",
+        "traffic_fyp_pct", "traffic_search_pct", "traffic_following_pct",
+        "traffic_profile_pct", "traffic_sound_pct",
+        "likes", "comments", "shares", "saves",
+        "followers_gained", "followers_lost", "videos_posted",
+        "top_search_query_1", "top_search_query_2", "top_search_query_3", "hook_text",
+      ];
+      for (const field of strFields) {
+        if (merged[field] != null && merged[field] !== "") {
+          (next as any)[field] = String(merged[field]);
+          filled.push(field);
+        }
+      }
+      if (merged.is_slideshow != null) {
+        next.is_slideshow = Boolean(merged.is_slideshow);
+        if (merged.is_slideshow) { next.video_length_seconds = ""; next.avg_watch_time_seconds = ""; }
+        filled.push("is_slideshow");
+      }
+      return next;
+    });
+    setScreenshotFilled(filled);
+    setScreenshotReading(false);
+    if (filled.length === 0) setScreenshotError("Couldn't read any analytics from the screenshot. Try a clearer image or fill in manually.");
+  }
 
   const selectedCreator = isAdmin ? ugcCreators.find(c => c.id === form.creator_id) || null : (profile as UGCCreatorProfile);
 
@@ -5127,6 +5194,46 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
         />
         {isAdmin && <Sel label="Creator" value={form.creator_id} onChange={v => setForm({ ...form, creator_id: v })}
           options={[{ value: "", label: "— Select creator —" }, ...ugcCreators.filter(c => c.ugc_status !== "archived").map(c => ({ value: c.id, label: `${c.full_name}${c.tiktok_handle ? ` (@${c.tiktok_handle})` : ""}` }))]} />}
+
+        {/* Screenshot Upload */}
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Autofill from Screenshot</p>
+          <input
+            ref={screenshotInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={e => handleScreenshot(e.target.files)}
+          />
+          <button
+            type="button"
+            onClick={() => screenshotInputRef.current?.click()}
+            disabled={screenshotReading}
+            className={`flex items-center justify-center gap-2.5 w-full border-2 border-dashed rounded-xl py-4 px-4 transition-all text-sm font-medium
+              ${screenshotReading
+                ? "border-stone-200 bg-stone-50 text-stone-400 cursor-not-allowed"
+                : "border-stone-300 bg-stone-50 text-stone-600 hover:border-stone-400 hover:bg-stone-100 cursor-pointer"
+              }`}
+          >
+            {screenshotReading
+              ? <><Loader2 size={16} className="animate-spin text-stone-400" />Reading screenshot…</>
+              : <><Upload size={16} className="text-stone-400" />Upload TikTok analytics screenshot{screenshotFilled.length > 0 ? " (upload more to update)" : "s"}</>
+            }
+          </button>
+          {screenshotFilled.length > 0 && (
+            <div className="flex items-start gap-2 px-3 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+              <CheckCircle2 size={14} className="text-emerald-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-emerald-700"><span className="font-semibold">{screenshotFilled.length} fields autofilled.</span> Review below and adjust anything that looks off.</p>
+            </div>
+          )}
+          {screenshotError && (
+            <p className="text-xs text-red-500 px-1">{screenshotError}</p>
+          )}
+          <p className="text-xs text-stone-400">Upload up to 3 screenshots — AI will read the numbers and fill the form. You can still edit any field manually.</p>
+        </div>
+
+        <div className="border-t border-stone-100" />
 
         {/* Video Metadata — best performing video */}
         <div className="flex flex-col gap-3">
