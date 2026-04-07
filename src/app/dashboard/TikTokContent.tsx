@@ -268,7 +268,9 @@ function blankAnalytics(): Omit<TikTokAnalytics, 'id' | 'created_at'> {
 function ContentCalendar({ posts, canEdit, sb, onChange, profile }: {
   posts: TikTokPost[]; canEdit: boolean; sb: any; onChange: () => void; profile: Profile;
 }) {
+  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const [weekStart, setWeekStart] = useState<Date>(() => getMonday(new Date()));
+  const [monthDate, setMonthDate] = useState<Date>(() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; });
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
   const [slidePost, setSlidePost] = useState<TikTokPost | null>(null);
@@ -343,6 +345,32 @@ function ContentCalendar({ posts, canEdit, sb, onChange, profile }: {
   }
 
   const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  const ALL_DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  // Month grid helpers
+  function getMonthWeeks(monthStart: Date): Date[][] {
+    const year = monthStart.getFullYear();
+    const month = monthStart.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    // Find the Monday on or before the 1st
+    const startMonday = getMonday(firstDay);
+    const weeks: Date[][] = [];
+    let cur = new Date(startMonday);
+    while (cur <= lastDay || weeks.length < 1) {
+      const week: Date[] = [];
+      for (let i = 0; i < 7; i++) {
+        week.push(new Date(cur));
+        cur = addDays(cur, 1);
+      }
+      weeks.push(week);
+      if (cur > lastDay && weeks.length >= 4) break;
+    }
+    return weeks;
+  }
+
+  const monthLabel = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const monthWeeks = getMonthWeeks(monthDate);
 
   return (
     <div className="space-y-5">
@@ -368,78 +396,178 @@ function ContentCalendar({ posts, canEdit, sb, onChange, profile }: {
         </p>
       </div>
 
-      {/* Week nav + Add button */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button onClick={() => setWeekStart(d => addDays(d, -7))} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500">
-            <ChevronLeft size={16} />
-          </button>
-          <span className="text-sm font-medium text-stone-700">{fmtWeekLabel(weekStart)}</span>
-          <button onClick={() => setWeekStart(d => addDays(d, 7))} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500">
-            <ChevronRight size={16} />
-          </button>
+      {/* Nav bar: view toggle + prev/next + add */}
+      <div className="flex items-center justify-between gap-3">
+        {/* View toggle */}
+        <div className="flex items-center bg-stone-100 rounded-lg p-0.5 gap-0.5">
+          <button
+            onClick={() => setViewMode('week')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'week' ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}
+          >Week</button>
+          <button
+            onClick={() => setViewMode('month')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'month' ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}
+          >Month</button>
         </div>
+
+        {/* Period nav */}
+        <div className="flex items-center gap-1.5 flex-1">
+          {viewMode === 'week' ? (
+            <>
+              <button onClick={() => setWeekStart(d => addDays(d, -7))} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"><ChevronLeft size={16} /></button>
+              <span className="text-sm font-medium text-stone-700">{fmtWeekLabel(weekStart)}</span>
+              <button onClick={() => setWeekStart(d => addDays(d, 7))} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"><ChevronRight size={16} /></button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setMonthDate(d => { const n = new Date(d); n.setMonth(n.getMonth() - 1); return n; })}
+                className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
+              ><ChevronLeft size={16} /></button>
+              <span className="text-sm font-medium text-stone-700">{monthLabel}</span>
+              <button
+                onClick={() => setMonthDate(d => { const n = new Date(d); n.setMonth(n.getMonth() + 1); return n; })}
+                className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500"
+              ><ChevronRight size={16} /></button>
+            </>
+          )}
+        </div>
+
         {canEdit && <Btn variant="primary" onClick={() => openNew()}><Plus size={14} />Add Post</Btn>}
       </div>
 
-      {/* Calendar grid */}
-      <div className="grid grid-cols-5 gap-2">
-        {weekDays.map((day, i) => {
-          const dayKey = fmtDateKey(day);
-          const dayPosts = posts.filter(p => p.scheduled_date === dayKey);
-          const isOver = dragOverDay === dayKey;
-          const isToday = dayKey === fmtDateKey(new Date());
-          return (
-            <div
-              key={dayKey}
-              onDragOver={e => { e.preventDefault(); setDragOverDay(dayKey); }}
-              onDragLeave={() => setDragOverDay(null)}
-              onDrop={() => handleDrop(dayKey)}
-              className={`min-h-[160px] rounded-xl border p-2 transition-colors ${isOver ? 'border-stone-400 bg-stone-50' : 'border-stone-200 bg-white'}`}
-            >
-              <div className={`flex items-center justify-between mb-2`}>
-                <div>
-                  <p className="text-[10px] font-semibold text-stone-400 uppercase">{DAY_LABELS[i]}</p>
-                  <p className={`text-sm font-bold ${isToday ? 'text-pink-600' : 'text-stone-700'}`}>{fmtDateLabel(day)}</p>
+      {/* Week view grid */}
+      {viewMode === 'week' && (
+        <div className="grid grid-cols-5 gap-2">
+          {weekDays.map((day, i) => {
+            const dayKey = fmtDateKey(day);
+            const dayPosts = posts.filter(p => p.scheduled_date === dayKey);
+            const isOver = dragOverDay === dayKey;
+            const isToday = dayKey === fmtDateKey(new Date());
+            return (
+              <div
+                key={dayKey}
+                onDragOver={e => { e.preventDefault(); setDragOverDay(dayKey); }}
+                onDragLeave={() => setDragOverDay(null)}
+                onDrop={() => handleDrop(dayKey)}
+                className={`min-h-[160px] rounded-xl border p-2 transition-colors ${isOver ? 'border-stone-400 bg-stone-50' : 'border-stone-200 bg-white'}`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-[10px] font-semibold text-stone-400 uppercase">{DAY_LABELS[i]}</p>
+                    <p className={`text-sm font-bold ${isToday ? 'text-pink-600' : 'text-stone-700'}`}>{fmtDateLabel(day)}</p>
+                  </div>
+                  {canEdit && (
+                    <button onClick={() => openNew(dayKey)} className="p-0.5 rounded text-stone-300 hover:text-stone-600 hover:bg-stone-100">
+                      <Plus size={12} />
+                    </button>
+                  )}
                 </div>
-                {canEdit && (
-                  <button onClick={() => openNew(dayKey)} className="p-0.5 rounded text-stone-300 hover:text-stone-600 hover:bg-stone-100">
-                    <Plus size={12} />
-                  </button>
-                )}
+                <div className="space-y-1.5">
+                  {dayPosts.map(post => (
+                    <div
+                      key={post.id}
+                      draggable={canEdit}
+                      onDragStart={() => setDraggingId(post.id)}
+                      onDragEnd={() => { setDraggingId(null); setDragOverDay(null); }}
+                      onClick={() => openEdit(post)}
+                      className={`cursor-pointer rounded-lg p-2 border-l-4 bg-stone-50 hover:bg-stone-100 transition-colors ${
+                        post.pillar === 'podcast_clips' ? 'border-pink-400' :
+                        post.pillar === 'content_day' ? 'border-teal-400' : 'border-purple-400'
+                      }`}
+                    >
+                      <div className="flex flex-wrap gap-1 mb-1">
+                        <Pill label={PILLAR_LABELS[post.pillar]} className={PILLAR_COLORS[post.pillar]} />
+                        <Pill label={POST_STATUS_LABELS[post.status] || post.status} className={POST_STATUS_COLORS[post.status] || 'bg-stone-100 text-stone-500'} />
+                      </div>
+                      <p className="text-xs font-medium text-stone-800 line-clamp-2">{post.title}</p>
+                      {post.assigned_to && (
+                        <div className="mt-1.5 flex items-center gap-1">
+                          <div className="w-4 h-4 rounded-full bg-stone-200 flex items-center justify-center text-[9px] font-bold text-stone-600">
+                            {post.assigned_to.slice(0, 2).toUpperCase()}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-1.5">
-                {dayPosts.map(post => (
+            );
+          })}
+        </div>
+      )}
+
+      {/* Month view grid */}
+      {viewMode === 'month' && (
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+          {/* Day headers */}
+          <div className="grid grid-cols-7 border-b border-stone-100">
+            {ALL_DAY_LABELS.map(d => (
+              <div key={d} className="px-2 py-2 text-center text-[10px] font-semibold text-stone-400 uppercase">{d}</div>
+            ))}
+          </div>
+          {/* Weeks */}
+          {monthWeeks.map((week, wi) => (
+            <div key={wi} className="grid grid-cols-7 border-b border-stone-100 last:border-b-0">
+              {week.map((day) => {
+                const dayKey = fmtDateKey(day);
+                const inMonth = day.getMonth() === monthDate.getMonth();
+                const isToday = dayKey === fmtDateKey(new Date());
+                const dayPosts = posts.filter(p => p.scheduled_date === dayKey);
+                const isOver = dragOverDay === dayKey;
+                return (
                   <div
-                    key={post.id}
-                    draggable={canEdit}
-                    onDragStart={() => setDraggingId(post.id)}
-                    onDragEnd={() => { setDraggingId(null); setDragOverDay(null); }}
-                    onClick={() => openEdit(post)}
-                    className={`cursor-pointer rounded-lg p-2 border-l-4 bg-stone-50 hover:bg-stone-100 transition-colors ${
-                      post.pillar === 'podcast_clips' ? 'border-pink-400' :
-                      post.pillar === 'content_day' ? 'border-teal-400' : 'border-purple-400'
+                    key={dayKey}
+                    onDragOver={e => { e.preventDefault(); setDragOverDay(dayKey); }}
+                    onDragLeave={() => setDragOverDay(null)}
+                    onDrop={() => handleDrop(dayKey)}
+                    className={`min-h-[100px] p-1.5 border-r border-stone-100 last:border-r-0 transition-colors ${
+                      isOver ? 'bg-stone-50' : inMonth ? 'bg-white' : 'bg-stone-50/50'
                     }`}
                   >
-                    <div className="flex flex-wrap gap-1 mb-1">
-                      <Pill label={PILLAR_LABELS[post.pillar]} className={PILLAR_COLORS[post.pillar]} />
-                      <Pill label={POST_STATUS_LABELS[post.status] || post.status} className={POST_STATUS_COLORS[post.status] || 'bg-stone-100 text-stone-500'} />
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-xs font-semibold w-5 h-5 flex items-center justify-center rounded-full ${
+                        isToday ? 'bg-pink-500 text-white' : inMonth ? 'text-stone-700' : 'text-stone-300'
+                      }`}>
+                        {day.getDate()}
+                      </span>
+                      {canEdit && inMonth && (
+                        <button onClick={() => openNew(dayKey)} className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-stone-300 hover:text-stone-500">
+                          <Plus size={10} />
+                        </button>
+                      )}
                     </div>
-                    <p className="text-xs font-medium text-stone-800 line-clamp-2">{post.title}</p>
-                    {post.assigned_to && (
-                      <div className="mt-1.5 flex items-center gap-1">
-                        <div className="w-4 h-4 rounded-full bg-stone-200 flex items-center justify-center text-[9px] font-bold text-stone-600">
-                          {post.assigned_to.slice(0, 2).toUpperCase()}
+                    <div className="space-y-0.5">
+                      {dayPosts.map(post => (
+                        <div
+                          key={post.id}
+                          draggable={canEdit}
+                          onDragStart={() => setDraggingId(post.id)}
+                          onDragEnd={() => { setDraggingId(null); setDragOverDay(null); }}
+                          onClick={() => openEdit(post)}
+                          className={`cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium truncate border-l-2 ${
+                            post.pillar === 'podcast_clips' ? 'border-pink-400 bg-pink-50 text-pink-800' :
+                            post.pillar === 'content_day' ? 'border-teal-400 bg-teal-50 text-teal-800' :
+                            'border-purple-400 bg-purple-50 text-purple-800'
+                          } ${post.status === 'posted' ? 'opacity-60' : ''}`}
+                        >
+                          {post.title}
                         </div>
-                      </div>
-                    )}
+                      ))}
+                      {dayPosts.length === 0 && canEdit && inMonth && (
+                        <button
+                          onClick={() => openNew(dayKey)}
+                          className="w-full text-[10px] text-stone-300 hover:text-stone-500 py-1 text-center"
+                        >+</button>
+                      )}
+                    </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Queue */}
       <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">

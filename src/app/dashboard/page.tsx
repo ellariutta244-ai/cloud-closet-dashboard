@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Role = "admin" | "intern" | "ugc_creator" | "director" | "wisconsin_admin" | "soraa_creator" | "cc_exec";
+type Role = "admin" | "intern" | "ugc_creator" | "director" | "wisconsin_admin" | "soraa_creator" | "cc_exec" | "ugc_manager";
 type Profile = { id: string; full_name: string; email: string; role: Role; team?: string; active?: boolean; rush_access?: boolean };
 type TaskComment = { id: string; task_id: string; author_id?: string; body: string; created_at: string };
 type Task = { id: string; title: string; description?: string; assigned_to?: string; co_assignees?: string[]; category?: string; priority?: string; status: string; due_date?: string; created_at: string; completed_at?: string; task_comments?: TaskComment[] };
@@ -9508,6 +9508,7 @@ export default function DashboardPage() {
       if (prof.role === "director") setPage("director_home");
       if (prof.role === "soraa_creator") setPage("external-ugc");
       if (prof.role === "cc_exec") setPage("rush");
+      if (prof.role === "ugc_manager") setPage("ugc_creators");
       const [
         { data: iD }, { data: tD }, { data: oD }, { data: qD },
         { data: rD }, { data: resD }, { data: aD }, { data: actD },
@@ -9556,7 +9557,7 @@ export default function DashboardPage() {
       setMeetingRequests((mrD || []) as MeetingRequest[]);
 
       // UGC data
-      const isUGCRole = prof.role === "ugc_creator" || prof.role === "admin" || prof.role === "director";
+      const isUGCRole = prof.role === "ugc_creator" || prof.role === "admin" || prof.role === "director" || prof.role === "ugc_manager";
       if (isUGCRole) {
         const [
           { data: ugcCrD }, { data: ugcSubD }, { data: ugcPqD }, { data: ugcPvD },
@@ -9565,13 +9566,13 @@ export default function DashboardPage() {
           { data: tutorialsD }, { data: savedCapsD },
         ] = await Promise.all([
           supabase.from("profiles").select("*").eq("role", "ugc_creator").order("full_name"),
-          (prof.role === "admin" || prof.role === "director")
+          (prof.role === "admin" || prof.role === "director" || prof.role === "ugc_manager")
             ? supabase.from("ugc_submissions").select("*").order("created_at", { ascending: false })
             : supabase.from("ugc_submissions").select("*").eq("creator_id", prof.id).order("created_at", { ascending: false }),
-          prof.role === "admin"
+          (prof.role === "admin" || prof.role === "ugc_manager")
             ? supabase.from("ugc_pivot_queue").select("*").order("created_at", { ascending: false })
             : supabase.from("ugc_pivot_queue").select("*").eq("status", "never_show").limit(0),
-          prof.role === "admin"
+          (prof.role === "admin" || prof.role === "ugc_manager")
             ? supabase.from("ugc_pivots").select("*").order("created_at", { ascending: false })
             : supabase.from("ugc_pivots").select("*").eq("creator_id", prof.id).order("created_at", { ascending: false }),
           supabase.from("ugc_hooks").select("*").order("view_count", { ascending: false }),
@@ -9580,11 +9581,11 @@ export default function DashboardPage() {
           supabase.from("ugc_qa").select("*, ugc_qa_replies(*)").order("created_at", { ascending: false }),
           supabase.from("ugc_resources").select("*").order("created_at", { ascending: false }),
           supabase.from("smart_alerts").select("*").eq("dismissed", false).order("created_at", { ascending: false }),
-          prof.role === "admin"
+          (prof.role === "admin" || prof.role === "ugc_manager")
             ? supabase.from("saved_hooks").select("*").order("saved_at", { ascending: false })
             : supabase.from("saved_hooks").select("*").eq("creator_id", prof.id).order("saved_at", { ascending: false }),
           supabase.from("tutorials").select("*").order("sort_order").order("created_at"),
-          prof.role === "admin"
+          (prof.role === "admin" || prof.role === "ugc_manager")
             ? supabase.from("saved_captions").select("*").order("generated_at", { ascending: false })
             : supabase.from("saved_captions").select("*").eq("creator_id", prof.id).order("generated_at", { ascending: false }),
         ]);
@@ -9602,8 +9603,8 @@ export default function DashboardPage() {
         setTutorials((tutorialsD || []) as Tutorial[]);
         setSavedCaptions((savedCapsD || []) as SavedCaption[]);
 
-        // Brief comments (for director and admin)
-        if (prof.role === "admin" || prof.role === "director") {
+        // Brief comments (for director, admin, and ugc_manager)
+        if (prof.role === "admin" || prof.role === "director" || prof.role === "ugc_manager") {
           const { data: bcD } = await supabase.from("brief_comments").select("*").order("created_at", { ascending: false });
           setBriefComments((bcD || []) as BriefComment[]);
         }
@@ -9621,7 +9622,7 @@ export default function DashboardPage() {
         }
 
         // Weekly plans
-        if (prof.role === "admin") {
+        if (prof.role === "admin" || prof.role === "ugc_manager") {
           const { data: wpD } = await supabase.from("weekly_plans").select("*").order("created_at", { ascending: false });
           setWeeklyPlans((wpD || []) as WeeklyPlan[]);
         } else if (prof.role === "ugc_creator") {
@@ -9679,8 +9680,9 @@ export default function DashboardPage() {
   const isDirector = profile.role === "director";
   const isSoraaCreator = profile.role === "soraa_creator";
   const isCCExec = profile.role === "cc_exec";
+  const isUGCManager = profile.role === "ugc_manager";
   const canSeeRush = profile.rush_access === true;
-  const isIntern = !isAdmin && !isUGC && !isDirector && !isSoraaCreator && !isCCExec;
+  const isIntern = !isAdmin && !isUGC && !isDirector && !isSoraaCreator && !isCCExec && !isUGCManager;
   const isTech = profile.team === "Tech/AI";
   const isDesign = profile.team === "Design";
   const isStrategy = profile.team === "Strategy";
@@ -9788,6 +9790,8 @@ export default function DashboardPage() {
     }] : []),
   ];
 
+  const UGC_MANAGER_SECTIONS = ADMIN_SECTIONS.filter(s => s.label === "UGC TEAM");
+
   const DIRECTOR_SECTIONS = [
     {
       label: "GENERAL",
@@ -9864,6 +9868,25 @@ export default function DashboardPage() {
           SORAA_NAV.map(item => <NavItem key={item.id} item={item} />)
         ) : isCCExec ? (
           CC_EXEC_NAV.map(item => <NavItem key={item.id} item={item} />)
+        ) : isUGCManager ? (
+          UGC_MANAGER_SECTIONS.map(section => {
+            const sectionHasActivePage = section.items.some(i => i.id === page);
+            const isCollapsed = collapsedSections[section.label] !== undefined
+              ? collapsedSections[section.label]
+              : !sectionHasActivePage;
+            return (
+              <div key={section.label} className="mb-1">
+                <button
+                  onClick={() => toggleSection(section.label)}
+                  className="w-full flex items-center justify-between px-3 py-2 mt-1 group"
+                >
+                  <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-widest">{section.label}</span>
+                  <ChevronDown size={12} className={`text-stone-300 group-hover:text-stone-500 transition-transform duration-200 ${isCollapsed ? "-rotate-90" : ""}`} />
+                </button>
+                {!isCollapsed && section.items.map(item => <NavItem key={item.id} item={item} />)}
+              </div>
+            );
+          })
         ) : (
           NAV.map(item => <NavItem key={item.id} item={item} />)
         )}
@@ -9873,7 +9896,7 @@ export default function DashboardPage() {
           <Av name={profile.full_name} size={32}/>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-stone-800 truncate">{profile.full_name}</p>
-            <p className="text-xs text-stone-400 capitalize">{isWisconsinAdmin ? "Wisconsin Admin" : isFullAdmin ? "Admin" : isDirector ? "Director" : isUGC ? "UGC Creator" : isSoraaCreator ? "Soraa Creator" : isCCExec ? "CC Exec" : (profile.team || "Intern")}</p>
+            <p className="text-xs text-stone-400 capitalize">{isWisconsinAdmin ? "Wisconsin Admin" : isFullAdmin ? "Admin" : isDirector ? "Director" : isUGC ? "UGC Creator" : isSoraaCreator ? "Soraa Creator" : isCCExec ? "CC Exec" : isUGCManager ? "UGC Manager" : (profile.team || "Intern")}</p>
           </div>
           <button onClick={handleSignOut} className="p-1.5 rounded-lg text-stone-300 hover:text-stone-600 hover:bg-stone-100 transition-colors" title="Sign out"><LogOut size={14}/></button>
         </div>
@@ -9908,27 +9931,27 @@ export default function DashboardPage() {
       case "notifications": return isAdmin ? <NotificationPg interns={interns} ugcCreators={ugcCreators}/> : null;
       case "settings":  return isAdmin ? <SettingsPg settings={settings} setSettings={setSettings} sb={supabase}/> : null;
       // UGC Creator pages (no access for wisconsin_admin)
-      case "ugc_dashboard":     return (isFullAdmin || isUGC) ? <UGCDashboard profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} pivots={ugcPivots} briefs={ugcBriefs} announcements={ugcAnnouncements} sb={supabase} setPage={setPage}/> : null;
-      case "ugc_submit":        return (isFullAdmin || isUGC) ? <UGCSubmitPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
-      case "ugc_pivots":        return (isFullAdmin || isUGC) ? <UGCMyPivotsPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} submissions={ugcSubmissions} sb={supabase}/> : null;
-      case "ugc_hook_generator": return (isFullAdmin || isUGC) ? <HookGeneratorPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
-      case "ugc_hooks":         return (isFullAdmin || isUGC) ? <UGCHooksPage profile={p as UGCCreatorProfile} hooks={ugcHooks} setHooks={setUGCHooks} ugcCreators={ugcCreators} sb={supabase}/> : null;
-      case "ugc_leaderboard":   return (isFullAdmin || isUGC) ? <UGCLeaderboardPage submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
-      case "ugc_qa":            return (isFullAdmin || isUGC) ? <UGCQAPage profile={p as UGCCreatorProfile} questions={ugcQuestions} setQuestions={setUGCQuestions} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_dashboard":     return (isFullAdmin || isUGCManager || isUGC) ? <UGCDashboard profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} pivots={ugcPivots} briefs={ugcBriefs} announcements={ugcAnnouncements} sb={supabase} setPage={setPage}/> : null;
+      case "ugc_submit":        return (isFullAdmin || isUGCManager || isUGC) ? <UGCSubmitPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_pivots":        return (isFullAdmin || isUGCManager || isUGC) ? <UGCMyPivotsPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} submissions={ugcSubmissions} sb={supabase}/> : null;
+      case "ugc_hook_generator": return (isFullAdmin || isUGCManager || isUGC) ? <HookGeneratorPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={supabase}/> : null;
+      case "ugc_hooks":         return (isFullAdmin || isUGCManager || isUGC) ? <UGCHooksPage profile={p as UGCCreatorProfile} hooks={ugcHooks} setHooks={setUGCHooks} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_leaderboard":   return (isFullAdmin || isUGCManager || isUGC) ? <UGCLeaderboardPage submissions={ugcSubmissions} ugcCreators={ugcCreators}/> : null;
+      case "ugc_qa":            return (isFullAdmin || isUGCManager || isUGC) ? <UGCQAPage profile={p as UGCCreatorProfile} questions={ugcQuestions} setQuestions={setUGCQuestions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_meeting":       return isUGC ? <UGCMeetingPage profile={p as UGCCreatorProfile}/> : null;
-      case "ugc_announcements": return isFullAdmin ? <UGCAnnouncementsPage profile={p as UGCCreatorProfile} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
-      case "ugc_pivots_hub":            return isFullAdmin ? <UGCPivotsHubPage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
-      case "ugc_briefs_announcements":  return isFullAdmin ? <UGCBriefsAnnouncementsPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_announcements": return (isFullAdmin || isUGCManager) ? <UGCAnnouncementsPage profile={p as UGCCreatorProfile} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
+      case "ugc_pivots_hub":            return (isFullAdmin || isUGCManager) ? <UGCPivotsHubPage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_briefs_announcements":  return (isFullAdmin || isUGCManager) ? <UGCBriefsAnnouncementsPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_weekly_brief":          return isUGC ? <CreatorWeeklyBriefPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} sb={supabase}/> : null;
-      case "ugc_history":       return (isFullAdmin || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
-      case "ugc_resources":     return (isFullAdmin || isUGC) ? <UGCResourcesPage profile={p as UGCCreatorProfile} resources={ugcResources} setResources={setUGCResources} sb={supabase}/> : null;
-      case "ugc_tutorials":     return (isFullAdmin || isUGC || isDirector) ? <TutorialLibraryPage profile={p as UGCCreatorProfile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={supabase}/> : null;
+      case "ugc_history":       return (isFullAdmin || isUGCManager || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_resources":     return (isFullAdmin || isUGCManager || isUGC) ? <UGCResourcesPage profile={p as UGCCreatorProfile} resources={ugcResources} setResources={setUGCResources} sb={supabase}/> : null;
+      case "ugc_tutorials":     return (isFullAdmin || isUGCManager || isUGC || isDirector) ? <TutorialLibraryPage profile={p as UGCCreatorProfile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={supabase}/> : null;
       // Admin-only UGC pages (no access for wisconsin_admin)
-      case "ugc_creators":      return isFullAdmin ? <UGCCreatorMgmtPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} smartAlerts={smartAlerts} sb={supabase}/> : null;
-      case "ugc_pivot_queue":   return isFullAdmin ? <UGCPivotQueuePage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} ugcCreators={ugcCreators} sb={supabase}/> : null;
-      case "ugc_analytics":     return isFullAdmin ? <UGCAnalyticsOverview submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} pivotQueue={ugcPivotQueue} smartAlerts={smartAlerts} sb={supabase}/> : null;
-      case "ugc_pivot_history": return isFullAdmin ? <UGCPivotHistoryPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
-      case "ugc_brief":         return isFullAdmin ? <UGCBriefPage briefs={ugcBriefs} setBriefs={setUGCBriefs} sb={supabase}/> : null;
+      case "ugc_creators":      return (isFullAdmin || isUGCManager) ? <UGCCreatorMgmtPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} smartAlerts={smartAlerts} sb={supabase}/> : null;
+      case "ugc_pivot_queue":   return (isFullAdmin || isUGCManager) ? <UGCPivotQueuePage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_analytics":     return (isFullAdmin || isUGCManager) ? <UGCAnalyticsOverview submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} pivotQueue={ugcPivotQueue} smartAlerts={smartAlerts} sb={supabase}/> : null;
+      case "ugc_pivot_history": return (isFullAdmin || isUGCManager) ? <UGCPivotHistoryPage profile={p as UGCCreatorProfile} pivots={ugcPivots} setPivots={setUGCPivots} ugcCreators={ugcCreators} sb={supabase}/> : null;
+      case "ugc_brief":         return (isFullAdmin || isUGCManager) ? <UGCBriefPage briefs={ugcBriefs} setBriefs={setUGCBriefs} sb={supabase}/> : null;
       case "external-ugc":      return isSoraaCreator ? <SoraaCreatorView profile={profile!}/> : (isAdmin || isDirector) ? <ExternalUGCPanel/> : null;
       case "director_home":      return isDirector ? <DirectorDash profile={profile!} events={events} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} ugcBriefs={ugcBriefs} smartAlerts={smartAlerts} reports={reports} outreach={outreach} ugcHooks={ugcHooks} settings={settings} techProjects={techProjects} designProjects={designProjects} interns={interns} setPage={setPage} sb={supabase}/> : null;
       case "director_calendar":  return isDirector ? <EventsPage profile={profile!} interns={interns} events={events} setEvents={setEvents} sb={supabase}/> : null;
