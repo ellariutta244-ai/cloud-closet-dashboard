@@ -6075,10 +6075,10 @@ function UGCHooksPage({ profile, hooks, setHooks, ugcCreators, sb }: {
 }
 
 // ── Tutorial Library ───────────────────────────────────────────────────────────
-function TutorialLibraryPage({ profile, tutorials, setTutorials, savedCaptions, setSavedCaptions, sb, initialTab }: {
+function TutorialLibraryPage({ profile, tutorials, setTutorials, savedCaptions, setSavedCaptions, sb, initialTab, hideTabBar }: {
   profile: UGCCreatorProfile; tutorials: Tutorial[]; setTutorials: (t: Tutorial[]) => void;
   savedCaptions: SavedCaption[]; setSavedCaptions: (c: SavedCaption[]) => void; sb: any;
-  initialTab?: "guides" | "captions";
+  initialTab?: "guides" | "captions"; hideTabBar?: boolean;
 }) {
   const isAdmin = profile.role === "admin" || profile.role === "wisconsin_admin";
   const [tab, setTab] = useState<"guides" | "captions">(initialTab ?? "guides");
@@ -6201,10 +6201,12 @@ function TutorialLibraryPage({ profile, tutorials, setTutorials, savedCaptions, 
           <h1 className="text-xl font-bold text-stone-800">Tutorial Library</h1>
           <p className="text-sm text-stone-400 mt-0.5">Learn to film and edit entirely inside TikTok</p>
         </div>
-        <div className="flex gap-1 bg-stone-100 p-1 rounded-xl">
-          <button onClick={() => setTab("guides")} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${tab === "guides" ? "bg-white shadow-sm text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>How To Guides</button>
-          <button onClick={() => setTab("captions")} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${tab === "captions" ? "bg-white shadow-sm text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Caption & Hashtag Generator</button>
-        </div>
+        {!hideTabBar && (
+          <div className="flex gap-1 bg-stone-100 p-1 rounded-xl">
+            <button onClick={() => setTab("guides")} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${tab === "guides" ? "bg-white shadow-sm text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>How To Guides</button>
+            <button onClick={() => setTab("captions")} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${tab === "captions" ? "bg-white shadow-sm text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Caption & Hashtag Generator</button>
+          </div>
+        )}
       </div>
 
       {/* ── HOW TO GUIDES TAB ─────────────────────────────────────────────────── */}
@@ -9686,8 +9688,8 @@ function ContentCloudPage({ profile, weeklyPlans, ugcCreators, ugcHooks, setUGCH
       <div className="min-h-0">
         {tab === "ideas" && <ContentIdeasPage profile={profile} weeklyPlans={weeklyPlans} />}
         {tab === "hooks" && <HookGeneratorPage profile={profile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={sb} />}
-        {tab === "captions" && <TutorialLibraryPage profile={profile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={sb} initialTab="captions" />}
-        {tab === "tutorials" && <TutorialLibraryPage profile={profile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={sb} initialTab="guides" />}
+        {tab === "captions" && <TutorialLibraryPage profile={profile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={sb} initialTab="captions" hideTabBar />}
+        {tab === "tutorials" && <TutorialLibraryPage profile={profile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={sb} initialTab="guides" hideTabBar />}
         {tab === "saved_hooks" && <UGCHooksPage profile={profile} hooks={ugcHooks} setHooks={setUGCHooks} ugcCreators={ugcCreators} sb={sb} />}
         {tab === "resources" && <UGCResourcesPage profile={profile} resources={resources} setResources={setResources} sb={sb} />}
       </div>
