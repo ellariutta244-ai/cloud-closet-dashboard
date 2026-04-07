@@ -4771,11 +4771,20 @@ function UGCDashboard({ profile, ugcCreators, setUGCCreators, submissions, pivot
   const isAdmin = profile.role === "admin" || profile.role === "wisconsin_admin";
   const mySubmissions = isAdmin ? submissions : submissions.filter(s => s.creator_id === profile.id);
   const myPivots = isAdmin ? pivots : pivots.filter(p => p.creator_id === profile.id);
-  const pinned = announcements.filter(a => a.pinned);
   const currentWeek = getMondayOfWeek(new Date());
   const hasSubmittedThisWeek = mySubmissions.some(s => inWeek(s.week_date, currentWeek));
   const latestBrief = briefs[0];
   const latestPivot = myPivots[0];
+
+  const [dismissedAnnouncements, setDismissedAnnouncements] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem("ugc_dismissed_announcements") || "[]"); } catch { return []; }
+  });
+  function dismissAnnouncement(id: string) {
+    const next = [...dismissedAnnouncements, id];
+    setDismissedAnnouncements(next);
+    try { localStorage.setItem("ugc_dismissed_announcements", JSON.stringify(next)); } catch {}
+  }
+  const visiblePinned = announcements.filter(a => a.pinned && !dismissedAnnouncements.includes(a.id));
 
   // Views stats
   const thisWeekSubs = mySubmissions.filter(s => inWeek(s.week_date, currentWeek));
@@ -4821,14 +4830,22 @@ function UGCDashboard({ profile, ugcCreators, setUGCCreators, submissions, pivot
         )}
       </div>
 
-      {pinned.length > 0 && (
+      {visiblePinned.length > 0 && (
         <div className="bg-amber-50 border border-amber-200/60 rounded-xl p-4">
           <p className="text-xs font-semibold text-amber-700 uppercase tracking-widest mb-2">📌 Announcements</p>
-          <div className="flex flex-col gap-2">
-            {pinned.map(a => (
-              <div key={a.id}>
-                <p className="text-sm font-medium text-amber-800">{a.title}</p>
-                {a.body && <p className="text-xs text-amber-700 mt-0.5">{a.body}</p>}
+          <div className="flex flex-col gap-3">
+            {visiblePinned.map(a => (
+              <div key={a.id} className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-amber-800">{a.title}</p>
+                  {a.body && <p className="text-xs text-amber-700 mt-0.5">{a.body}</p>}
+                </div>
+                <button
+                  onClick={() => dismissAnnouncement(a.id)}
+                  className="text-xs text-amber-600 hover:text-amber-800 font-medium shrink-0 px-2 py-1 rounded-lg hover:bg-amber-100 transition-colors"
+                >
+                  Mark Seen
+                </button>
               </div>
             ))}
           </div>
@@ -4862,15 +4879,21 @@ function UGCDashboard({ profile, ugcCreators, setUGCCreators, submissions, pivot
       )}
 
       {latestPivot && (
-        <div className="bg-white border border-stone-200/60 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest">Latest Pivot</p>
-            <span className="text-xs text-stone-400">{latestPivot.week_date}</span>
+        <button
+          onClick={() => setPage("ugc_pivots")}
+          className="flex items-center justify-between w-full bg-violet-50 border border-violet-200/60 rounded-xl p-4 hover:bg-violet-100 transition-colors group text-left"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center shrink-0">
+              <TrendingUp size={16} className="text-violet-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-violet-800">You have a pivot ready to view</p>
+              <p className="text-xs text-violet-500 mt-0.5">Week of {latestPivot.week_date}</p>
+            </div>
           </div>
-          <p className="text-sm text-stone-700 line-clamp-4 whitespace-pre-wrap">{latestPivot.ai_pivot}</p>
-          {latestPivot.admin_notes && <p className="text-xs text-stone-500 mt-2 italic">Admin: {latestPivot.admin_notes}</p>}
-          <button onClick={() => setPage("ugc_pivots")} className="text-xs text-stone-500 hover:text-stone-700 mt-2 flex items-center gap-1">View all pivots<ChevronRight size={12}/></button>
-        </div>
+          <ChevronRight size={16} className="text-violet-400 group-hover:text-violet-600 transition-colors shrink-0" />
+        </button>
       )}
 
       {!isAdmin && (
@@ -9585,139 +9608,133 @@ function CreatorWeeklyBriefPage({ profile, briefs, setBriefs, weeklyPlans, setWe
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit">
-        <button onClick={() => setTab("brief")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "brief" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>This Week's Brief</button>
-        <button onClick={() => setTab("plan")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "plan" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>My Content Plan</button>
-      </div>
-
-      {tab === "brief" && (
+      {!currentBrief ? (
+        <ES icon={<FileText size={24}/>} message="No brief published for this week yet. Check back Monday!" />
+      ) : (
         <div className="flex flex-col gap-4">
-          {!currentBrief ? (
-            <ES icon={<FileText size={24}/>} message="No brief published for this week yet. Check back Monday!" />
-          ) : (
-            <div className="flex flex-col gap-4">
-              <div>
-                <h1 className="text-xl font-bold text-stone-800">Weekly Brief</h1>
-                <p className="text-sm text-stone-400 mt-0.5">Week of {currentBrief.week_date}</p>
-              </div>
-              {currentBrief.hooks && (
-                <div className="bg-white border border-stone-200/60 rounded-xl p-5">
-                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Hooks This Week</p>
-                  <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{currentBrief.hooks}</p>
-                </div>
-              )}
-              {currentBrief.format_recs && (
-                <div className="bg-white border border-stone-200/60 rounded-xl p-5">
-                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Format Recommendations</p>
-                  <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{currentBrief.format_recs}</p>
-                </div>
-              )}
-              {currentBrief.brand_guidelines && (
-                <div className="bg-white border border-stone-200/60 rounded-xl p-5">
-                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Brand Guidelines</p>
-                  <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{currentBrief.brand_guidelines}</p>
-                </div>
-              )}
+          <div>
+            <h1 className="text-xl font-bold text-stone-800">Weekly Brief</h1>
+            <p className="text-sm text-stone-400 mt-0.5">Week of {currentBrief.week_date}</p>
+          </div>
+          {currentBrief.hooks && (
+            <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+              <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Hooks This Week</p>
+              <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{currentBrief.hooks}</p>
+            </div>
+          )}
+          {currentBrief.format_recs && (
+            <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+              <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Format Recommendations</p>
+              <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{currentBrief.format_recs}</p>
+            </div>
+          )}
+          {currentBrief.brand_guidelines && (
+            <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+              <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Brand Guidelines</p>
+              <p className="text-sm text-stone-700 whitespace-pre-wrap leading-relaxed">{currentBrief.brand_guidelines}</p>
             </div>
           )}
         </div>
       )}
+    </div>
+  );
+}
 
-      {tab === "plan" && (
-        <div className="flex flex-col gap-4">
-          {/* Week navigation */}
-          {planWeekDates.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => shiftPlanWeek(-1)}
-                disabled={planWeekDates.indexOf(selectedPlanWeek) >= planWeekDates.length - 1}
-                className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 disabled:opacity-30 transition-colors"
-                title="Older week"
-              >‹</button>
-              <span className="text-sm text-stone-500 min-w-[130px] text-center">
-                {selectedPlanWeek === currentWeek ? `This week · ${selectedPlanWeek}` : `Week of ${selectedPlanWeek}`}
-              </span>
-              <button
-                onClick={() => shiftPlanWeek(1)}
-                disabled={planWeekDates.indexOf(selectedPlanWeek) <= 0}
-                className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 disabled:opacity-30 transition-colors"
-                title="Newer week"
-              >›</button>
+// ── Content Ideas Page (creator) ───────────────────────────────────────────────
+function ContentIdeasPage({ profile, weeklyPlans }: {
+  profile: UGCCreatorProfile; weeklyPlans: WeeklyPlan[];
+}) {
+  const currentWeek = getMondayOfWeek(new Date());
+  const approvedPlans = weeklyPlans.filter(p => p.status === "approved");
+  const planWeekDates = [...new Set(approvedPlans.map(p => p.week_date))].sort().reverse();
+  const [selectedWeek, setSelectedWeek] = useState<string>(() =>
+    planWeekDates.includes(currentWeek) ? currentWeek : (planWeekDates[0] ?? currentWeek)
+  );
+  const myPlan = approvedPlans.find(p => p.week_date === selectedWeek) ?? null;
+
+  const DAYS: { key: keyof WeeklyPlan; label: string }[] = [
+    { key: "monday", label: "Monday" }, { key: "tuesday", label: "Tuesday" },
+    { key: "wednesday", label: "Wednesday" }, { key: "thursday", label: "Thursday" },
+    { key: "friday", label: "Friday" }, { key: "saturday", label: "Saturday" },
+    { key: "sunday", label: "Sunday" },
+  ];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-stone-800">Content Ideas</h1>
+          <p className="text-sm text-stone-400 mt-0.5">Personalized hook ideas generated for you</p>
+        </div>
+        {planWeekDates.length > 1 && (
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => {
+                const idx = planWeekDates.indexOf(selectedWeek);
+                if (idx < planWeekDates.length - 1) setSelectedWeek(planWeekDates[idx + 1]);
+              }}
+              disabled={planWeekDates.indexOf(selectedWeek) >= planWeekDates.length - 1}
+              className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 disabled:opacity-30 transition-colors"
+            >‹</button>
+            <span className="text-sm text-stone-500 min-w-[130px] text-center">
+              {selectedWeek === currentWeek ? `This week · ${selectedWeek}` : `Week of ${selectedWeek}`}
+            </span>
+            <button
+              onClick={() => {
+                const idx = planWeekDates.indexOf(selectedWeek);
+                if (idx > 0) setSelectedWeek(planWeekDates[idx - 1]);
+              }}
+              disabled={planWeekDates.indexOf(selectedWeek) <= 0}
+              className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 disabled:opacity-30 transition-colors"
+            >›</button>
+          </div>
+        )}
+      </div>
+
+      {!myPlan ? (
+        <ES icon={<Zap size={24}/>} message="No content ideas for this week yet. Check back soon!" />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {myPlan.week_goal && (
+            <div className="bg-stone-50 border border-stone-200/60 rounded-xl p-4">
+              <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-1">Week Goal</p>
+              <p className="text-sm text-stone-700">{myPlan.week_goal}</p>
             </div>
           )}
-          {!myPlan ? (
-            <ES icon={<CalendarDays size={24}/>} message={selectedPlanWeek === currentWeek ? "Your content plan for this week hasn't been sent yet. Check back soon!" : `No plan for week of ${selectedPlanWeek}.`} />
-          ) : myPlan.status === "draft" ? (
-            <ES icon={<CalendarDays size={24}/>} message="Your plan is being reviewed by the team. It'll appear here once approved." />
-          ) : (
-            <>
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div>
-                  <h1 className="text-xl font-bold text-stone-800">My Content Plan</h1>
-                  <p className="text-sm text-stone-400 mt-0.5">Week of {myPlan.week_date}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <PhaseBadge phase={myPlan.phase} />
-                  <span className="text-xs text-stone-400">{(Array.isArray(myPlan.completed_days) ? myPlan.completed_days : []).length}/7 days done</span>
-                </div>
-              </div>
-
-              {myPlan.week_goal && (
-                <div className="bg-stone-50 rounded-xl p-4 border border-stone-200/60">
-                  <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-1">Week Goal</p>
-                  <p className="text-sm text-stone-700">{myPlan.week_goal}</p>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-2">
-                {DAYS.map(({ key, label }) => {
-                  const d = myPlan[key] as DayPlan | undefined;
-                  if (!d) return null;
-                  const completed = (Array.isArray(myPlan.completed_days) ? myPlan.completed_days : []).includes(String(key));
-                  return (
-                    <div
-                      key={String(key)}
-                      className={`bg-white border rounded-xl p-4 transition-all ${completed ? "border-emerald-200 bg-emerald-50/40" : "border-stone-200/60"}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <button
-                          onClick={() => toggleDay(String(key))}
-                          className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${completed ? "border-emerald-500 bg-emerald-500" : "border-stone-300 hover:border-stone-400"}`}
-                        >
-                          {completed && <span className="text-white text-[10px] font-bold">✓</span>}
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-stone-500 uppercase tracking-widest mb-1">{label}</p>
-                          <p className={`text-sm leading-snug mb-1.5 ${completed ? "text-stone-400 line-through" : "text-stone-800"}`}>{d.hook}</p>
-                          <div className="flex items-center gap-3 flex-wrap">
-                            {d.format && <span className="text-xs text-stone-400">{d.format}</span>}
-                            {d.postTime && <span className="text-xs text-stone-400">· {d.postTime}</span>}
-                          </div>
-                          {d.note && <p className="text-xs text-stone-500 italic mt-1.5">{d.note}</p>}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {(myPlan.ab_test || myPlan.weekly_reminder) && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {myPlan.ab_test && (
-                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                      <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">A/B Test This Week</p>
-                      <p className="text-sm text-blue-800">{myPlan.ab_test}</p>
-                    </div>
+          {DAYS.map(({ key, label }) => {
+            const d = myPlan[key] as DayPlan | undefined;
+            if (!d?.hook) return null;
+            return (
+              <div key={String(key)} className="bg-white border border-stone-200/60 rounded-xl p-4">
+                <p className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-2">{label}</p>
+                <p className="text-sm font-medium text-stone-800 leading-snug mb-2">{d.hook}</p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {d.format && (
+                    <span className="text-xs px-2 py-0.5 bg-stone-100 text-stone-500 rounded-full">{d.format}</span>
                   )}
-                  {myPlan.weekly_reminder && (
-                    <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
-                      <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">Weekly Reminder</p>
-                      <p className="text-sm text-amber-800">{myPlan.weekly_reminder}</p>
-                    </div>
+                  {d.postTime && (
+                    <span className="text-xs text-stone-400">Suggested posting time: <span className="font-medium text-stone-600">{d.postTime}</span></span>
                   )}
                 </div>
+                {d.note && <p className="text-xs text-stone-500 italic mt-2">{d.note}</p>}
+              </div>
+            );
+          })}
+          {(myPlan.ab_test || myPlan.weekly_reminder) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+              {myPlan.ab_test && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                  <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">A/B Test This Week</p>
+                  <p className="text-sm text-blue-800">{myPlan.ab_test}</p>
+                </div>
               )}
-            </>
+              {myPlan.weekly_reminder && (
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+                  <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mb-1">Weekly Reminder</p>
+                  <p className="text-sm text-amber-800">{myPlan.weekly_reminder}</p>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -10012,6 +10029,7 @@ export default function DashboardPage() {
     { id: "ugc_submit",         icon: <BarChart3 size={16}/>,       label: "Submit Analytics" },
     { id: "ugc_pivots",         icon: <TrendingUp size={16}/>,      label: "My Pivots",       badge: newPivotCount || null },
     { id: "ugc_weekly_brief",   icon: <FileText size={16}/>,        label: "Weekly Brief",    badge: newBriefCount || null },
+    { id: "ugc_content_ideas",  icon: <Sparkles size={16}/>,        label: "Content Ideas" },
     { id: "ugc_hook_generator", icon: <Zap size={16}/>,             label: "Hook Generator" },
     { id: "ugc_tutorials",      icon: <BookOpen size={16}/>,        label: "Tutorial Library" },
     { id: "ugc_leaderboard",    icon: <Trophy size={16}/>,          label: "Leaderboard" },
@@ -10251,6 +10269,7 @@ export default function DashboardPage() {
       case "ugc_pivots_hub":            return (isFullAdmin || isUGCManager) ? <UGCPivotsHubPage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_briefs_announcements":  return (isFullAdmin || isUGCManager) ? <UGCBriefsAnnouncementsPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_weekly_brief":          return isUGC ? <CreatorWeeklyBriefPage profile={p as UGCCreatorProfile} briefs={ugcBriefs} setBriefs={setUGCBriefs} weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans} sb={supabase}/> : null;
+      case "ugc_content_ideas":         return (isUGC || isFullAdmin || isUGCManager) ? <ContentIdeasPage profile={p as UGCCreatorProfile} weeklyPlans={weeklyPlans}/> : null;
       case "ugc_history":       return (isFullAdmin || isUGCManager || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_resources":     return (isFullAdmin || isUGCManager || isUGC) ? <UGCResourcesPage profile={p as UGCCreatorProfile} resources={ugcResources} setResources={setUGCResources} sb={supabase}/> : null;
       case "ugc_tutorials":     return (isFullAdmin || isUGCManager || isUGC || isDirector) ? <TutorialLibraryPage profile={p as UGCCreatorProfile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={supabase}/> : null;
