@@ -5002,31 +5002,30 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
       } catch {}
     }
 
+    // Build updates synchronously before any setState calls
+    const strFields = [
+      "total_views", "best_video_views", "worst_video_views", "profile_visits",
+      "video_length_seconds", "avg_watch_time_seconds", "watch_completion_rate",
+      "traffic_fyp_pct", "traffic_search_pct", "traffic_following_pct",
+      "traffic_profile_pct", "traffic_sound_pct",
+      "likes", "comments", "shares", "saves",
+      "followers_gained", "followers_lost", "videos_posted",
+      "top_search_query_1", "top_search_query_2", "top_search_query_3", "hook_text",
+    ];
+    const updates: Record<string, any> = {};
     const filled: string[] = [];
-    setForm(prev => {
-      const next = { ...prev };
-      const strFields = [
-        "total_views", "best_video_views", "worst_video_views", "profile_visits",
-        "video_length_seconds", "avg_watch_time_seconds", "watch_completion_rate",
-        "traffic_fyp_pct", "traffic_search_pct", "traffic_following_pct",
-        "traffic_profile_pct", "traffic_sound_pct",
-        "likes", "comments", "shares", "saves",
-        "followers_gained", "followers_lost", "videos_posted",
-        "top_search_query_1", "top_search_query_2", "top_search_query_3", "hook_text",
-      ];
-      for (const field of strFields) {
-        if (merged[field] != null && merged[field] !== "") {
-          (next as any)[field] = String(merged[field]);
-          filled.push(field);
-        }
+    for (const field of strFields) {
+      if (merged[field] != null && merged[field] !== "") {
+        updates[field] = String(merged[field]);
+        filled.push(field);
       }
-      if (merged.is_slideshow != null) {
-        next.is_slideshow = Boolean(merged.is_slideshow);
-        if (merged.is_slideshow) { next.video_length_seconds = ""; next.avg_watch_time_seconds = ""; }
-        filled.push("is_slideshow");
-      }
-      return next;
-    });
+    }
+    if (merged.is_slideshow != null) {
+      updates.is_slideshow = Boolean(merged.is_slideshow);
+      if (merged.is_slideshow) { updates.video_length_seconds = ""; updates.avg_watch_time_seconds = ""; }
+      filled.push("is_slideshow");
+    }
+    setForm(prev => ({ ...prev, ...updates }));
     setScreenshotFilled(filled);
     setScreenshotReading(false);
     if (filled.length === 0) setScreenshotError("Couldn't read any analytics from the screenshot. Try a clearer image or fill in manually.");
@@ -5064,27 +5063,25 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
       } catch {}
     }
 
-    // Best video screenshots only fill video-specific fields
+    // Build updates synchronously before any setState calls
     const bestVideoFields = [
       "best_video_views", "video_length_seconds", "avg_watch_time_seconds",
       "watch_completion_rate", "hook_text", "best_video_link",
     ];
+    const updates: Record<string, any> = {};
     const filled: string[] = [];
-    setForm(prev => {
-      const next = { ...prev };
-      for (const field of bestVideoFields) {
-        if (merged[field] != null && merged[field] !== "") {
-          (next as any)[field] = String(merged[field]);
-          filled.push(field);
-        }
+    for (const field of bestVideoFields) {
+      if (merged[field] != null && merged[field] !== "") {
+        updates[field] = String(merged[field]);
+        filled.push(field);
       }
-      if (merged.is_slideshow != null) {
-        next.is_slideshow = Boolean(merged.is_slideshow);
-        if (merged.is_slideshow) { next.video_length_seconds = ""; next.avg_watch_time_seconds = ""; }
-        filled.push("is_slideshow");
-      }
-      return next;
-    });
+    }
+    if (merged.is_slideshow != null) {
+      updates.is_slideshow = Boolean(merged.is_slideshow);
+      if (merged.is_slideshow) { updates.video_length_seconds = ""; updates.avg_watch_time_seconds = ""; }
+      filled.push("is_slideshow");
+    }
+    setForm(prev => ({ ...prev, ...updates }));
     setBestVideoFilled(filled);
     setBestVideoReading(false);
     if (filled.length === 0) setBestVideoError("Couldn't read video analytics from the screenshot. Try a clearer image or fill in manually.");
