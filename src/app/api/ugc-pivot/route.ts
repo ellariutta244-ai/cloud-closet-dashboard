@@ -141,6 +141,9 @@ IMPORTANT RULES
 - Optimize for SAVES and SHARES, not just views
 - Assume the audience is college-aged women
 - Prioritize relatable, roommate, and outfit-based content
+- Do NOT reference the creator's school, university, location, or any personal detail not in the data
+- Do NOT use language like "fashion tips", "style advice", "fashion influencer", "content creator tips", or similar buzzwords — they are off-brand
+- Do NOT assume any field is 0 if it was not submitted — treat missing data as unknown and skip calculations that depend on it
 
 -----------------------------------
 OUTPUT FORMAT
@@ -245,24 +248,25 @@ export async function POST(req: NextRequest) {
     } = analytics;
 
     const fmt = (n: any) => n != null ? Number(n).toLocaleString() : 'not submitted';
-    const pct = (n: any) => n != null && n !== 0 ? `${n}%` : 'not submitted';
-    const sec = (n: any) => n != null ? `${n}s` : 'not submitted';
-    const searchQueries = [top_search_query_1, top_search_query_2, top_search_query_3].filter(Boolean);
+    const pct = (n: any) => n != null && n !== '' ? `${n}%` : 'not submitted';
+    const sec = (n: any) => n != null && n !== '' ? `${n}s` : 'not submitted';
 
     const dataPrompt = `A UGC creator has submitted their weekly analytics. Generate their personalized pivot using the rules in your system instructions.
 
+CRITICAL RULES FOR MISSING DATA:
+- Any field marked "not submitted" means the creator did not provide that data — it is UNKNOWN, not zero.
+- Do NOT assume a "not submitted" field is 0. Do not calculate rates using fields that are "not submitted".
+- Only reference metrics that were actually submitted. If a metric is missing, say it's unavailable and base your analysis on what was provided.
+- Do NOT reference the creator's school, location, city, university, or any other personal detail not present in this data. Do not invent context.
+- Do NOT use generic buzzword language like "fashion tips", "style advice", "content tips", "fashion influencer", or similar clichés. Cloud Closet is not that brand. Keep the voice direct, specific, and grounded.
+
 FIELD DEFINITIONS — read before analysing the data:
-- total_views: THE ONLY VIEWS METRIC — SUM of views across ALL videos posted this week. Not one video's views. There is no separate account-level view field.
+- total_views: THE ONLY VIEWS METRIC — SUM of views across ALL videos posted this week. Not one video's views.
 - best_video_views: views on their single highest-performing video only (one video).
 - worst_video_views: views on their single lowest-performing video only (one video).
 - avg_watch_time_seconds + watch_completion_rate: retention metrics for the best video only, not a weekly average.
 - videos_posted: how many videos they uploaded this week total.
-- total_account_views: TikTok account-level view count for the week (may differ slightly from total_views).
-- traffic_fyp_pct: % of views from TikTok's For You Page algorithm.
-- traffic_search_pct: % of views from TikTok Search — high % means content is keyword-discoverable.
-- top_search_queries: keywords TikTok already ranks their content for — build on these.
 - is_slideshow: CRITICAL — if true, the best video is a TikTok photo carousel/slideshow, NOT a traditional video. video_length_seconds and avg_watch_time_seconds do not apply and are marked N/A. Do NOT give watch-time or video-length advice for slideshows. Focus on hook text (opening image/text), saves, shares, and whether each slide delivers a clear payoff.
-- Do NOT invent numbers for fields marked "not submitted".
 
 Creator: ${creatorName || 'Sample Creator'} (@${tiktokHandle || 'unknown'})
 Week: ${week_date || 'this week'}
@@ -273,7 +277,7 @@ WEEKLY TOTALS — all videos combined this week:
 - videos_posted = ${videos_posted ?? 'not submitted'}  ← number of videos uploaded
 - likes = ${fmt(likes)}  comments = ${fmt(comments)}  shares = ${fmt(shares)}  saves = ${fmt(saves)}
 - profile_visits = ${fmt(profile_visits)}
-- followers_gained = ${fmt(followers_gained)}  followers_lost = ${fmt(followers_lost)}  net = ${fmt((followers_gained ?? 0) - (followers_lost ?? 0))}
+- followers_gained = ${followers_gained != null ? fmt(followers_gained) : 'not submitted'}  followers_lost = ${followers_lost != null ? fmt(followers_lost) : 'not submitted'}  net = ${followers_gained != null && followers_lost != null ? fmt(followers_gained - followers_lost) : 'not submitted'}
 - comment_sentiment = ${comment_sentiment ?? 'not submitted'}
 
 BEST PERFORMING VIDEO — single video data only, not weekly averages:
@@ -282,22 +286,21 @@ BEST PERFORMING VIDEO — single video data only, not weekly averages:
 - worst_video_views = ${fmt(worst_video_views)}  ← views on their lowest video
 - hook_text = ${hook_text ? `"${hook_text}"` : 'not submitted'}  ← opening line/image of best video
 - format_type = ${format_type ?? 'not submitted'}  ← video style (talking_head, voiceover, outfit_montage, pov, trending_audio, tutorial)
-- video_length_seconds = ${is_slideshow ? 'N/A (slideshow — not applicable)' : sec(video_length_seconds)}
-- avg_watch_time_seconds = ${is_slideshow ? 'N/A (slideshow — TikTok loops these automatically, metric is not meaningful)' : sec(avg_watch_time_seconds)}
-- watch_completion_rate = ${is_slideshow ? `${watch_completion_rate != null ? pct(watch_completion_rate) + ' (swipe-through rate for slideshow, not video completion)' : 'N/A (slideshow)'}` : pct(watch_completion_rate) + '  ← % who watched to the end'}
+- video_length_seconds = ${is_slideshow ? 'N/A (slideshow)' : sec(video_length_seconds)}
+- avg_watch_time_seconds = ${is_slideshow ? 'N/A (slideshow)' : sec(avg_watch_time_seconds)}
+- watch_completion_rate = ${is_slideshow ? (watch_completion_rate != null ? pct(watch_completion_rate) + ' (swipe-through rate)' : 'N/A (slideshow)') : pct(watch_completion_rate)}
 - niche = ${niche ?? 'not submitted'}  ← topic/category of best video
 - trending_sound = ${trending_sound ? 'yes' : 'no'}  ← used trending audio
 - has_cta = ${has_cta ? 'yes' : 'no'}  ← included a call to action
 - best_video_link = ${best_video_link ?? 'not submitted'}
 
 TRAFFIC SOURCES — where viewers found their videos:
-- For You Page (FYP) = ${pct(traffic_fyp_pct)}  ← pushed by TikTok algorithm
-- Search = ${pct(traffic_search_pct)}  ← found via keyword search
-- Following tab = ${pct(traffic_following_pct)}  ← existing followers
-- Profile = ${pct(traffic_profile_pct)}  ← visited profile directly
-- Sound/Audio = ${pct(traffic_sound_pct)}  ← discovered via audio page
-${most_active_time ? `- Most active viewer time = ${most_active_time}` : ''}
-${searchQueries.length ? `- Top search queries = ${searchQueries.map((q: string) => `"${q}"`).join(', ')}  ← TikTok already ranks their content for these` : ''}`;
+- For You Page (FYP) = ${pct(traffic_fyp_pct)}
+- Search = ${pct(traffic_search_pct)}
+- Following tab = ${pct(traffic_following_pct)}
+- Profile = ${pct(traffic_profile_pct)}
+- Sound/Audio = ${pct(traffic_sound_pct)}
+${most_active_time ? `- Most active viewer time = ${most_active_time}` : ''}`;
 
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,

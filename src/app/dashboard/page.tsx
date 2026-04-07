@@ -4251,6 +4251,9 @@ IMPORTANT RULES
 - Optimize for SAVES and SHARES, not just views
 - Assume the audience is college-aged women
 - Prioritize relatable, roommate, and outfit-based content
+- Do NOT reference the creator's school, university, location, or any personal detail not in the data
+- Do NOT use language like "fashion tips", "style advice", "fashion influencer", "content creator tips", or similar buzzwords — they are off-brand
+- Do NOT assume any field is 0 if it was not submitted — treat missing data as unknown and skip calculations that depend on it
 
 -----------------------------------
 OUTPUT FORMAT
@@ -4947,8 +4950,6 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
     most_active_time: "", profile_visits: "",
     traffic_fyp_pct: "", traffic_search_pct: "", traffic_profile_pct: "",
     traffic_following_pct: "", traffic_sound_pct: "",
-    // Top search queries
-    top_search_query_1: "", top_search_query_2: "", top_search_query_3: "",
     // Engagement
     likes: "", comments: "", shares: "", saves: "", comment_sentiment: "neutral",
     // Account health
@@ -5009,8 +5010,7 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
       "traffic_fyp_pct", "traffic_search_pct", "traffic_following_pct",
       "traffic_profile_pct", "traffic_sound_pct",
       "likes", "comments", "shares", "saves",
-      "followers_gained", "followers_lost", "videos_posted",
-      "top_search_query_1", "top_search_query_2", "top_search_query_3", "hook_text",
+      "followers_gained", "followers_lost", "videos_posted", "hook_text",
     ];
     const updates: Record<string, any> = {};
     const filled: string[] = [];
@@ -5128,9 +5128,6 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
       traffic_search_pct: parseFloat(form.traffic_search_pct) || 0,
       traffic_profile_pct: parseFloat(form.traffic_profile_pct) || 0,
       traffic_sound_pct: parseFloat(form.traffic_sound_pct) || 0,
-      top_search_query_1: form.top_search_query_1 || null,
-      top_search_query_2: form.top_search_query_2 || null,
-      top_search_query_3: form.top_search_query_3 || null,
       likes: parseInt(form.likes) || 0,
       comments: parseInt(form.comments) || 0,
       shares: parseInt(form.shares) || 0,
@@ -5371,12 +5368,6 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
             </div>
           )}
 
-          <p className="text-xs font-medium text-stone-500 uppercase tracking-wide pt-1">Top Search Queries (if any)</p>
-          <div className="flex flex-col gap-2">
-            <TI label="Query 1" value={form.top_search_query_1} onChange={v => setForm({ ...form, top_search_query_1: v })} placeholder="e.g. cloud closet app" />
-            <TI label="Query 2" value={form.top_search_query_2} onChange={v => setForm({ ...form, top_search_query_2: v })} placeholder="optional" />
-            <TI label="Query 3" value={form.top_search_query_3} onChange={v => setForm({ ...form, top_search_query_3: v })} placeholder="optional" />
-          </div>
         </div>
 
         {/* Engagement */}
