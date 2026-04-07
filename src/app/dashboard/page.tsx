@@ -4963,7 +4963,11 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
   const [screenshotReading, setScreenshotReading] = useState(false);
   const [screenshotFilled, setScreenshotFilled] = useState<string[]>([]);
   const [screenshotError, setScreenshotError] = useState("");
+  const [bestVideoReading, setBestVideoReading] = useState(false);
+  const [bestVideoFilled, setBestVideoFilled] = useState<string[]>([]);
+  const [bestVideoError, setBestVideoError] = useState("");
   const screenshotInputRef = useRef<HTMLInputElement>(null);
+  const bestVideoInputRef = useRef<HTMLInputElement>(null);
 
   async function handleScreenshot(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -4971,9 +4975,9 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
     setScreenshotError("");
     setScreenshotFilled([]);
 
-    // Process up to 3 screenshots — send each individually and merge results
+    // Process up to 5 screenshots — send each individually and merge results
     const merged: Record<string, any> = {};
-    for (let i = 0; i < Math.min(files.length, 3); i++) {
+    for (let i = 0; i < Math.min(files.length, 5); i++) {
       const file = files[i];
       const base64 = await new Promise<string>((res, rej) => {
         const reader = new FileReader();
@@ -5026,6 +5030,64 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
     setScreenshotFilled(filled);
     setScreenshotReading(false);
     if (filled.length === 0) setScreenshotError("Couldn't read any analytics from the screenshot. Try a clearer image or fill in manually.");
+  }
+
+  async function handleBestVideoScreenshot(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setBestVideoReading(true);
+    setBestVideoError("");
+    setBestVideoFilled([]);
+
+    const merged: Record<string, any> = {};
+    for (let i = 0; i < Math.min(files.length, 5); i++) {
+      const file = files[i];
+      const base64 = await new Promise<string>((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = () => res((reader.result as string).split(",")[1]);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+      try {
+        const resp = await fetch("/api/ugc-screenshot-parse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: base64, mimeType: file.type, mode: "best_video" }),
+        });
+        const json = await resp.json();
+        if (json.ok && json.fields) {
+          for (const [k, v] of Object.entries(json.fields)) {
+            if (v !== null && v !== undefined && v !== "" && merged[k] == null) {
+              merged[k] = v;
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // Best video screenshots only fill video-specific fields
+    const bestVideoFields = [
+      "best_video_views", "video_length_seconds", "avg_watch_time_seconds",
+      "watch_completion_rate", "hook_text", "best_video_link",
+    ];
+    const filled: string[] = [];
+    setForm(prev => {
+      const next = { ...prev };
+      for (const field of bestVideoFields) {
+        if (merged[field] != null && merged[field] !== "") {
+          (next as any)[field] = String(merged[field]);
+          filled.push(field);
+        }
+      }
+      if (merged.is_slideshow != null) {
+        next.is_slideshow = Boolean(merged.is_slideshow);
+        if (merged.is_slideshow) { next.video_length_seconds = ""; next.avg_watch_time_seconds = ""; }
+        filled.push("is_slideshow");
+      }
+      return next;
+    });
+    setBestVideoFilled(filled);
+    setBestVideoReading(false);
+    if (filled.length === 0) setBestVideoError("Couldn't read video analytics from the screenshot. Try a clearer image or fill in manually.");
   }
 
   const selectedCreator = isAdmin ? ugcCreators.find(c => c.id === form.creator_id) || null : (profile as UGCCreatorProfile);
@@ -5198,39 +5260,56 @@ function UGCSubmitPage({ profile, submissions, setSubmissions, ugcCreators, sb }
         {/* Screenshot Upload */}
         <div className="flex flex-col gap-2">
           <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Autofill from Screenshot</p>
-          <input
-            ref={screenshotInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={e => handleScreenshot(e.target.files)}
-          />
-          <button
-            type="button"
-            onClick={() => screenshotInputRef.current?.click()}
-            disabled={screenshotReading}
-            className={`flex items-center justify-center gap-2.5 w-full border-2 border-dashed rounded-xl py-4 px-4 transition-all text-sm font-medium
-              ${screenshotReading
-                ? "border-stone-200 bg-stone-50 text-stone-400 cursor-not-allowed"
-                : "border-stone-300 bg-stone-50 text-stone-600 hover:border-stone-400 hover:bg-stone-100 cursor-pointer"
-              }`}
-          >
-            {screenshotReading
-              ? <><Loader2 size={16} className="animate-spin text-stone-400" />Reading screenshot…</>
-              : <><Upload size={16} className="text-stone-400" />Upload TikTok analytics screenshot{screenshotFilled.length > 0 ? " (upload more to update)" : "s"}</>
-            }
-          </button>
-          {screenshotFilled.length > 0 && (
+          <input ref={screenshotInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => handleScreenshot(e.target.files)} />
+          <input ref={bestVideoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => handleBestVideoScreenshot(e.target.files)} />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => screenshotInputRef.current?.click()}
+              disabled={screenshotReading || bestVideoReading}
+              className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-xl py-3.5 px-3 transition-all text-sm font-medium
+                ${screenshotReading
+                  ? "border-stone-200 bg-stone-50 text-stone-400 cursor-not-allowed"
+                  : "border-stone-300 bg-stone-50 text-stone-600 hover:border-stone-400 hover:bg-stone-100 cursor-pointer"
+                }`}
+            >
+              {screenshotReading
+                ? <><Loader2 size={15} className="animate-spin text-stone-400 shrink-0" /><span>Reading…</span></>
+                : <><Upload size={15} className="text-stone-400 shrink-0" /><span className="text-left leading-tight">Weekly Overview<br/><span className="text-xs font-normal text-stone-400">Up to 5 screenshots</span></span></>
+              }
+            </button>
+
+            <button
+              type="button"
+              onClick={() => bestVideoInputRef.current?.click()}
+              disabled={screenshotReading || bestVideoReading}
+              className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-xl py-3.5 px-3 transition-all text-sm font-medium
+                ${bestVideoReading
+                  ? "border-violet-200 bg-violet-50 text-violet-400 cursor-not-allowed"
+                  : bestVideoFilled.length > 0
+                    ? "border-violet-300 bg-violet-50 text-violet-700 hover:border-violet-400 hover:bg-violet-100 cursor-pointer"
+                    : "border-stone-300 bg-stone-50 text-stone-600 hover:border-stone-400 hover:bg-stone-100 cursor-pointer"
+                }`}
+            >
+              {bestVideoReading
+                ? <><Loader2 size={15} className="animate-spin text-violet-400 shrink-0" /><span>Reading…</span></>
+                : <><Upload size={15} className={`shrink-0 ${bestVideoFilled.length > 0 ? "text-violet-400" : "text-stone-400"}`} /><span className="text-left leading-tight">Best Video Analytics<br/><span className="text-xs font-normal text-stone-400">Views, watch time, etc.</span></span></>
+              }
+            </button>
+          </div>
+
+          {(screenshotFilled.length > 0 || bestVideoFilled.length > 0) && (
             <div className="flex items-start gap-2 px-3 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
               <CheckCircle2 size={14} className="text-emerald-600 mt-0.5 shrink-0" />
-              <p className="text-xs text-emerald-700"><span className="font-semibold">{screenshotFilled.length} fields autofilled.</span> Review below and adjust anything that looks off.</p>
+              <p className="text-xs text-emerald-700">
+                <span className="font-semibold">{screenshotFilled.length + bestVideoFilled.length} fields autofilled.</span> Review below and adjust anything that looks off.
+              </p>
             </div>
           )}
-          {screenshotError && (
-            <p className="text-xs text-red-500 px-1">{screenshotError}</p>
-          )}
-          <p className="text-xs text-stone-400">Upload up to 3 screenshots — AI will read the numbers and fill the form. You can still edit any field manually.</p>
+          {screenshotError && <p className="text-xs text-red-500 px-1">{screenshotError}</p>}
+          {bestVideoError && <p className="text-xs text-red-500 px-1">{bestVideoError}</p>}
+          <p className="text-xs text-stone-400">AI reads the numbers and fills the form. You can still edit any field manually.</p>
         </div>
 
         <div className="border-t border-stone-100" />

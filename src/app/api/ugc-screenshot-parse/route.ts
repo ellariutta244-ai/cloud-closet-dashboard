@@ -2,13 +2,44 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageBase64, mimeType } = await req.json();
+    const { imageBase64, mimeType, mode } = await req.json();
+    const isBestVideoMode = mode === 'best_video';
     if (!imageBase64) return NextResponse.json({ error: 'No image provided' }, { status: 400 });
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 500 });
 
-    const prompt = `You are analyzing one or more TikTok analytics screenshots from the TikTok Creator Studio or TikTok app.
+    const prompt = isBestVideoMode
+      ? `You are analyzing a TikTok screenshot showing the analytics for a single specific video (not an account overview).
+
+Extract every numeric and text value visible and return ONLY a valid JSON object — no markdown, no explanation, just raw JSON.
+
+Field mapping rules:
+- best_video_views: the view count shown for this video
+- video_length_seconds: video duration in seconds (convert "0:45" → 45, "1:23" → 83)
+- avg_watch_time_seconds: average watch time in seconds
+- watch_completion_rate: % of viewers who watched to the end (as a number, e.g. 42 not "42%")
+- hook_text: the video caption or opening text visible in the screenshot (if shown)
+- best_video_link: any URL visible for this video (if shown)
+- is_slideshow: true if this is a photo carousel/slideshow, false if it is a regular video
+
+Rules:
+- If a value is not visible or cannot be determined, use null
+- For counts shown as "1.2K" → 1200, "3.4M" → 3400000
+- For percentages, return the numeric value only
+- Do not guess or invent values
+
+Return this exact JSON structure:
+{
+  "best_video_views": null,
+  "video_length_seconds": null,
+  "avg_watch_time_seconds": null,
+  "watch_completion_rate": null,
+  "hook_text": null,
+  "best_video_link": null,
+  "is_slideshow": false
+}`
+      : `You are analyzing one or more TikTok analytics screenshots from the TikTok Creator Studio or TikTok app.
 
 Extract every numeric and text value visible in the screenshot(s) and map them to the fields below.
 
