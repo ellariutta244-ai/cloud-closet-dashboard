@@ -3789,7 +3789,7 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
       <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit flex-wrap">
         <button onClick={() => setTab("brief")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "brief" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Weekly Brief</button>
         <button onClick={() => setTab("plans")} className={`relative text-sm px-4 py-2 rounded-lg transition-all ${tab === "plans" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>
-          Content Plans
+          Content Ideas
           {draftCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{draftCount}</span>}
         </button>
         <button onClick={() => setTab("announcements")} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === "announcements" ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>Announcements</button>
@@ -3802,7 +3802,7 @@ function UGCBriefsAnnouncementsPage({ profile, briefs, setBriefs, announcements,
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h1 className="text-xl font-bold text-stone-800">Content Plans</h1>
+              <h1 className="text-xl font-bold text-stone-800">Content Ideas</h1>
               <div className="flex items-center gap-1.5 mt-1">
                 <button onClick={() => shiftWeek(-1)} className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors" title="Previous week">‹</button>
                 <span className="text-sm text-stone-500 min-w-[110px] text-center">
@@ -7677,8 +7677,43 @@ function UGCPivotHistoryPage({ profile, pivots, setPivots, ugcCreators, sb }: {
 }
 
 // ── UGC Analytics Overview (admin) ────────────────────────────────────────────
-function UGCAnalyticsOverview({ submissions, setSubmissions, ugcCreators, pivotQueue, smartAlerts, sb }: {
-  submissions: UGCSubmission[]; setSubmissions?: (s: UGCSubmission[]) => void; ugcCreators: UGCCreatorProfile[]; pivotQueue: UGCPivotQueue[]; smartAlerts?: SmartAlert[]; sb?: any;
+// ── Admin Content Resources (combines Hook Generator, Hook Library, Tutorial Library, Resources) ──
+type AdminContentResourcesTab = "hooks" | "hook_library" | "tutorials" | "resources";
+function AdminContentResourcesPage({ profile, ugcCreators, ugcHooks, setUGCHooks, savedHooks, setSavedHooks, tutorials, setTutorials, savedCaptions, setSavedCaptions, resources, setResources, settings, sb }: {
+  profile: UGCCreatorProfile; ugcCreators: UGCCreatorProfile[];
+  ugcHooks: UGCHook[]; setUGCHooks: (h: UGCHook[]) => void;
+  savedHooks: SavedHook[]; setSavedHooks: (h: SavedHook[]) => void;
+  tutorials: Tutorial[]; setTutorials: (t: Tutorial[]) => void;
+  savedCaptions: SavedCaption[]; setSavedCaptions: (c: SavedCaption[]) => void;
+  resources: UGCResource[]; setResources: (r: UGCResource[]) => void;
+  settings: AppSettings; sb: any;
+}) {
+  const [tab, setTab] = useState<AdminContentResourcesTab>("hooks");
+  const tabs: { id: AdminContentResourcesTab; label: string }[] = [
+    { id: "hooks",        label: "Hook Generator" },
+    { id: "hook_library", label: "Hook Library" },
+    { id: "tutorials",    label: "Tutorial Library" },
+    { id: "resources",    label: "Other Resources" },
+  ];
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit flex-wrap">
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} className={`text-sm px-4 py-2 rounded-lg transition-all ${tab === t.id ? "bg-white shadow-sm font-medium text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === "hooks"        && <HookGeneratorPage profile={profile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} settings={settings} sb={sb}/>}
+      {tab === "hook_library" && <UGCHooksPage profile={profile} hooks={ugcHooks} setHooks={setUGCHooks} ugcCreators={ugcCreators} sb={sb}/>}
+      {tab === "tutorials"    && <TutorialLibraryPage profile={profile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={sb}/>}
+      {tab === "resources"    && <UGCResourcesPage profile={profile} resources={resources} setResources={setResources} sb={sb}/>}
+    </div>
+  );
+}
+
+function UGCAnalyticsOverview({ submissions, setSubmissions, ugcCreators, pivotQueue, smartAlerts, announcements, setAnnouncements, sb }: {
+  submissions: UGCSubmission[]; setSubmissions?: (s: UGCSubmission[]) => void; ugcCreators: UGCCreatorProfile[]; pivotQueue: UGCPivotQueue[]; smartAlerts?: SmartAlert[]; announcements?: UGCAnnouncement[]; setAnnouncements?: (a: UGCAnnouncement[]) => void; sb?: any;
 }) {
   const currentWeek = getMondayOfWeek(new Date());
   const activeCreatorIds = new Set(ugcCreators.filter(c => c.ugc_status !== "archived").map(c => c.id));
@@ -7709,6 +7744,25 @@ function UGCAnalyticsOverview({ submissions, setSubmissions, ugcCreators, pivotQ
   const [c2, setC2] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [subsExpanded, setSubsExpanded] = useState(false);
+  const [annForm, setAnnForm] = useState({ title: "", body: "", pinned: false });
+  const [annSaving, setAnnSaving] = useState(false);
+  const [annSaved, setAnnSaved] = useState(false);
+
+  async function createAnnouncement() {
+    if (!annForm.title.trim() || !sb || !setAnnouncements) return;
+    setAnnSaving(true);
+    const { data } = await sb.from("ugc_announcements").insert({
+      title: annForm.title, body: annForm.body || null, pinned: annForm.pinned, created_at: new Date().toISOString(),
+    }).select().single();
+    setAnnSaving(false);
+    if (data) {
+      setAnnouncements([data as UGCAnnouncement, ...(announcements ?? [])]);
+      setAnnForm({ title: "", body: "", pinned: false });
+      setAnnSaved(true);
+      setTimeout(() => setAnnSaved(false), 3000);
+    }
+  }
 
   async function refresh() {
     if (!sb || !setSubmissions) return;
@@ -7740,9 +7794,10 @@ function UGCAnalyticsOverview({ submissions, setSubmissions, ugcCreators, pivotQ
   const g1 = c1 ? creatorGraphData(c1) : null;
   const g2 = c2 ? creatorGraphData(c2) : null;
 
+  const activeCreators = ugcCreators.filter(c => c.ugc_status !== "archived");
   const creatorOptions = [
     { value: "", label: "— Select creator —" },
-    ...ugcCreators.map(c => ({ value: c.id, label: c.full_name })),
+    ...activeCreators.map(c => ({ value: c.id, label: c.full_name })),
   ];
 
   return (
@@ -7775,6 +7830,23 @@ function UGCAnalyticsOverview({ submissions, setSubmissions, ugcCreators, pivotQ
       </div>
 
       <div className="bg-white border border-stone-200/60 rounded-xl p-5">
+        <p className="text-sm font-semibold text-stone-700 mb-4">Post an Announcement</p>
+        <div className="flex flex-col gap-3">
+          <TI label="Title" value={annForm.title} onChange={v => setAnnForm(f => ({ ...f, title: v }))} placeholder="e.g. New hook format this week" />
+          <TA label="Body (optional)" value={annForm.body} onChange={v => setAnnForm(f => ({ ...f, body: v }))} placeholder="Additional details..." rows={2} />
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 cursor-pointer text-sm text-stone-600">
+              <input type="checkbox" checked={annForm.pinned} onChange={e => setAnnForm(f => ({ ...f, pinned: e.target.checked }))} className="rounded" />
+              Pin announcement
+            </label>
+            <Btn onClick={createAnnouncement} disabled={!annForm.title.trim() || annSaving}>
+              {annSaved ? "Published!" : annSaving ? "Publishing..." : <><Plus size={14}/>Publish</>}
+            </Btn>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white border border-stone-200/60 rounded-xl p-5">
         <p className="text-sm font-semibold text-stone-700 mb-4">Creator Comparison</p>
         <div className="grid grid-cols-2 gap-3 mb-4">
           <Sel label="Creator 1" value={c1} onChange={setC1} options={creatorOptions} />
@@ -7792,44 +7864,51 @@ function UGCAnalyticsOverview({ submissions, setSubmissions, ugcCreators, pivotQ
       </div>
 
 
-      <div className="bg-white border border-stone-200/60 rounded-xl p-5 overflow-x-auto">
-        <p className="text-sm font-semibold text-stone-700 mb-4">All Submissions</p>
-        {submissions.length === 0 ? <ES message="No submissions yet" /> : (
-          <table className="w-full text-xs">
-            <thead><tr className="border-b border-stone-100">
-              <th className="text-left py-2 pr-4 text-stone-400 font-medium">Creator</th>
-              <th className="text-left py-2 pr-4 text-stone-400 font-medium">Week</th>
-              <th className="text-center py-2 px-2 text-stone-400 font-medium">Views</th>
-              <th className="text-center py-2 px-2 text-stone-400 font-medium">Tier</th>
-              <th className="py-2 w-8"></th>
-            </tr></thead>
-            <tbody>
-              {[...submissions].sort((a, b) => b.week_date.localeCompare(a.week_date)).map(s => {
-                const creator = ugcCreators.find(c => c.id === s.creator_id);
-                return (
-                <tr key={s.id} className="border-b border-stone-50 hover:bg-stone-50">
-                  <td className="py-2 pr-4">
-                    <p className="text-stone-700">{creator?.full_name || "—"}</p>
-                    {creator && <TikTokLink creator={creator} />}
-                  </td>
-                  <td className="py-2 pr-4 text-stone-500">{s.week_date}</td>
-                  <td className="py-2 px-2 text-center font-semibold text-stone-700">{fmtViews(s.total_views)}</td>
-                  <td className="py-2 px-2 text-center"><BenchmarkBadge tier={s.benchmark_tier} /></td>
-                  <td className="py-2 text-right">
-                    {confirmDelete === s.id ? (
-                      <div className="flex items-center gap-1 justify-end">
-                        <button onClick={() => setConfirmDelete(null)} className="px-2 py-0.5 rounded border border-stone-200 text-stone-400 hover:bg-stone-50">Cancel</button>
-                        <button onClick={() => deleteSub(s.id)} className="px-2 py-0.5 rounded bg-red-500 text-white hover:bg-red-600">Delete</button>
-                      </div>
-                    ) : (
-                      <button onClick={() => setConfirmDelete(s.id)} className="p-1 rounded text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={12}/></button>
-                    )}
-                  </td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      <div className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
+        <button onClick={() => setSubsExpanded(v => !v)} className="w-full flex items-center justify-between px-5 py-4 hover:bg-stone-50 transition-colors">
+          <p className="text-sm font-semibold text-stone-700">All Submissions <span className="text-stone-400 font-normal">({submissions.length})</span></p>
+          <ChevronDown size={16} className={`text-stone-400 transition-transform ${subsExpanded ? "rotate-180" : ""}`} />
+        </button>
+        {subsExpanded && (
+          <div className="px-5 pb-5 overflow-x-auto">
+            {submissions.length === 0 ? <ES message="No submissions yet" /> : (
+              <table className="w-full text-xs">
+                <thead><tr className="border-b border-stone-100">
+                  <th className="text-left py-2 pr-4 text-stone-400 font-medium">Creator</th>
+                  <th className="text-left py-2 pr-4 text-stone-400 font-medium">Week</th>
+                  <th className="text-center py-2 px-2 text-stone-400 font-medium">Views</th>
+                  <th className="text-center py-2 px-2 text-stone-400 font-medium">Tier</th>
+                  <th className="py-2 w-8"></th>
+                </tr></thead>
+                <tbody>
+                  {[...submissions].sort((a, b) => b.week_date.localeCompare(a.week_date)).map(s => {
+                    const creator = ugcCreators.find(c => c.id === s.creator_id);
+                    return (
+                    <tr key={s.id} className="border-b border-stone-50 hover:bg-stone-50">
+                      <td className="py-2 pr-4">
+                        <p className="text-stone-700">{creator?.full_name || "—"}</p>
+                        {creator && <TikTokLink creator={creator} />}
+                      </td>
+                      <td className="py-2 pr-4 text-stone-500">{s.week_date}</td>
+                      <td className="py-2 px-2 text-center font-semibold text-stone-700">{fmtViews(s.total_views)}</td>
+                      <td className="py-2 px-2 text-center"><BenchmarkBadge tier={s.benchmark_tier} /></td>
+                      <td className="py-2 text-right">
+                        {confirmDelete === s.id ? (
+                          <div className="flex items-center gap-1 justify-end">
+                            <button onClick={() => setConfirmDelete(null)} className="px-2 py-0.5 rounded border border-stone-200 text-stone-400 hover:bg-stone-50">Cancel</button>
+                            <button onClick={() => deleteSub(s.id)} className="px-2 py-0.5 rounded bg-red-500 text-white hover:bg-red-600">Delete</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setConfirmDelete(s.id)} className="p-1 rounded text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={12}/></button>
+                        )}
+                      </td>
+                    </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -10048,12 +10127,9 @@ export default function DashboardPage() {
         { id: "ugc_creators",            icon: <Users size={16}/>,        label: "UGC Creators" },
         { id: "ugc_analytics",           icon: <BarChart3 size={16}/>,    label: "UGC Analytics" },
         { id: "ugc_pivots_hub",          icon: <Inbox size={16}/>,        label: "Pivots", badge: pendingPivotCount || null },
-        { id: "ugc_briefs_announcements",icon: <FileText size={16}/>,     label: "Briefs & Announcements", badge: pendingPlanCount || null },
-        { id: "ugc_resources",           icon: <FolderOpen size={16}/>,   label: "UGC Resources" },
-        { id: "ugc_qa",                  icon: <MessageCircle size={16}/>,label: "Creator Q&A" },
-        { id: "ugc_hook_generator",      icon: <Zap size={16}/>,          label: "Hook Generator" },
-        { id: "ugc_hooks",               icon: <Bookmark size={16}/>,     label: "Hook Library" },
-        { id: "ugc_tutorials",           icon: <BookOpen size={16}/>,     label: "Tutorial Library" },
+        { id: "ugc_briefs_announcements",icon: <FileText size={16}/>,     label: "Creator Communication", badge: pendingPlanCount || null },
+        { id: "ugc_qa",                   icon: <MessageCircle size={16}/>, label: "Creator Q&A" },
+        { id: "ugc_content_resources",   icon: <FolderOpen size={16}/>,   label: "Content Resources" },
         { id: "ugc_leaderboard",         icon: <Trophy size={16}/>,       label: "Leaderboard" },
       ],
     },
@@ -10238,10 +10314,11 @@ export default function DashboardPage() {
       case "ugc_history":       return (isFullAdmin || isUGCManager || isUGC) ? <UGCSubmissionHistoryPage profile={p as UGCCreatorProfile} submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_resources":     return (isFullAdmin || isUGCManager || isUGC) ? <UGCResourcesPage profile={p as UGCCreatorProfile} resources={ugcResources} setResources={setUGCResources} sb={supabase}/> : null;
       case "ugc_tutorials":     return (isFullAdmin || isUGCManager || isUGC || isDirector) ? <TutorialLibraryPage profile={p as UGCCreatorProfile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={supabase}/> : null;
+      case "ugc_content_resources": return (isFullAdmin || isUGCManager) ? <AdminContentResourcesPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} resources={ugcResources} setResources={setUGCResources} settings={settings} sb={supabase}/> : null;
       // Admin-only UGC pages (no access for wisconsin_admin)
       case "ugc_creators":      return (isFullAdmin || isUGCManager) ? <UGCCreatorMgmtPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} smartAlerts={smartAlerts} sb={supabase}/> : null;
       case "ugc_pivot_queue":   return (isFullAdmin || isUGCManager) ? <UGCPivotQueuePage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} ugcCreators={ugcCreators} sb={supabase}/> : null;
-      case "ugc_analytics":     return (isFullAdmin || isUGCManager) ? <UGCAnalyticsOverview submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} pivotQueue={ugcPivotQueue} smartAlerts={smartAlerts} sb={supabase}/> : null;
+      case "ugc_analytics":     return (isFullAdmin || isUGCManager) ? <UGCAnalyticsOverview submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} pivotQueue={ugcPivotQueue} smartAlerts={smartAlerts} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
       case "ugc_brief":         return (isFullAdmin || isUGCManager) ? <UGCBriefPage briefs={ugcBriefs} setBriefs={setUGCBriefs} sb={supabase}/> : null;
       case "external-ugc":      return isSoraaCreator ? <SoraaCreatorView profile={profile!}/> : (isAdmin || isDirector) ? <ExternalUGCPanel/> : null;
       case "director_home":      return isDirector ? <DirectorDash profile={profile!} events={events} ugcSubmissions={ugcSubmissions} ugcCreators={ugcCreators} ugcBriefs={ugcBriefs} smartAlerts={smartAlerts} reports={reports} outreach={outreach} ugcHooks={ugcHooks} settings={settings} techProjects={techProjects} designProjects={designProjects} interns={interns} setPage={setPage} sb={supabase}/> : null;
