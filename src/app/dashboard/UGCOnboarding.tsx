@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   CheckCircle2, XCircle, Lock, Star, Play,
   ArrowUp, ArrowDown, RotateCcw, GripVertical,
+  ChevronDown, AlertTriangle,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -522,6 +523,132 @@ function WelcomeModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ─── Warm-Up Protocol ──────────────────────────────────────────────────────────
+
+const WARM_UP_DAYS = [
+  { day: "Day 1",    action: "Spend 30–45 min watching fashion TikToks (GRWM, outfit ideas, hauls, styling tips). Like 30+ videos. Follow 10–15 relevant accounts." },
+  { day: "Day 2",    action: "Comment on 10 videos (genuine, not spam). Search and follow: #outfitoftheday #grwm #fashiontiktok #whatiwore. Save 5 videos you love." },
+  { day: "Day 3",    action: "Follow 10 more fashion accounts. Your FYP should now be personalizing. Like and share 10 more videos. Do NOT post yet." },
+  { day: "Day 4",    action: "Post your FIRST video — low-stakes warm-up content only (see ideas below). Engage with every comment." },
+  { day: "Days 5–6", action: "Post 1 soft personal video per day. Keep watching and liking in your niche. Follow 5–10 more accounts each day." },
+  { day: "Day 7",    action: "Warm-up complete. Review what got the most engagement. Take notes. Week 2 starts the real UGC campaign content." },
+];
+
+const WARM_UP_IDEAS = [
+  { icon: "🎬", title: "GRWM for a casual day", desc: "Phone propped up, no script, natural audio — just getting ready" },
+  { icon: "👗", title: "Current outfit rotation", desc: "Lay-flat of 3–4 recent outfits with trending audio underneath" },
+  { icon: "📱", title: "Day-in-my-life vlog snippet", desc: "15–30 seconds getting ready in the morning" },
+  { icon: "✨", title: "Outfit transition", desc: "Before/after look using a viral sound — simple and native-feeling" },
+  { icon: "⭐", title: "Rate my outfits this week", desc: "5 outfits in 30 seconds — CapCut speed ramp effect" },
+];
+
+function WarmUpProtocol() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded-2xl border-2 border-amber-200 bg-amber-50 overflow-hidden">
+      {/* Header — always visible */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-start gap-3 px-4 py-4 text-left hover:bg-amber-100/50 transition-colors"
+      >
+        <div className="mt-0.5 flex-shrink-0">
+          <AlertTriangle size={18} className="text-amber-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-amber-800 uppercase tracking-wide">Account Warm-Up Protocol</p>
+          <p className="text-xs text-amber-600 mt-0.5">Non-negotiable before posting any UGC content — read before starting modules</p>
+        </div>
+        <ChevronDown size={16} className={`text-amber-400 flex-shrink-0 mt-1 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="px-4 pb-5 flex flex-col gap-5 border-t border-amber-200">
+          {/* Why it matters */}
+          <div className="pt-4">
+            <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-2">Why This Matters — Do Not Skip</p>
+            <p className="text-sm text-slate-700 leading-relaxed">
+              New TikTok accounts that immediately post branded content get suppressed. TikTok needs to
+              understand the account and build an audience profile before it trusts it enough to push
+              content to the FYP. Accounts that skip the warm-up phase often get permanently sandboxed
+              and stuck under 500 views forever.
+            </p>
+            <div className="mt-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <p className="text-xs font-bold text-red-600 uppercase tracking-wide mb-1">⚠️ Single Most Common UGC Mistake</p>
+              <p className="text-xs text-red-700 leading-relaxed">Skipping the warm-up phase. Do not post branded content until Day 4 at the earliest.</p>
+            </div>
+          </div>
+
+          {/* Step 1 */}
+          <div>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Step 1 — Account Setup</p>
+            <div className="flex flex-col gap-2">
+              {[
+                { icon: "👤", label: "Username", text: "Personal and natural — NOT brand-related. e.g. @emilyoutfits, @stylewithjenna, @claudiascloset" },
+                { icon: "📸", label: "Profile photo", text: "Real photo of yourself — bright and approachable" },
+                { icon: "✍️", label: "Bio", text: "'fashion girlie | outfit inspo daily' or 'getting dressed shouldn't be hard'" },
+                { icon: "🌐", label: "Vibe", text: "Profile should look 100% like a real person's account — NOT a brand page" },
+                { icon: "🔗", label: "Link in bio", text: "Add Cloud Closet download link and @bycloudcloset" },
+                { icon: "🔓", label: "Visibility", text: "Set account to PUBLIC immediately" },
+              ].map((item) => (
+                <div key={item.label} className="flex items-start gap-2.5 text-sm">
+                  <span className="text-base flex-shrink-0 leading-snug">{item.icon}</span>
+                  <span>
+                    <span className="font-semibold text-slate-700">{item.label}: </span>
+                    <span className="text-slate-600">{item.text}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Step 2 — Day table */}
+          <div>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Step 2 — The Watch-First Phase</p>
+            <p className="text-xs text-slate-500 mb-3 italic">For the first 3 days, only watch and engage — no posting yet. This trains the algorithm on your niche.</p>
+            <div className="flex flex-col gap-1.5">
+              {WARM_UP_DAYS.map((row, i) => (
+                <div
+                  key={i}
+                  className={`rounded-xl px-3.5 py-3 flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 ${
+                    row.day === "Day 4" ? "bg-blue-50 border border-blue-200" :
+                    row.day === "Day 7" ? "bg-emerald-50 border border-emerald-200" :
+                    "bg-white border border-slate-100"
+                  }`}
+                >
+                  <span className={`text-xs font-bold flex-shrink-0 min-w-[58px] ${
+                    row.day === "Day 4" ? "text-blue-600" :
+                    row.day === "Day 7" ? "text-emerald-600" :
+                    "text-slate-500"
+                  }`}>{row.day}</span>
+                  <span className="text-xs text-slate-700 leading-relaxed">{row.action}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Warm-up video ideas */}
+          <div>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Warm-Up Video Ideas</p>
+            <p className="text-xs text-slate-400 italic mb-3">First posts should feel 100% organic — no app mention, no brand mention.</p>
+            <div className="flex flex-col gap-2">
+              {WARM_UP_IDEAS.map((idea) => (
+                <div key={idea.title} className="flex items-start gap-2.5 bg-white border border-slate-100 rounded-xl px-3.5 py-3">
+                  <span className="text-base flex-shrink-0 leading-snug">{idea.icon}</span>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">{idea.title}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{idea.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Export ────────────────────────────────────────────────────────────────
 
 export function UGCOnboardingPage({ profile }: { profile: { full_name?: string } }) {
@@ -579,6 +706,9 @@ export function UGCOnboardingPage({ profile }: { profile: { full_name?: string }
           Complete all 4 modules to unlock your creator dashboard
         </p>
       </div>
+
+      {/* Warm-up protocol */}
+      <WarmUpProtocol />
 
       {/* Progress card */}
       <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm">
