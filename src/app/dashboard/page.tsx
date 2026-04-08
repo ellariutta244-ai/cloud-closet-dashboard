@@ -8,6 +8,7 @@ import ExternalUGCPanel from "./ExternalUGCPanel";
 import SoraaCreatorView, { SoraaCreatorQuestionsPage } from "./SoraaCreatorView";
 import SororityRushPlan from "./SororityRushPlan";
 import TikTokContent from "./TikTokContent";
+import { UGCOnboardingPage } from "./UGCOnboarding";
 import {
   LayoutDashboard, CheckSquare, Mail, MessageCircle, FileText,
   FolderOpen, Users, BarChart3, Plus, Search, Bell,
@@ -10124,6 +10125,7 @@ export default function DashboardPage() {
     {
       label: "UGC TEAM",
       items: [
+        { id: "ugc_onboarding",          icon: <BookOpen size={16}/>,     label: "Onboarding Training" },
         { id: "ugc_creators",            icon: <Users size={16}/>,        label: "UGC Creators" },
         { id: "ugc_analytics",           icon: <BarChart3 size={16}/>,    label: "UGC Analytics" },
         { id: "ugc_pivots_hub",          icon: <Inbox size={16}/>,        label: "Pivots", badge: pendingPivotCount || null },
@@ -10316,6 +10318,7 @@ export default function DashboardPage() {
       case "ugc_tutorials":     return (isFullAdmin || isUGCManager || isUGC || isDirector) ? <TutorialLibraryPage profile={p as UGCCreatorProfile} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} sb={supabase}/> : null;
       case "ugc_content_resources": return (isFullAdmin || isUGCManager) ? <AdminContentResourcesPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} ugcHooks={ugcHooks} setUGCHooks={setUGCHooks} savedHooks={savedHooks} setSavedHooks={setSavedHooks} tutorials={tutorials} setTutorials={setTutorials} savedCaptions={savedCaptions} setSavedCaptions={setSavedCaptions} resources={ugcResources} setResources={setUGCResources} settings={settings} sb={supabase}/> : null;
       // Admin-only UGC pages (no access for wisconsin_admin)
+      case "ugc_onboarding":    return (isFullAdmin || isUGCManager) ? <UGCOnboardingPage profile={p as UGCCreatorProfile} /> : null;
       case "ugc_creators":      return (isFullAdmin || isUGCManager) ? <UGCCreatorMgmtPage profile={p as UGCCreatorProfile} ugcCreators={ugcCreators} setUGCCreators={setUGCCreators} submissions={ugcSubmissions} smartAlerts={smartAlerts} sb={supabase}/> : null;
       case "ugc_pivot_queue":   return (isFullAdmin || isUGCManager) ? <UGCPivotQueuePage profile={p as UGCCreatorProfile} pivotQueue={ugcPivotQueue} setPivotQueue={setUGCPivotQueue} ugcCreators={ugcCreators} sb={supabase}/> : null;
       case "ugc_analytics":     return (isFullAdmin || isUGCManager) ? <UGCAnalyticsOverview submissions={ugcSubmissions} setSubmissions={setUGCSubmissions} ugcCreators={ugcCreators} pivotQueue={ugcPivotQueue} smartAlerts={smartAlerts} announcements={ugcAnnouncements} setAnnouncements={setUGCAnnouncements} sb={supabase}/> : null;
