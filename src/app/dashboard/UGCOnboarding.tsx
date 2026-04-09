@@ -106,7 +106,7 @@ const WIZARD_STEPS: WizardStep[] = ["intro","why","username","photo","bio","link
 const MODULES = [
   { id:1, title:"What Cloud Closet Is and What We're Building", subtitle:"Brand foundation & why your content has to feel different", time:"8 min" },
   { id:2, title:"Account Setup & Warm-Up Protocol",            subtitle:"Profile optimization, account linking, and the warm-up plan", time:"10 min", wizardMode:true },
-  { id:3, title:"Content Strategy & Hook Mastery",             subtitle:"Your first 3 videos and what makes a scroll-stopping hook", time:"12 min" },
+  { id:3, title:"How the TikTok Algorithm Actually Works",      subtitle:"Distribution waves, ranking signals, and why follower count doesn't protect you", time:"10 min" },
   { id:4, title:"Guidelines, Upkeep & Going Live",             subtitle:"Brand rules, daily routine, and how to sustain momentum", time:"10 min" },
 ];
 
@@ -1430,6 +1430,399 @@ function Module1Content({ onComplete }: { onComplete: () => void }) {
   );
 }
 
+// ─── Module 2 — Interactive components ──────────────────────────────────────────
+
+// True/False rapid-fire quiz
+const TF_STATEMENTS = [
+  {
+    text: "Having more followers means your videos get shown to more people automatically.",
+    answer: false,
+    explanation: "TikTok tests every video with a small audience first — including a slice of your followers — and only expands based on how that test performs. Follower count gives you a slightly larger initial test pool but does not guarantee distribution.",
+  },
+  {
+    text: "A video with high completion rate but few likes can still go viral.",
+    answer: true,
+    explanation: "Completion rate is the strongest signal. A video with 80% completion and 50 likes will outperform a video with 20% completion and 500 likes. The algorithm trusts watch behavior more than passive taps.",
+  },
+  {
+    text: "Posting the same video twice will get you double the reach.",
+    answer: false,
+    explanation: "The algorithm actively identifies and demotes duplicate or recycled content. Original content gets a ranking preference.",
+  },
+  {
+    text: "A video can go viral days after it was posted.",
+    answer: true,
+    explanation: "TikTok videos have a 7–14 day lifespan. The algorithm can resurface a video if it starts gaining traction — some videos blow up on day 5 or 7 with no explanation. This is very different from Instagram, where reach peaks in 24 hours.",
+  },
+  {
+    text: "Asking people to 'like this video' is an effective growth strategy.",
+    answer: false,
+    explanation: "Likes are the weakest engagement signal. Shares, saves, and comments carry far more weight. Design your content to earn those instead.",
+  },
+];
+
+function TrueFalseQuiz({ onDone }: { onDone: () => void }) {
+  const [idx, setIdx] = useState(0);
+  const [choice, setChoice] = useState<boolean | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const current = TF_STATEMENTS[idx];
+  const isCorrect = revealed && choice === current.answer;
+
+  function pick(val: boolean) {
+    if (revealed) return;
+    setChoice(val);
+    setRevealed(true);
+  }
+
+  function next() {
+    if (idx < TF_STATEMENTS.length - 1) {
+      setIdx(i => i + 1);
+      setChoice(null);
+      setRevealed(false);
+    } else {
+      setDone(true);
+      setTimeout(onDone, 800);
+    }
+  }
+
+  if (done) {
+    return (
+      <motion.div initial={{opacity:0,scale:0.96}} animate={{opacity:1,scale:1}} transition={{duration:0.3,ease:"easeOut" as const}}
+        className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-center gap-3">
+        <IcoCheck size={18} className="text-emerald-500 flex-shrink-0"/>
+        <p className="text-sm font-extrabold text-emerald-700">All 5 statements reviewed!</p>
+      </motion.div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Progress dots */}
+      <div className="flex items-center gap-1.5">
+        {TF_STATEMENTS.map((_, i) => (
+          <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+            i < idx ? "bg-[#4a8fd4]" : i === idx ? "bg-[#4a8fd4]/40" : "bg-slate-200"
+          }`}/>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div key={idx} initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-20}}
+          transition={{duration:0.25,ease:"easeOut" as const}} className="flex flex-col gap-4">
+          {/* Statement card */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
+            <p className="text-[10px] font-bold text-[#4a8fd4] uppercase tracking-widest mb-3">
+              Statement {idx + 1} of {TF_STATEMENTS.length}
+            </p>
+            <p className="text-sm font-semibold text-slate-700 leading-[1.6]">&ldquo;{current.text}&rdquo;</p>
+          </div>
+
+          {/* True / False buttons */}
+          {!revealed && (
+            <div className="grid grid-cols-2 gap-3">
+              {([true, false] as const).map(val => (
+                <button key={String(val)} onClick={() => pick(val)}
+                  className="py-4 rounded-2xl border-2 border-slate-200 font-extrabold text-sm text-slate-600
+                    hover:border-[#4a8fd4]/60 hover:bg-[#1a2f4a]/3 active:scale-[0.98] transition-all duration-150">
+                  {val ? "True" : "False"}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Answer reveal */}
+          {revealed && (
+            <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:0.3,ease:"easeOut" as const}}
+              className={`rounded-2xl p-5 border-2 flex flex-col gap-3 ${
+                isCorrect ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"
+              }`}>
+              <div className="flex items-center gap-2">
+                {isCorrect
+                  ? <IcoCheck size={16} className="text-emerald-500 flex-shrink-0"/>
+                  : <IcoX size={16} className="text-red-400 flex-shrink-0"/>}
+                <span className={`text-sm font-extrabold ${isCorrect ? "text-emerald-700" : "text-red-600"}`}>
+                  {isCorrect ? "Correct" : `The answer is ${current.answer ? "True" : "False"}`}
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 leading-[1.6]">{current.explanation}</p>
+              <button onClick={next}
+                className="mt-1 self-start flex items-center gap-1 text-xs font-bold text-[#4a8fd4] hover:text-[#1a2f4a] transition-colors">
+                {idx < TF_STATEMENTS.length - 1 ? "Next statement" : "Finish"} <IcoChevronRight size={12}/>
+              </button>
+            </motion.div>
+          )}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Ranking signals bar chart
+const RANKING_SIGNALS = [
+  { name: "Completion rate", pct: 100, detail: "The percentage of your video people watch before scrolling away. The current threshold for viral distribution is ~70%. For a 30-second video, that means the average viewer needs to watch 21+ seconds. This is the number that decides everything else." },
+  { name: "Rewatch rate",    pct: 95,  detail: "When someone watches your video more than once, TikTok reads it as a powerful signal of genuine interest. A 15-20%+ rewatch rate is strong. This is why tight, dense videos that reward a second watch outperform padded ones." },
+  { name: "Shares",          pct: 75,  detail: "Sharing requires effort and intent — the viewer decides this content is good enough to send to someone else. TikTok weights this heavily because it's a strong indicator of real value. Design for shares by making content that feels like something worth passing on." },
+  { name: "Saves",           pct: 70,  detail: "A save says 'I want to come back to this.' Educational content, how-to formats, and content with lasting value earn saves. The educational/how-I-use-it Cloud Closet format is specifically strong for saves." },
+  { name: "Comment quality", pct: 45,  detail: "Not just comment count — the algorithm now weighs the length and substance of comments. A video that generates 10 long, thoughtful responses outperforms one with 50 'lol' comments. Content that sparks genuine conversation is rewarded." },
+  { name: "Likes",           pct: 20,  detail: "Still a signal, but the weakest one here. Asking people to 'like if you agree' is not a growth strategy. Focus on completion and shares first — likes will follow naturally if the other signals are strong." },
+];
+
+function RankingSignals({ onDone }: { onDone: () => void }) {
+  const [expanded, setExpanded] = useState<number[]>([]);
+  const allExpanded = RANKING_SIGNALS.every((_, i) => expanded.includes(i));
+
+  function toggle(i: number) {
+    setExpanded(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
+    // mark as seen (can't un-see)
+  }
+
+  // track which have been seen (opened at least once)
+  const [seen, setSeen] = useState<number[]>([]);
+  function open(i: number) {
+    setSeen(prev => prev.includes(i) ? prev : [...prev, i]);
+    toggle(i);
+  }
+  const allSeen = RANKING_SIGNALS.every((_, i) => seen.includes(i));
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2 mb-1">
+        <IcoStar size={13} className="text-amber-400"/>
+        <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Tap each signal to expand</p>
+      </div>
+
+      {RANKING_SIGNALS.map((sig, i) => {
+        const isOpen = expanded.includes(i);
+        const isSeen = seen.includes(i);
+        return (
+          <motion.div key={i} layout className={`rounded-2xl border-2 overflow-hidden transition-colors duration-200 ${
+            isOpen ? "border-[#1a2f4a]/30 bg-[#1a2f4a]/3" : "border-slate-200 bg-white"
+          }`}>
+            <button onClick={() => open(i)} className="w-full flex items-center gap-4 px-4 py-3.5 text-left">
+              {/* Bar */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-sm font-extrabold text-slate-800">{sig.name}</p>
+                  <span className="text-[10px] font-bold text-[#4a8fd4]">{sig.pct}%</span>
+                </div>
+                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full rounded-full bg-gradient-to-r from-[#1a2f4a] to-[#4a8fd4]"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${sig.pct}%` }}
+                    transition={{ delay: i * 0.08, duration: 0.6, ease: "easeOut" as const }}
+                  />
+                </div>
+              </div>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+                isSeen ? "bg-[#1a2f4a] text-white" : "bg-slate-100 text-slate-400"
+              }`}>
+                {isSeen ? <IcoCheck size={11}/> : <IcoChevronRight size={11}/>}
+              </div>
+            </button>
+            <AnimatePresence>
+              {isOpen && (
+                <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:"auto"}} exit={{opacity:0,height:0}}
+                  transition={{duration:0.28,ease:"easeOut" as const}} className="overflow-hidden">
+                  <div className="px-4 pb-4 pt-1 border-t border-slate-100">
+                    <p className="text-xs text-slate-600 leading-[1.6]">{sig.detail}</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        );
+      })}
+
+      <AnimatePresence>
+        {allSeen && (
+          <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:0.35,ease:"easeOut" as const}}
+            className="flex flex-col gap-4">
+            <div className="border-l-4 border-amber-400 pl-5 py-1 bg-amber-50/60 rounded-r-xl">
+              <p className="text-xs text-slate-700 leading-[1.6]">Notice what's not on this list: follower count, posting frequency, account age, and paid promotion. TikTok is the most meritocratic major platform — content quality is the only thing that compounds.</p>
+            </div>
+            <PrimaryBtn onClick={onDone}>Continue to Section 3 <IcoChevronRight size={16}/></PrimaryBtn>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Wave system diagram
+const WAVES = [
+  { label: "Wave 1 — Follower test", audience: "~50–200 people", barPct: 5, color: "#4a8fd4", detail: "Your video shows to a small slice of your existing followers first (a 2025 change). If they engage, it moves forward. If they don't, the video largely stops here. This is why posting consistently to a warm audience matters — your followers are your launchpad." },
+  { label: "Wave 2 — 100–500 users", audience: "~100–500 people", barPct: 20, color: "#1e3a5f", detail: "Shown to a small relevant audience in the first ~3 hours. TikTok watches completion and engagement closely. This is the most critical window. The first 3 hours after posting matter more than any other variable." },
+  { label: "Wave 3 — 10K–100K+", audience: "~10,000–100,000+", barPct: 60, color: "#1a2f4a", detail: "If Wave 2 performs, distribution expands significantly. Strong signals here can push into the millions. Weak signals stop the wave and the video plateaus." },
+  { label: "Wave 4+ — Long tail", audience: "Potentially millions", barPct: 100, color: "#0f1f33", detail: "Videos that keep performing get resurfaced. TikTok videos have a 7–14 day viral window. Unlike Instagram (peaks at 24hrs), a strong TikTok video can explode on day 5." },
+];
+
+function WaveSystem({ onDone }: { onDone: () => void }) {
+  const [active, setActive] = useState(0);
+  const [revealed, setRevealed] = useState<number[]>([0]);
+  const allRevealed = WAVES.every((_, i) => revealed.includes(i));
+
+  function advance() {
+    const next = active + 1;
+    if (next < WAVES.length) {
+      setActive(next);
+      setRevealed(prev => prev.includes(next) ? prev : [...prev, next]);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2 mb-1">
+        <IcoStar size={13} className="text-amber-400"/>
+        <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Step through each distribution wave</p>
+      </div>
+
+      {/* Wave bars */}
+      <div className="flex flex-col gap-2">
+        {WAVES.map((wave, i) => {
+          const isRevealed = revealed.includes(i);
+          const isActive = i === active;
+          return (
+            <motion.div key={i} layout
+              className={`rounded-2xl border-2 overflow-hidden transition-colors duration-300 ${
+                isActive ? "border-[#1a2f4a]/40 bg-[#1a2f4a]/4" : isRevealed ? "border-[#4a8fd4]/30 bg-white" : "border-slate-100 bg-slate-50 opacity-40"
+              }`}>
+              <div className="px-4 py-3.5 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <p className={`text-xs font-extrabold ${isRevealed ? "text-slate-800" : "text-slate-400"}`}>{wave.label}</p>
+                  {isRevealed && <span className="text-[10px] font-bold text-[#4a8fd4] bg-[#4a8fd4]/10 px-2 py-0.5 rounded-full">{wave.audience}</span>}
+                </div>
+                {isRevealed && (
+                  <>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{ background: `linear-gradient(to right, ${wave.color}, #4a8fd4)` }}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${wave.barPct}%` }}
+                        transition={{ duration: 0.7, ease: "easeOut" as const }}
+                      />
+                    </div>
+                    <motion.p initial={{opacity:0}} animate={{opacity:1}} transition={{delay:0.3,duration:0.4}}
+                      className="text-xs text-slate-600 leading-[1.6]">{wave.detail}</motion.p>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      <AnimatePresence>
+        {!allRevealed && (
+          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}>
+            <PrimaryBtn onClick={advance}>
+              {active < WAVES.length - 1 ? `Next: ${WAVES[active + 1].label}` : "See final insight"} <IcoChevronRight size={16}/>
+            </PrimaryBtn>
+          </motion.div>
+        )}
+        {allRevealed && (
+          <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:0.35,ease:"easeOut" as const}}
+            className="flex flex-col gap-4">
+            <div className="border-l-4 border-[#4a8fd4] pl-5 py-1">
+              <p className="text-sm text-slate-700 leading-[1.7] italic" style={{fontFamily:"Georgia, 'Times New Roman', serif"}}>
+                "What this means for you: every video gets a fair test. The question is whether your content performs when it gets one."
+              </p>
+            </div>
+            <PrimaryBtn onClick={onDone}>Complete Module 3 <IcoChevronRight size={16}/></PrimaryBtn>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Module 2 (index 2 = "Module 3") — Full Multi-Section Component ───────────────
+
+function Module3Content({ onComplete }: { onComplete: () => void }) {
+  const [section, setSection] = useState(1);
+  const [sDone, setSDone] = useState<boolean[]>([false, false, false]);
+  const TOTAL_SECTIONS = 3;
+
+  function completeSection(n: number) {
+    setSDone(prev => { const next = [...prev]; next[n - 1] = true; return next; });
+    if (n < TOTAL_SECTIONS) setTimeout(() => setSection(n + 1), 600);
+    else setTimeout(onComplete, 900);
+  }
+
+  const segmentClass = (n: number) => {
+    if (sDone[n - 1]) return "bg-[#4a8fd4]";
+    if (n === section) return "bg-[#4a8fd4]/40";
+    return "bg-slate-200";
+  };
+
+  function SectionDoneTag() {
+    return (
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} className="flex items-center gap-2 text-xs font-bold text-emerald-600">
+        <IcoCheck size={13}/> Section complete
+      </motion.div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      {/* 3-segment progress bar */}
+      <div className="flex gap-1">
+        {Array.from({length: TOTAL_SECTIONS}, (_, i) => i + 1).map(n => (
+          <div key={n} className={`h-1 flex-1 rounded-full transition-all duration-500 ${segmentClass(n)}`}/>
+        ))}
+      </div>
+
+      {/* ── Section 1 ── */}
+      <motion.div initial={{opacity:0,y:14}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6">
+        <SectionHeader n={1} total={TOTAL_SECTIONS} label="The single most important thing"/>
+        <div className="flex flex-col gap-4">
+          <h3 className="text-lg font-extrabold text-slate-800 leading-tight">TikTok is not a social graph. It's an interest graph.</h3>
+          <p className="text-sm text-slate-600 leading-[1.6]">Instagram and YouTube are built around who you follow. TikTok is built around what you watch. The algorithm doesn't ask "who does this person follow?" — it asks "what has this person actually watched, rewatched, saved, and shared?" That distinction is everything. It means a brand new account with zero followers can land on 100,000 FYPs tomorrow. It also means a creator with 50,000 followers can post and get 200 views if the content doesn't perform. Follower count does not protect you here.</p>
+          <div className="border-l-4 border-[#4a8fd4] pl-5 py-1">
+            <p className="text-base text-slate-700 leading-[1.7] italic" style={{fontFamily:"Georgia, 'Times New Roman', serif"}}>"The algorithm's first question is not 'did people like this.' It is 'did people keep watching this.'"</p>
+          </div>
+        </div>
+        {!sDone[0] ? <TrueFalseQuiz onDone={() => completeSection(1)}/> : <SectionDoneTag/>}
+      </motion.div>
+
+      {/* ── Section 2 ── */}
+      {section >= 2 && (
+        <motion.div key="s2" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={2} total={TOTAL_SECTIONS} label="What TikTok is actually measuring"/>
+          <div className="flex flex-col gap-2">
+            <h3 className="text-base font-extrabold text-slate-800">What TikTok is actually measuring</h3>
+            <p className="text-xs text-slate-400 leading-[1.6]">Listed in order of algorithmic weight.</p>
+          </div>
+          {!sDone[1] ? <RankingSignals onDone={() => completeSection(2)}/> : <SectionDoneTag/>}
+        </motion.div>
+      )}
+
+      {/* ── Section 3 ── */}
+      {section >= 3 && (
+        <motion.div key="s3" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={3} total={TOTAL_SECTIONS} label="How a video actually gets distributed"/>
+          <div className="flex flex-col gap-3">
+            <h3 className="text-base font-extrabold text-slate-800">How a video actually gets distributed</h3>
+            <p className="text-sm text-slate-600 leading-[1.6]">TikTok doesn't show your video to everyone at once. It runs a series of tests, expanding distribution only when each wave performs.</p>
+          </div>
+          {!sDone[2] ? <WaveSystem onDone={() => completeSection(3)}/> : (
+            <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0"><IcoCheck size={18} className="text-white"/></div>
+              <div>
+                <p className="text-sm font-extrabold text-emerald-700">Module 3 complete!</p>
+                <p className="text-xs text-slate-500 mt-0.5 leading-[1.6]">Returning to the overview — Module 4 is now unlocked.</p>
+              </div>
+            </motion.div>
+          )}
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
 // ─── Stepper ─────────────────────────────────────────────────────────────────────
 // Numbered circles → checkmarks on complete; "Level X of Y" lives in module header
 
@@ -1673,8 +2066,25 @@ export function UGCOnboardingPage({ profile }: { profile:{ full_name?:string } }
                 </div>
               )}
 
-              {/* Modules 3 & 4 — coming soon */}
-              {(currentModule === 2 || currentModule === 3) && (
+              {/* Module 3 — How the Algorithm Works */}
+              {currentModule === 2 && !isCompleted && (
+                <Module3Content onComplete={() => handlePass(2)}/>
+              )}
+              {currentModule === 2 && isCompleted && (
+                <div className="flex flex-col items-center gap-3 py-8 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center">
+                    <IcoCheck size={28} className="text-emerald-500"/>
+                  </div>
+                  <p className="text-base font-extrabold text-slate-700">Module 3 Complete!</p>
+                  <p className="text-sm text-slate-500 leading-[1.6]">You understand how TikTok distributes content and what it rewards.</p>
+                  <button onClick={() => setView("overview")} className="mt-2 text-xs font-bold text-[#4a8fd4] hover:text-[#1a2f4a] transition-colors flex items-center gap-1">
+                    <IcoChevronLeft size={12}/> Back to overview
+                  </button>
+                </div>
+              )}
+
+              {/* Module 4 — coming soon */}
+              {currentModule === 3 && (
                 <div className="flex flex-col items-center gap-3 py-10 text-center">
                   <div className="w-14 h-14 rounded-2xl bg-[#1a2f4a]/8 flex items-center justify-center">
                     <IcoStar size={24} className="text-[#4a8fd4]"/>
