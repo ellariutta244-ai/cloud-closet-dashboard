@@ -931,148 +931,501 @@ function ContentTestSlider({ onDone }: { onDone: () => void }) {
   );
 }
 
-// ─── Module 1 — Full Multi-Section Component ─────────────────────────────────────
+// ─── Section 4 — Brand Pillars ───────────────────────────────────────────────────
 
-function Module1Content({ onComplete }: { onComplete: () => void }) {
-  const [section, setSection] = useState(1);
-  const [s1Done, setS1Done] = useState(false);
-  const [s2Done, setS2Done] = useState(false);
-  const [s3Done, setS3Done] = useState(false);
-  const [flipped, setFlipped] = useState([false, false, false]);
-  const allFlipped = flipped.every(Boolean);
-  const [moduleDone, setModuleDone] = useState(false);
+const PILLARS = [
+  {
+    num: "01", name: "The Closet",
+    teaser: "Personal, physical, emotional. Where identity gets negotiated every morning.",
+    detail: "The closet isn't just where your clothes live — it's where decisions get made, memories get stored, and identity gets negotiated every single morning. Cloud Closet takes that private, tactile, deeply human space and gives it somewhere to exist tangibly and evolve with you. When you make content about the closet, you're making content about identity. That's the weight of it.",
+    tags: ["getting dressed","wardrobe","identity","intentional","emotional"],
+    affirm: "Content rooted in The Closet tends to be introspective and personal. Think GRWM, outfit breakdowns, and the emotional story behind what you wear.",
+  },
+  {
+    num: "02", name: "The Cloud",
+    teaser: "What happens when every closet connects.",
+    detail: "The cloud is the living, breathing community formed between users — the collective of real outfits, real stories, and real engagement that grows every time someone shows up and shares. Your archive feeds it. Others' closets inform yours. The cloud is the whole — dynamic, communal, and always evolving. When you make content about discovering someone else's style, you're making content about the cloud.",
+    tags: ["community","connection","collective","shared","discovery"],
+    affirm: "Content rooted in The Cloud tends to be community-driven and connective. Think discovery reactions, sharing others' fits, and the collective aspect of style.",
+  },
+  {
+    num: "03", name: "The Spark",
+    teaser: "Every fit uploaded is an act of generosity.",
+    detail: "Every fit uploaded is an act of generosity: here is how I showed up today, maybe it means something to you. That moment of mutual recognition — when someone else's outfit triggers something in you — is what makes Cloud Closet different from every other platform. It's generative. It creates momentum in self expression. When you make content that captures the spark, you're making Cloud Closet's best content.",
+    tags: ["real style","discovery","taste","fit checks","recognition","authenticity"],
+    affirm: "Content rooted in The Spark tends to be reactive and generative. Think inspiration moments, unexpected styling, and the 'I never would have thought of that' reaction.",
+  },
+];
 
-  function flip(i: number) { setFlipped(prev => { const n=[...prev]; n[i]=true; return n; }); }
-  function completeSection1() { setS1Done(true); setTimeout(() => setSection(2), 600); }
-  function completeSection2() { setS2Done(true); setTimeout(() => setSection(3), 600); }
-  function completeSection3() {
-    setS3Done(true);
-    setModuleDone(true);
-    setTimeout(onComplete, 900);
+function PillarCards({ onDone }: { onDone: () => void }) {
+  const [expanded, setExpanded] = useState<number[]>([]);
+  const [selected, setSelected] = useState<number | null>(null);
+  const allExpanded = PILLARS.every((_, i) => expanded.includes(i));
+
+  function toggle(i: number) {
+    setExpanded(prev => prev.includes(i) ? prev : [...prev, i]);
   }
 
-  // Section progress bar
-  const sectionsDone = [s1Done, s2Done, s3Done].filter(Boolean).length;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2 mb-1">
+        <IcoStar size={13} className="text-amber-400"/>
+        <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Expand all 3 pillars to continue</p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {PILLARS.map((p, i) => {
+          const isOpen = expanded.includes(i);
+          return (
+            <motion.div key={i} layout className={`rounded-2xl border-2 overflow-hidden transition-colors duration-200 ${
+              isOpen ? "border-[#1a2f4a]/30 bg-[#1a2f4a]/3" : "border-slate-200 bg-white"
+            }`}>
+              <button onClick={() => toggle(i)} className="w-full flex items-center gap-4 px-5 py-4 text-left">
+                <span className="text-[11px] font-extrabold text-[#4a8fd4] tabular-nums flex-shrink-0">{p.num}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-extrabold text-slate-800">{p.name}</p>
+                  {!isOpen && <p className="text-xs text-slate-500 mt-0.5 leading-[1.5] truncate">{p.teaser}</p>}
+                </div>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+                  isOpen ? "bg-[#1a2f4a] text-white" : "bg-slate-100 text-slate-400"
+                }`}>
+                  {isOpen ? <IcoCheck size={12}/> : <IcoChevronRight size={12}/>}
+                </div>
+              </button>
+              <AnimatePresence>
+                {isOpen && (
+                  <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:"auto"}} exit={{opacity:0,height:0}}
+                    transition={{duration:0.3,ease:"easeOut" as const}} className="overflow-hidden">
+                    <div className="px-5 pb-5 flex flex-col gap-3 border-t border-slate-100 pt-4">
+                      <p className="text-sm text-slate-600 leading-[1.6]">{p.detail}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {p.tags.map(tag => (
+                          <span key={tag} className="text-[10px] font-bold text-[#1a2f4a] bg-[#1a2f4a]/8 px-2.5 py-1 rounded-full uppercase tracking-wide">{tag}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Pillar affinity question */}
+      <AnimatePresence>
+        {allExpanded && selected === null && (
+          <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{duration:0.3,ease:"easeOut" as const}}
+            className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col gap-3">
+            <p className="text-sm font-extrabold text-slate-700">Before you move on — which pillar does your personal style and content instinct connect with most?</p>
+            <p className="text-xs text-slate-400">No wrong answer.</p>
+            <div className="flex flex-col gap-2">
+              {PILLARS.map((p, i) => (
+                <button key={i} onClick={() => setSelected(i)}
+                  className="flex items-center gap-3 text-left px-4 py-3 rounded-xl border-2 border-slate-200 bg-white hover:border-[#4a8fd4]/50 hover:bg-[#1a2f4a]/3 transition-all active:scale-[0.99]">
+                  <span className="text-[10px] font-extrabold text-[#4a8fd4]">{p.num}</span>
+                  <span className="text-sm font-semibold text-slate-700">{p.name}</span>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+        {selected !== null && (
+          <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{duration:0.3,ease:"easeOut" as const}}
+            className="bg-[#1a2f4a]/5 border border-[#1a2f4a]/15 rounded-2xl p-5 flex flex-col gap-3">
+            <p className="text-[10px] font-bold text-[#4a8fd4] uppercase tracking-widest">Your pillar: {PILLARS[selected].num} — {PILLARS[selected].name}</p>
+            <p className="text-sm text-slate-700 leading-[1.6]">{PILLARS[selected].affirm}</p>
+            <PrimaryBtn onClick={onDone}>Continue to Section 5 <IcoChevronRight size={16}/></PrimaryBtn>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Section 5 — Voice Sorting Game ──────────────────────────────────────────────
+
+const VOICE_PHRASES = [
+  { phrase: "I've been logging my outfits for three weeks and I keep reaching for the same three things. Interesting.", correct: "yes" as const, explanation: "Dry, observational, personal. This trusts the viewer to find the insight without spelling it out." },
+  { phrase: "You NEED to download this app RIGHT NOW it will literally transform your wardrobe!!", correct: "no" as const, explanation: "Too loud, too urgent. Cloud Closet doesn't hype. We trust the product to speak." },
+  { phrase: "Someone on this app styled a vintage jacket in a way I genuinely hadn't considered. That's the whole point of this place.", correct: "yes" as const, explanation: "Warm, specific, connected to The Spark. Doesn't over-explain. Ends on the insight." },
+  { phrase: "Cloud Closet's curated aesthetic makes it the perfect app for building your personal style.", correct: "no" as const, explanation: "Two problems — 'curated' is on the avoid list, and this is brand-speak, not a person talking." },
+  { phrase: "I have a lot of feelings about getting dressed and apparently there's an app for that now.", correct: "yes" as const, explanation: "Dry humor, self-aware, warm. Feels like a real person." },
+  { phrase: "This app is so trendy right now — everyone is talking about it and the aesthetic is everything.", correct: "no" as const, explanation: "Trendy, aesthetic as a noun, vague hype — three things on the avoid list in one sentence." },
+];
+
+function VoiceSorting({ onDone }: { onDone: () => void }) {
+  const [answers, setAnswers] = useState<Record<number, "yes"|"no">>({});
+  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
+  const [currentIdx, setCurrentIdx] = useState(0);
+
+  const current = VOICE_PHRASES[currentIdx];
+  const answered = answers[currentIdx] !== undefined;
+  const isCorrect = answered && answers[currentIdx] === current.correct;
+  const allDone = Object.keys(answers).length === VOICE_PHRASES.length;
+
+  function answer(choice: "yes"|"no") {
+    if (answered) return;
+    setAnswers(prev => ({ ...prev, [currentIdx]: choice }));
+    setRevealed(prev => ({ ...prev, [currentIdx]: true }));
+  }
+
+  function advance() {
+    if (currentIdx < VOICE_PHRASES.length - 1) setCurrentIdx(i => i + 1);
+  }
 
   return (
-    <div className="flex flex-col gap-8">
-      {/* Section progress */}
-      <div className="flex gap-1.5">
-        {[1,2,3].map(n => (
-          <div key={n} className={`h-1 flex-1 rounded-full transition-all duration-500 ${
-            n < section || (n === 1 && s1Done) || (n === 2 && s2Done) || (n === 3 && s3Done) ? "bg-[#4a8fd4]" :
-            n === section ? "bg-[#4a8fd4]/40" : "bg-slate-200"
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2 mb-1">
+        <IcoStar size={13} className="text-amber-400"/>
+        <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Sort these phrases — sounds like Cloud Closet or doesn't?</p>
+      </div>
+
+      {/* Phrase progress */}
+      <div className="flex gap-1">
+        {VOICE_PHRASES.map((p, i) => (
+          <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+            answers[i] !== undefined
+              ? answers[i] === p.correct ? "bg-emerald-400" : "bg-red-400"
+              : i === currentIdx ? "bg-[#4a8fd4]" : "bg-slate-200"
           }`}/>
         ))}
       </div>
 
-      {/* ── Section 1 ── */}
-      <motion.div initial={{opacity:0,y:14}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}}
-        className="flex flex-col gap-6">
-        <SectionHeader n={1} total={3} label="The simplest version"/>
+      {!allDone ? (
+        <>
+          <AnimatePresence mode="wait">
+            <motion.div key={currentIdx} initial={{opacity:0,x:16}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-16}}
+              transition={{duration:0.25,ease:"easeOut" as const}}
+              className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-5">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Phrase {currentIdx + 1} of {VOICE_PHRASES.length}</p>
+              <p className="text-sm text-slate-700 font-semibold leading-[1.6] italic">"{current.phrase}"</p>
+            </motion.div>
+          </AnimatePresence>
 
-        <div className="flex flex-col gap-4">
-          <p className="text-sm text-slate-600 leading-[1.6]">
-            Cloud Closet takes all the outfit pics in your camera roll and all the "what are you wearing" texts and puts them into one clean, organized app. Free to use. Community driven. No ads or clutter. Just everything you need and nothing you don't.
-          </p>
-          <p className="text-sm text-slate-600 leading-[1.6]">
-            That's the elevator pitch. But here's the thing — the product isn't really about the app. It's about the fact that style is a social experience, and nobody had built the right place for it yet. Not influencer social. People social. The difference matters, and it's the whole reason your content needs to feel the way it does.
-          </p>
-          <div className="border-l-4 border-[#4a8fd4] pl-5 py-1">
-            <p className="text-base text-slate-700 leading-[1.7] italic" style={{fontFamily:"Georgia, 'Times New Roman', serif"}}>
-              "We are a place to share your fit, discover someone else's, and find the pieces that actually move you — not because an algorithm decided they should, but because a real person wore them in a way that lit something up in you."
+          {!answered && (
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => answer("yes")}
+                className="py-3.5 rounded-2xl border-2 border-emerald-300 bg-emerald-50 text-emerald-700 font-extrabold text-xs hover:bg-emerald-100 active:scale-[0.98] transition-all">
+                Sounds like Cloud Closet
+              </button>
+              <button onClick={() => answer("no")}
+                className="py-3.5 rounded-2xl border-2 border-red-300 bg-red-50 text-red-600 font-extrabold text-xs hover:bg-red-100 active:scale-[0.98] transition-all">
+                Doesn't sound like us
+              </button>
+            </div>
+          )}
+
+          {revealed[currentIdx] && (
+            <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:0.25,ease:"easeOut" as const}}
+              className={`rounded-2xl p-4 border-2 flex flex-col gap-2 ${isCorrect ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
+              <div className="flex items-center gap-2">
+                {isCorrect ? <IcoCheck size={14} className="text-emerald-500 flex-shrink-0"/> : <IcoX size={14} className="text-red-400 flex-shrink-0"/>}
+                <p className={`font-extrabold text-sm ${isCorrect ? "text-emerald-700" : "text-red-600"}`}>
+                  {isCorrect ? "Correct" : `Not quite — this ${current.correct === "yes" ? "does" : "doesn't"} sound like Cloud Closet`}
+                </p>
+              </div>
+              <p className="text-xs text-slate-600 leading-[1.6]">{current.explanation}</p>
+              {currentIdx < VOICE_PHRASES.length - 1 && (
+                <button onClick={advance} className="self-end text-xs font-extrabold text-[#4a8fd4] hover:text-[#1a2f4a] flex items-center gap-1 mt-1 transition-colors">
+                  Next phrase <IcoChevronRight size={12}/>
+                </button>
+              )}
+              {currentIdx === VOICE_PHRASES.length - 1 && (
+                <button onClick={() => setAnswers(prev => ({ ...prev }))} className="self-end text-xs font-extrabold text-[#4a8fd4] hover:text-[#1a2f4a] flex items-center gap-1 mt-1 transition-colors">
+                  See results <IcoChevronRight size={12}/>
+                </button>
+              )}
+            </motion.div>
+          )}
+        </>
+      ) : (
+        <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{duration:0.35,ease:"easeOut" as const}}
+          className="flex flex-col gap-4">
+          <div className="bg-gradient-to-br from-[#1a2f4a] to-[#1e3a5f] rounded-2xl p-5 text-center">
+            <p className="text-5xl font-extrabold text-white mb-1">
+              {VOICE_PHRASES.filter((p, i) => answers[i] === p.correct).length}<span className="text-2xl text-white/40">/{VOICE_PHRASES.length}</span>
             </p>
+            <p className="text-sm text-white/70 mt-2 leading-[1.6]">The Cloud Closet voice is quiet confidence. It observes. It trusts. It doesn't yell.</p>
+          </div>
+          <PrimaryBtn onClick={onDone}>Continue to Section 6 <IcoChevronRight size={16}/></PrimaryBtn>
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
+// ─── Section 6 — What We Are Not ─────────────────────────────────────────────────
+
+const NOT_LIST = [
+  "We are not an influencer platform",
+  "We are not a trend engine or trend forecast tool",
+  "We are not an AI stylist that tells you what to wear",
+  "We are not loud, busy, or everything at once",
+  "We are not for people who want to perform style — we are for people who want to live it",
+];
+
+function WhatWeAreNot({ onDone }: { onDone: () => void }) {
+  const [visible, setVisible] = useState(0);
+  const [started, setStarted] = useState(false);
+
+  function start() {
+    setStarted(true);
+    let count = 0;
+    const id = setInterval(() => {
+      count++;
+      setVisible(count);
+      if (count >= NOT_LIST.length) clearInterval(id);
+    }, 420);
+  }
+
+  const allVisible = visible >= NOT_LIST.length;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {!started ? (
+        <button onClick={start}
+          className="w-full py-3.5 rounded-2xl border-2 border-[#1a2f4a]/20 bg-[#1a2f4a]/5 text-[#1a2f4a] font-extrabold text-sm hover:bg-[#1a2f4a]/10 active:scale-[0.98] transition-all">
+          Reveal the list
+        </button>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {NOT_LIST.map((item, i) => (
+            <AnimatePresence key={i}>
+              {visible > i && (
+                <motion.div initial={{opacity:0,x:-16}} animate={{opacity:1,x:0}} transition={{duration:0.35,ease:"easeOut" as const}}
+                  className="flex items-start gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5">
+                  <IcoX size={14} className="text-[#1a2f4a] flex-shrink-0 mt-0.5"/>
+                  <p className="text-sm text-slate-700 leading-[1.6] font-medium">{item}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          ))}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {allVisible && (
+          <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{delay:0.3,duration:0.4,ease:"easeOut" as const}}
+            className="flex flex-col gap-4">
+            <div className="border-l-4 border-[#4a8fd4] pl-5 py-1">
+              <p className="text-sm text-slate-700 leading-[1.7] italic" style={{fontFamily:"Georgia, 'Times New Roman', serif"}}>
+                "We are quiet on purpose. Perfection is discouraged and shoes are optional. Come as you are, even in sweatpants."
+              </p>
+            </div>
+            <PrimaryBtn onClick={onDone}>Continue to Section 7 <IcoChevronRight size={16}/></PrimaryBtn>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Section 7 — One Sentence Test ───────────────────────────────────────────────
+
+const LAZY_ANSWERS = ["it's short", "its short", "i worked hard", "i worked on it", "it's good", "its good", "it's funny", "its funny"];
+
+function OneSentenceTest({ onDone }: { onDone: () => void }) {
+  const [value, setValue] = useState("");
+  const [error, setError] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  function submit() {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) { setError("The answer can't be blank."); return; }
+    if (LAZY_ANSWERS.some(a => trimmed.includes(a))) {
+      setError("Try again — the answer has to be something the viewer would say, not something you would say about your own effort.");
+      return;
+    }
+    setError("");
+    setSubmitted(true);
+    setTimeout(onDone, 1400);
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2 mb-1">
+        <IcoStar size={13} className="text-amber-400"/>
+        <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Complete this sentence about a content idea you have</p>
+      </div>
+
+      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
+        <p className="text-sm text-slate-600 leading-[1.6] mb-4">
+          Before you post or submit anything, ask yourself: does this feel like something a real person made about an app they actually use? Does it feel like a TikTok, or does it feel like an ad? Would it pass the scroll test — meaning, would someone stop and watch, or would they keep going? Would both a maximalist and a minimalist see themselves in it?
+        </p>
+        <div className="border-t border-slate-200 pt-4">
+          <p className="text-sm font-extrabold text-slate-700 mb-3 leading-[1.6]">
+            "Someone will watch this to the end because <span className="text-[#4a8fd4]">___________.</span>"
+          </p>
+          {!submitted ? (
+            <div className="flex flex-col gap-2">
+              <textarea
+                value={value}
+                onChange={e => { setValue(e.target.value); setError(""); }}
+                placeholder="…they've felt this exact thing and didn't know how to say it."
+                rows={3}
+                className="w-full border-2 border-slate-200 rounded-xl px-3.5 py-3 text-sm text-slate-800 outline-none focus:border-[#4a8fd4] transition-colors resize-none placeholder:text-slate-300 leading-[1.6]"
+              />
+              <AnimatePresence>
+                {error && (
+                  <motion.p initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}} exit={{opacity:0}}
+                    className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 leading-[1.6]">
+                    {error}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+              <PrimaryBtn onClick={submit} disabled={!value.trim()}>Submit</PrimaryBtn>
+            </div>
+          ) : (
+            <motion.div initial={{opacity:0,scale:0.97}} animate={{opacity:1,scale:1}} transition={{duration:0.3,ease:"easeOut" as const}}
+              className="bg-[#1a2f4a]/5 border border-[#1a2f4a]/15 rounded-xl p-4">
+              <p className="text-sm font-extrabold text-[#1a2f4a] mb-1">Saved.</p>
+              <p className="text-xs text-slate-600 leading-[1.6]">Come back to it every time you sit down to make a video.</p>
+            </motion.div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Module 1 — Full Multi-Section Component ─────────────────────────────────────
+
+function Module1Content({ onComplete }: { onComplete: () => void }) {
+  const [section, setSection] = useState(1);
+  const [sDone, setSDone] = useState<boolean[]>([false,false,false,false,false,false,false]);
+  const [flipped, setFlipped] = useState([false, false, false]);
+  const allFlipped = flipped.every(Boolean);
+  const TOTAL_SECTIONS = 7;
+
+  function flip(i: number) { setFlipped(prev => { const n=[...prev]; n[i]=true; return n; }); }
+
+  function completeSection(n: number) {
+    setSDone(prev => { const next=[...prev]; next[n-1]=true; return next; });
+    if (n < TOTAL_SECTIONS) setTimeout(() => setSection(n + 1), 600);
+    else setTimeout(onComplete, 900);
+  }
+
+  // Section progress bar (7 segments)
+  const segmentClass = (n: number) => {
+    if (sDone[n-1]) return "bg-[#4a8fd4]";
+    if (n === section) return "bg-[#4a8fd4]/40";
+    return "bg-slate-200";
+  };
+
+  function SectionDoneTag() {
+    return (
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} className="flex items-center gap-2 text-xs font-bold text-emerald-600">
+        <IcoCheck size={13}/> Section complete
+      </motion.div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      {/* 7-segment progress bar */}
+      <div className="flex gap-1">
+        {Array.from({length: TOTAL_SECTIONS}, (_, i) => i+1).map(n => (
+          <div key={n} className={`h-1 flex-1 rounded-full transition-all duration-500 ${segmentClass(n)}`}/>
+        ))}
+      </div>
+
+      {/* ── Section 1 ── */}
+      <motion.div initial={{opacity:0,y:14}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6">
+        <SectionHeader n={1} total={TOTAL_SECTIONS} label="The simplest version"/>
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-slate-600 leading-[1.6]">Cloud Closet takes all the outfit pics in your camera roll and all the "what are you wearing" texts and puts them into one clean, organized app. Free to use. Community driven. No ads or clutter. Just everything you need and nothing you don't.</p>
+          <p className="text-sm text-slate-600 leading-[1.6]">That's the elevator pitch. But here's the thing — the product isn't really about the app. It's about the fact that style is a social experience, and nobody had built the right place for it yet. Not influencer social. People social. The difference matters, and it's the whole reason your content needs to feel the way it does.</p>
+          <div className="border-l-4 border-[#4a8fd4] pl-5 py-1">
+            <p className="text-base text-slate-700 leading-[1.7] italic" style={{fontFamily:"Georgia, 'Times New Roman', serif"}}>"We are a place to share your fit, discover someone else's, and find the pieces that actually move you — not because an algorithm decided they should, but because a real person wore them in a way that lit something up in you."</p>
           </div>
         </div>
-
-        {/* Flip cards */}
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <IcoStar size={13} className="text-amber-400"/>
-            <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Flip all 3 cards to continue</p>
-          </div>
+          <div className="flex items-center gap-2 mb-1"><IcoStar size={13} className="text-amber-400"/><p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Flip all 3 cards to continue</p></div>
           <p className="text-xs text-slate-400 mb-4">{flipped.filter(Boolean).length} of 3 flipped{allFlipped ? " — nice work!" : ""}</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {FLIP_CARDS.map((card, i) => (
-              <FlipCard key={i} front={card.front} back={card.back} flipped={flipped[i]} onFlip={() => flip(i)}/>
-            ))}
+            {FLIP_CARDS.map((card, i) => <FlipCard key={i} front={card.front} back={card.back} flipped={flipped[i]} onFlip={() => flip(i)}/>)}
           </div>
         </div>
-
         <AnimatePresence>
-          {allFlipped && !s1Done && (
+          {allFlipped && !sDone[0] && (
             <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:0.3,ease:"easeOut" as const}}>
-              <PrimaryBtn onClick={completeSection1}>Continue to Section 2 <IcoChevronRight size={16}/></PrimaryBtn>
+              <PrimaryBtn onClick={() => completeSection(1)}>Continue to Section 2 <IcoChevronRight size={16}/></PrimaryBtn>
             </motion.div>
           )}
-          {s1Done && (
-            <motion.div initial={{opacity:0}} animate={{opacity:1}} className="flex items-center gap-2 text-xs font-bold text-emerald-600">
-              <IcoCheck size={13}/> Section 1 complete
-            </motion.div>
-          )}
+          {sDone[0] && <SectionDoneTag/>}
         </AnimatePresence>
       </motion.div>
 
       {/* ── Section 2 ── */}
-      <AnimatePresence>
-        {section >= 2 && (
-          <motion.div key="s2" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}}
-            className="flex flex-col gap-6 pt-2 border-t border-slate-100">
-            <SectionHeader n={2} total={3} label="What we're replacing"/>
-
-            <div className="flex flex-col gap-4">
-              <p className="text-sm text-slate-600 leading-[1.6]">
-                People have always had a system — a camera roll of fits, a Pinterest board, a group chat they rely on for style opinions. What they didn't have was one place that does all three. Shopping, sharing, and communicating. Cloud Closet captures all of them.
-              </p>
-              <p className="text-sm text-slate-600 leading-[1.6]">
-                But the way you talk about this as a creator is important. We don't shame people's current method. We don't say their camera roll is a mess or their Pinterest board is outdated. We ask questions that guide people into recognizing on their own that there's a better way. We recognize and guide the conversation. We don't lecture.
-              </p>
-            </div>
-
-            <FramingToggle onDone={completeSection2}/>
-
-            {s2Done && (
-              <motion.div initial={{opacity:0}} animate={{opacity:1}} className="flex items-center gap-2 text-xs font-bold text-emerald-600">
-                <IcoCheck size={13}/> Section 2 complete
-              </motion.div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {section >= 2 && (
+        <motion.div key="s2" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={2} total={TOTAL_SECTIONS} label="What we're replacing"/>
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-slate-600 leading-[1.6]">People have always had a system — a camera roll of fits, a Pinterest board, a group chat they rely on for style opinions. What they didn't have was one place that does all three. Shopping, sharing, and communicating. Cloud Closet captures all of them.</p>
+            <p className="text-sm text-slate-600 leading-[1.6]">But the way you talk about this as a creator is important. We don't shame people's current method. We don't say their camera roll is a mess or their Pinterest board is outdated. We ask questions that guide people into recognizing on their own that there's a better way. We recognize and guide the conversation. We don't lecture.</p>
+          </div>
+          {!sDone[1] ? <FramingToggle onDone={() => completeSection(2)}/> : <SectionDoneTag/>}
+        </motion.div>
+      )}
 
       {/* ── Section 3 ── */}
-      <AnimatePresence>
-        {section >= 3 && (
-          <motion.div key="s3" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}}
-            className="flex flex-col gap-6 pt-2 border-t border-slate-100">
-            <SectionHeader n={3} total={3} label="Everyone who has ever gotten dressed and felt something"/>
+      {section >= 3 && (
+        <motion.div key="s3" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={3} total={TOTAL_SECTIONS} label="Everyone who has ever gotten dressed and felt something"/>
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-slate-600 leading-[1.6]">That's not marketing language. It's the actual brief. Cloud Closet is for the older sister whose mom's bag finally made its way to her. The younger one who styles it in a way nobody saw coming. The thrifter. The guy who knows exactly what he's doing. The fashion obsessive with an archive. The person in Seoul whose fit stops someone in Alabama cold.</p>
+            <p className="text-sm text-slate-600 leading-[1.6]">This matters for your content because your job is not to speak to one corner of the closet.</p>
+          </div>
+          {!sDone[2] ? <ContentTestSlider onDone={() => completeSection(3)}/> : <SectionDoneTag/>}
+        </motion.div>
+      )}
 
-            <div className="flex flex-col gap-4">
-              <p className="text-sm text-slate-600 leading-[1.6]">
-                That's not marketing language. It's the actual brief. Cloud Closet is for the older sister whose mom's bag finally made its way to her. The younger one who styles it in a way nobody saw coming. The thrifter. The guy who knows exactly what he's doing. The fashion obsessive with an archive. The person in Seoul whose fit stops someone in Alabama cold.
-              </p>
-              <p className="text-sm text-slate-600 leading-[1.6]">
-                This matters for your content because your job is not to speak to one corner of the closet.
-              </p>
-            </div>
+      {/* ── Section 4 ── */}
+      {section >= 4 && (
+        <motion.div key="s4" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={4} total={TOTAL_SECTIONS} label="Three things that anchor every piece of content"/>
+          <p className="text-xs text-slate-400 -mt-3 leading-[1.6]">These aren't abstract values. They're what every video should connect back to.</p>
+          {!sDone[3] ? <PillarCards onDone={() => completeSection(4)}/> : <SectionDoneTag/>}
+        </motion.div>
+      )}
 
-            {!s3Done && <ContentTestSlider onDone={completeSection3}/>}
+      {/* ── Section 5 ── */}
+      {section >= 5 && (
+        <motion.div key="s5" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={5} total={TOTAL_SECTIONS} label="How Cloud Closet sounds"/>
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-slate-600 leading-[1.6]">Think of a group chat that evolved into an editorial. Confident, observational, dry — but warm underneath. We don't over-explain. We don't hype. We write and speak like we're already friends with the person watching.</p>
+            <p className="text-sm text-slate-600 leading-[1.6]">The reference point: SSENSE deadpan but with a beating heart. You trust the viewer to get it. You don't spell out the joke. You don't beg for the follow. You show up and say something true.</p>
+          </div>
+          {!sDone[4] ? <VoiceSorting onDone={() => completeSection(5)}/> : <SectionDoneTag/>}
+        </motion.div>
+      )}
 
-            {s3Done && (
-              <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}}
-                className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
-                  <IcoCheck size={18} className="text-white"/>
-                </div>
-                <div>
-                  <p className="text-sm font-extrabold text-emerald-700">Module 1 complete!</p>
-                  <p className="text-xs text-slate-500 mt-0.5 leading-[1.6]">Returning you to the overview to unlock Module 2.</p>
-                </div>
-              </motion.div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* ── Section 6 ── */}
+      {section >= 6 && (
+        <motion.div key="s6" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={6} total={TOTAL_SECTIONS} label="Just as important as what we are"/>
+          <p className="text-xs text-slate-400 -mt-3 leading-[1.6]">If your content accidentally positions Cloud Closet as any of the following, it's off-brand.</p>
+          {!sDone[5] ? <WhatWeAreNot onDone={() => completeSection(6)}/> : <SectionDoneTag/>}
+        </motion.div>
+      )}
+
+      {/* ── Section 7 ── */}
+      {section >= 7 && (
+        <motion.div key="s7" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={7} total={TOTAL_SECTIONS} label="How we measure whether content is working"/>
+          {!sDone[6] ? <OneSentenceTest onDone={() => completeSection(7)}/> : (
+            <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0"><IcoCheck size={18} className="text-white"/></div>
+              <div>
+                <p className="text-sm font-extrabold text-emerald-700">Module 1 complete!</p>
+                <p className="text-xs text-slate-500 mt-0.5 leading-[1.6]">Returning to the overview — Module 2 is now unlocked.</p>
+              </div>
+            </motion.div>
+          )}
+        </motion.div>
+      )}
     </div>
   );
 }
