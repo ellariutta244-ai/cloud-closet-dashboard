@@ -100,82 +100,16 @@ interface ModuleData { id:number; title:string; subtitle:string; description?:st
 // ─── Wizard step order (for progress) ───────────────────────────────────────────
 
 const WIZARD_STEPS: WizardStep[] = ["intro","why","username","photo","bio","link","public","warmup","quiz"];
-// Total progress ticks: 8 L1 sub-steps (intro=0→quiz pass=8) + 1 each for L2,L3,L4 = 11
-const TOTAL_TICKS = 11;
+// Total progress ticks: 1 for L1 completion + 8 for L2 wizard sub-steps = 9
+const TOTAL_TICKS = 9;
 
 // ─── Module Definitions ─────────────────────────────────────────────────────────
 
 const MODULES: ModuleData[] = [
-  { id:1, title:"The Setup", subtitle:"Account Setup & Warm-Up Protocol", wizardMode:true },
-  {
-    id:2, title:"The First Week", subtitle:"Your First 3 Videos & Hook Mastery",
-    description:[
-      "Your first three UGC videos set the tone for your entire account: The Unboxing, The Style-Inspo, and The Honest Review.",
-      "The most important skill you'll build in week one? Hooks that stop the scroll in the first 2 seconds.",
-    ],
-    highlights:[
-      { icon:"📦", text:"Video 1 — The Unboxing: Authentic reaction, item arriving on camera" },
-      { icon:"💫", text:"Video 2 — The Style-Inspo: 3+ ways to wear the same piece" },
-      { icon:"⭐", text:"Video 3 — The Honest Review: Real talk, real opinion — keep it genuine" },
-      { icon:"⏱", text:"Your hook must land in the first 2 seconds or viewers scroll away" },
-    ],
-    question:{ type:"quiz", question:"Which of these is a strong opening hook?",
-      options:[
-        { id:"a", text:"\"Hey guys, welcome back to my channel!\"" },
-        { id:"b", text:"\"Hi, today I'm going to show you some cute outfits.\"" },
-        { id:"c", text:"\"I wore the same 3 pieces 7 different ways — here's how.\"" },
-        { id:"d", text:"\"So I just got a package and wanted to share it with you all.\"" },
-      ],
-      correct:"c", explanation:"Option C is specific, creates curiosity, and promises value immediately. The others start with generic greetings or vague setups that lose viewers before the video begins.",
-    },
-  },
-  {
-    id:3, title:"Daily Upkeep", subtitle:"Dashboard Check-Ins, Comments & Uploads",
-    description:[
-      "Consistency isn't just about posting — it's the routine behind it. Top creators spend 15–20 minutes per day on upkeep.",
-      "Put these daily tasks in the right order, from most to least important.",
-    ],
-    highlights:[
-      { icon:"📊", text:"Check your dashboard for new briefs every morning" },
-      { icon:"🎥", text:"Film and post your scheduled content for the day" },
-      { icon:"📤", text:"Upload your raw footage to the platform after filming" },
-      { icon:"💬", text:"Engage with comments — reply within the first hour of posting" },
-      { icon:"📈", text:"Review analytics from your last post before sleeping" },
-    ],
-    question:{ type:"drag", prompt:"Order these daily tasks from most → least important:",
-      items:[
-        { id:"engage", text:"💬 Engage with comments" },
-        { id:"upload", text:"📤 Upload raw footage" },
-        { id:"brief",  text:"📊 Check dashboard for new briefs" },
-        { id:"film",   text:"🎥 Film your scheduled content" },
-        { id:"analytics", text:"📈 Review last post's analytics" },
-      ],
-      correctOrder:["brief","film","upload","engage","analytics"],
-      explanation:"Start your day by checking for briefs (so you know what to film), then create and upload content, engage with your community, and wind down by reviewing analytics to improve tomorrow.",
-    },
-  },
-  {
-    id:4, title:"Guidelines", subtitle:"Lighting, Language & Music Rules",
-    description:[
-      "Cloud Closet has non-negotiable content standards that protect the brand and keep your content performing.",
-      "Lighting requirements, banned phrases, and music usage rights are all covered here — read these carefully.",
-    ],
-    highlights:[
-      { icon:"💡", text:"Lighting: Natural or ring light only — no dark or grainy footage" },
-      { icon:"🚫", text:"No-Go phrases: \"cheap,\" \"buy now,\" \"sale,\" \"limited time,\" \"hurry\"" },
-      { icon:"🎵", text:"Music: TikTok commercial sounds only — no unlicensed audio" },
-      { icon:"🎨", text:"Background: Clean and uncluttered, no competitor brand items visible" },
-    ],
-    question:{ type:"quiz", question:"Which caption is NOT allowed in Cloud Closet content?",
-      options:[
-        { id:"a", text:"\"I've been styling this three different ways all week.\"" },
-        { id:"b", text:"\"This is the most versatile piece in my closet right now.\"" },
-        { id:"c", text:"\"So cheap — you need to buy this before it sells out!\"" },
-        { id:"d", text:"\"I tested this outfit for a full week, here's my honest take.\"" },
-      ],
-      correct:"c", explanation:"Option C contains two banned phrases: \"cheap\" (undermines brand positioning) and \"buy\" (pushy sales language). All other options reflect authentic Cloud Closet voice.",
-    },
-  },
+  // Level 1 content coming soon — placeholder
+  { id:1, title:"Understanding the Platform", subtitle:"Background, Mindset & How TikTok Works" },
+  // Level 2 = former Level 1 wizard
+  { id:2, title:"The Setup", subtitle:"Account Setup & Warm-Up Protocol", wizardMode:true },
 ];
 
 const WARM_UP_DAYS = [
@@ -698,103 +632,27 @@ function Level1Wizard({ onPass, onStepChange }: { onPass:()=>void; onStepChange:
   );
 }
 
-// ─── Quiz Section (Levels 2–4) ──────────────────────────────────────────────────
+// ─── Level 1 Placeholder (content coming soon) ──────────────────────────────────
 
-function QuizSection({ question, onPass }: { question:QuizQ; onPass:()=>void }) {
-  const [selected, setSelected] = useState<string|null>(null);
-  const [submitted, setSubmitted] = useState(false);
-  const isCorrect = submitted && selected === question.correct;
-  function submit() { if (!selected) return; setSubmitted(true); if (selected===question.correct) setTimeout(onPass,1400); }
+function Level1Placeholder({ onPass }: { onPass: () => void }) {
+  const [confirmed, setConfirmed] = useState(false);
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm font-extrabold text-slate-700 leading-[1.6]">{question.question}</p>
-      <div className="flex flex-col gap-2">
-        {question.options.map(opt => {
-          const isSel=selected===opt.id, isRight=opt.id===question.correct;
-          let cls="w-full text-left px-4 py-3.5 rounded-2xl border-2 text-sm transition-all duration-200 ";
-          if (!submitted) cls+=isSel?"border-[#1a2f4a] bg-[#1a2f4a]/5 text-[#1a2f4a] font-semibold shadow-sm":"border-slate-200 bg-white text-slate-700 hover:border-[#4a8fd4]/50 hover:bg-slate-50 active:scale-[0.99]";
-          else if (isRight) cls+="border-emerald-400 bg-emerald-50 text-emerald-800 font-semibold";
-          else if (isSel) cls+="border-red-300 bg-red-50 text-red-700";
-          else cls+="border-slate-100 bg-slate-50/60 text-slate-400";
-          return (
-            <button key={opt.id} className={cls} onClick={() => !submitted&&setSelected(opt.id)} disabled={submitted}>
-              <span className="flex items-center gap-3">
-                <span className="w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 text-[11px] font-extrabold" style={{borderColor:"currentColor"}}>{opt.id.toUpperCase()}</span>
-                <span className="flex-1 text-left leading-[1.6]">{opt.text}</span>
-                {submitted&&isRight&&<IcoCheck size={15} className="text-emerald-500 flex-shrink-0"/>}
-                {submitted&&isSel&&!isRight&&<IcoX size={15} className="text-red-400 flex-shrink-0"/>}
-              </span>
-            </button>
-          );
-        })}
+    <div className="flex flex-col gap-5">
+      <div className="bg-[#1a2f4a]/5 border border-[#1a2f4a]/10 rounded-2xl p-5 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#1a2f4a] to-[#26476e] flex items-center justify-center mx-auto mb-4 shadow-lg">
+          <IcoStar size={22} className="text-white"/>
+        </div>
+        <h3 className="text-base font-extrabold text-slate-800 mb-2">Level 1 content is on its way</h3>
+        <p className="text-sm text-slate-500 leading-[1.6] max-w-xs mx-auto">
+          This module will cover background knowledge, platform mindset, and how TikTok's algorithm works — so you understand <em>why</em> you're doing everything in Level 2.
+        </p>
       </div>
-      {!submitted ? (
-        <PrimaryBtn onClick={submit} disabled={!selected}>Submit Answer</PrimaryBtn>
-      ) : (
-        <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} className={`rounded-2xl p-4 border ${isCorrect?"bg-emerald-50 border-emerald-200":"bg-red-50 border-red-200"}`}>
-          <div className="flex items-center gap-2 mb-1.5">
-            {isCorrect?<IcoCheck size={15} className="text-emerald-500 flex-shrink-0"/>:<IcoX size={15} className="text-red-400 flex-shrink-0"/>}
-            <p className={`font-extrabold text-sm ${isCorrect?"text-emerald-700":"text-red-600"}`}>{isCorrect?"Correct! Moving to the next module…":"Not quite — try again!"}</p>
-          </div>
-          <p className="text-xs text-slate-600 leading-[1.6]">{question.explanation}</p>
-          {!isCorrect&&<button onClick={()=>{setSelected(null);setSubmitted(false);}} className="mt-2.5 flex items-center gap-1.5 text-xs text-red-600 font-bold"><IcoRefresh size={11}/> Try again</button>}
-        </motion.div>
-      )}
-    </div>
-  );
-}
-
-function DragDropSection({ question, onPass }: { question:DragQ; onPass:()=>void }) {
-  const [items, setItems] = useState([...question.items]);
-  const [submitted, setSubmitted] = useState(false);
-  const [dragIdx, setDragIdx] = useState<number|null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number|null>(null);
-  const isCorrect = items.map(i=>i.id).join(",")===question.correctOrder.join(",");
-  function move(from:number, to:number) { const n=[...items]; const [x]=n.splice(from,1); n.splice(to,0,x); setItems(n); }
-  function handleSubmit() { setSubmitted(true); if(isCorrect) setTimeout(onPass,1400); }
-  return (
-    <div className="flex flex-col gap-3">
-      <div>
-        <p className="text-sm font-extrabold text-slate-700 leading-[1.6]">{question.prompt}</p>
-        <p className="text-xs text-slate-400 mt-0.5">Drag to reorder, or use the ↑↓ buttons</p>
+      <div className="flex flex-col gap-2.5">
+        <ConfirmCheck checked={confirmed} onChange={setConfirmed} label="I understand — I'll revisit this module when it's ready"/>
       </div>
-      <div className="flex flex-col gap-2">
-        {items.map((item,idx) => (
-          <div key={item.id} draggable={!submitted}
-            onDragStart={()=>setDragIdx(idx)} onDragEnter={()=>setDragOverIdx(idx)} onDragOver={e=>e.preventDefault()}
-            onDragEnd={()=>{ if(dragIdx!==null&&dragOverIdx!==null&&dragIdx!==dragOverIdx) move(dragIdx,dragOverIdx); setDragIdx(null);setDragOverIdx(null); }}
-            className={["flex items-center gap-3 px-3 py-3 rounded-2xl border-2 text-sm transition-all",
-              submitted?"cursor-default":"cursor-grab active:cursor-grabbing",
-              dragIdx===idx?"opacity-40 scale-[0.98]":"",
-              dragOverIdx===idx&&dragIdx!==null&&dragIdx!==idx?"border-[#4a8fd4] bg-[#1a2f4a]/5 shadow-md":
-              submitted?isCorrect?"border-emerald-300 bg-emerald-50":"border-slate-200 bg-white":
-              "border-slate-200 bg-white hover:border-slate-300",
-            ].filter(Boolean).join(" ")}>
-            <IcoGrip size={15} className="text-slate-300 flex-shrink-0"/>
-            <span className="w-5 h-5 rounded-full bg-[#1a2f4a] text-white text-[11px] font-extrabold flex items-center justify-center flex-shrink-0">{idx+1}</span>
-            <span className="flex-1 text-slate-700 leading-[1.6]">{item.text}</span>
-            {!submitted&&(
-              <div className="flex flex-col gap-0.5 ml-auto flex-shrink-0">
-                <button onClick={()=>idx>0&&move(idx,idx-1)} disabled={idx===0} className="p-1 rounded text-slate-300 hover:text-slate-600 disabled:opacity-20 transition-colors"><IcoArrowUp size={12}/></button>
-                <button onClick={()=>idx<items.length-1&&move(idx,idx+1)} disabled={idx===items.length-1} className="p-1 rounded text-slate-300 hover:text-slate-600 disabled:opacity-20 transition-colors"><IcoArrowDown size={12}/></button>
-              </div>
-            )}
-            {submitted&&isCorrect&&<IcoCheck size={14} className="text-emerald-500 flex-shrink-0 ml-auto"/>}
-          </div>
-        ))}
-      </div>
-      {!submitted ? (
-        <PrimaryBtn onClick={handleSubmit}>Submit Order</PrimaryBtn>
-      ) : (
-        <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} className={`rounded-2xl p-4 border ${isCorrect?"bg-emerald-50 border-emerald-200":"bg-amber-50 border-amber-200"}`}>
-          <div className="flex items-center gap-2 mb-1.5">
-            {isCorrect?<IcoCheck size={15} className="text-emerald-500 flex-shrink-0"/>:<IcoX size={15} className="text-amber-500 flex-shrink-0"/>}
-            <p className={`font-extrabold text-sm ${isCorrect?"text-emerald-700":"text-amber-700"}`}>{isCorrect?"Perfect order! Moving on…":"Not quite — give it another try!"}</p>
-          </div>
-          <p className="text-xs text-slate-600 leading-[1.6]">{question.explanation}</p>
-          {!isCorrect&&<button onClick={()=>{setItems([...question.items]);setSubmitted(false);}} className="mt-2.5 flex items-center gap-1.5 text-xs text-amber-600 font-bold"><IcoRefresh size={11}/> Try again</button>}
-        </motion.div>
-      )}
+      <PrimaryBtn onClick={onPass} disabled={!confirmed}>
+        Continue to Level 2 <IcoChevronRight size={16}/>
+      </PrimaryBtn>
     </div>
   );
 }
@@ -864,15 +722,15 @@ function WelcomeModal({ onClose }: { onClose:()=>void }) {
 
 export function UGCOnboardingPage({ profile }: { profile:{ full_name?:string } }) {
   const [currentModule, setCurrentModule] = useState(0);
-  const [statuses, setStatuses] = useState<ModuleStatus[]>(["active","locked","locked","locked"]);
+  const [statuses, setStatuses] = useState<ModuleStatus[]>(["active","locked"]);
   const [showModal, setShowModal] = useState(false);
-  const [l1Step, setL1Step] = useState<WizardStep>("intro");
+  const [l2Step, setL2Step] = useState<WizardStep>("intro");
 
-  // Granular progress: L1 wizard has 8 sub-steps (intro=0 → quiz pass=8), then +1 per module for L2–L4 = 11 total
-  const wizardIdx = WIZARD_STEPS.indexOf(l1Step);
-  const completedModules = statuses.filter((s,i) => s==="completed" && i>0).length; // L2–L4 completions
-  const l1Done = statuses[0]==="completed";
-  const currentTicks = l1Done ? 8 + completedModules : wizardIdx;
+  // Granular progress: 1 tick for L1 completion + 8 sub-steps for L2 wizard = 9 total
+  const l1Done = statuses[0] === "completed";
+  const l2Done = statuses[1] === "completed";
+  const wizardIdx = WIZARD_STEPS.indexOf(l2Step);
+  const currentTicks = l1Done ? 1 + (l2Done ? 8 : wizardIdx) : 0;
   const progressPct = Math.min((currentTicks / TOTAL_TICKS) * 100, 100);
 
   async function triggerConfetti() {
@@ -939,69 +797,35 @@ export function UGCOnboardingPage({ profile }: { profile:{ full_name?:string } }
         </div>
 
         <div className="p-5">
-          {/* Level 1 wizard */}
+          {/* Level 1 placeholder (coming soon) */}
+          {!mod.wizardMode && currentModule === 0 && !isCompleted && (
+            <Level1Placeholder onPass={() => handlePass(0)}/>
+          )}
+          {!mod.wizardMode && currentModule === 0 && isCompleted && (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center">
+                <IcoCheck size={28} className="text-emerald-500"/>
+              </div>
+              <p className="text-base font-extrabold text-slate-700">Level 1 Complete!</p>
+              <p className="text-sm text-slate-500 leading-[1.6]">Select Level 2 above to continue with account setup.</p>
+            </div>
+          )}
+
+          {/* Level 2 wizard */}
           {mod.wizardMode && !isCompleted && (
-            <Level1Wizard key="l1" onPass={() => handlePass(0)} onStepChange={s => setL1Step(s)}/>
+            <Level1Wizard key="l2" onPass={() => handlePass(1)} onStepChange={s => setL2Step(s)}/>
           )}
           {mod.wizardMode && isCompleted && (
             <div className="flex flex-col items-center gap-3 py-8 text-center">
               <div className="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center">
                 <IcoCheck size={28} className="text-emerald-500"/>
               </div>
-              <p className="text-base font-extrabold text-slate-700">Level 1 Complete!</p>
-              <p className="text-sm text-slate-500 leading-[1.6]">Your account is set up and you know the warm-up plan. Select Level 2 above to continue.</p>
+              <p className="text-base font-extrabold text-slate-700">Level 2 Complete!</p>
+              <p className="text-sm text-slate-500 leading-[1.6]">Your account is set up and you know the warm-up plan. More modules coming soon.</p>
             </div>
           )}
 
-          {/* Levels 2–4 */}
-          {!mod.wizardMode && (
-            <div className="flex flex-col gap-5">
-              {mod.description && (
-                <div className="flex flex-col gap-2">
-                  {mod.description.map((para,i) => (
-                    <p key={i} className="text-sm text-slate-600 leading-[1.6]">{para}</p>
-                  ))}
-                </div>
-              )}
-              {mod.highlights && (
-                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.12em] mb-3">Key Takeaways</p>
-                  <div className="flex flex-col gap-2.5">
-                    {mod.highlights.map((h,i) => (
-                      <SlideItem key={i} i={i}>
-                        <div className="flex items-start gap-3 text-sm text-slate-700">
-                          <span className="text-base flex-shrink-0 leading-snug">{h.icon}</span>
-                          <span className="leading-[1.6]">{h.text}</span>
-                        </div>
-                      </SlideItem>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="border-t border-slate-100 pt-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <IcoStar size={14} className="text-amber-400"/>
-                  <p className="text-sm font-extrabold text-slate-700">Knowledge Check</p>
-                  {isCompleted && (
-                    <span className="ml-auto flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
-                      <IcoCheck size={11}/> Passed
-                    </span>
-                  )}
-                </div>
-                {isCompleted ? (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 text-center">
-                    <IcoCheck size={28} className="text-emerald-500 mx-auto mb-2"/>
-                    <p className="text-sm font-extrabold text-emerald-700">Module Complete!</p>
-                    <p className="text-xs text-slate-500 mt-1 leading-[1.6]">Select the next module above to continue.</p>
-                  </div>
-                ) : mod.question?.type==="quiz" ? (
-                  <QuizSection key={`quiz-${currentModule}`} question={mod.question as QuizQ} onPass={() => handlePass(currentModule)}/>
-                ) : mod.question?.type==="drag" ? (
-                  <DragDropSection key={`drag-${currentModule}`} question={mod.question as DragQ} onPass={() => handlePass(currentModule)}/>
-                ) : null}
-              </div>
-            </div>
-          )}
+          {/* Placeholder for future modules beyond L2 — nothing to render yet */}
         </div>
       </motion.div>
 
