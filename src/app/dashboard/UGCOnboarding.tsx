@@ -1739,12 +1739,158 @@ function WaveSystem({ onDone }: { onDone: () => void }) {
   );
 }
 
-// ─── Module 2 (index 2 = "Module 3") — Full Multi-Section Component ───────────────
+// ─── Section 4 — FYP vs Search toggle ───────────────────────────────────────────
+
+function DiscoveryToggle({ onDone }: { onDone: () => void }) {
+  const [active, setActive] = useState<"fyp"|"search">("fyp");
+  const [seen, setSeen] = useState<Set<string>>(new Set(["fyp"]));
+
+  function pick(panel: "fyp"|"search") {
+    setActive(panel);
+    setSeen(prev => { const next = new Set(prev); next.add(panel); return next; });
+  }
+
+  const bothSeen = seen.has("fyp") && seen.has("search");
+
+  const panels = {
+    fyp: {
+      label: "For You Page",
+      tag: "Passive discovery",
+      color: "from-[#1a2f4a] to-[#1e3a5f]",
+      body: "Driven entirely by behavioral signals — watch time, completion, shares. A video can go viral here without any keyword optimization if it performs. This is the main distribution engine.",
+      signals: ["Completion rate", "Rewatch rate", "Shares", "Saves"],
+    },
+    search: {
+      label: "Search",
+      tag: "Active discovery",
+      color: "from-[#0f3460] to-[#1a4a7a]",
+      body: "Works like a search engine. TikTok transcribes your spoken audio, reads on-screen text, and indexes captions and hashtags. A well-keyworded video with weak engagement will rank in search but won't get FYP push.",
+      signals: ["Keywords in captions", "Spoken words", "On-screen text", "Hashtags"],
+    },
+  };
+
+  const panel = panels[active];
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Toggle buttons */}
+      <div className="flex rounded-2xl border-2 border-slate-200 overflow-hidden">
+        {(["fyp","search"] as const).map(key => (
+          <button key={key} onClick={() => pick(key)}
+            className={`flex-1 py-3 text-sm font-extrabold transition-all duration-200 flex items-center justify-center gap-2 ${
+              active === key
+                ? "bg-gradient-to-r from-[#1a2f4a] to-[#1e3a5f] text-white"
+                : "bg-white text-slate-500 hover:bg-slate-50"
+            }`}>
+            {seen.has(key) && active !== key && <IcoCheck size={12} className="text-emerald-400"/>}
+            {key === "fyp" ? "For You Page" : "Search"}
+          </button>
+        ))}
+      </div>
+
+      {/* Panel */}
+      <AnimatePresence mode="wait">
+        <motion.div key={active} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}
+          transition={{duration:0.25,ease:"easeOut" as const}}
+          className={`rounded-2xl bg-gradient-to-br ${panel.color} p-5 flex flex-col gap-4`}>
+          <div>
+            <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{panel.tag}</span>
+            <h4 className="text-base font-extrabold text-white mt-0.5">{panel.label}</h4>
+          </div>
+          <p className="text-sm text-white/80 leading-[1.6]">{panel.body}</p>
+          <div>
+            <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-2">Signals that matter</p>
+            <div className="flex flex-wrap gap-2">
+              {panel.signals.map(sig => (
+                <span key={sig} className="text-xs font-bold text-white bg-white/15 border border-white/20 px-2.5 py-1 rounded-full">{sig}</span>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Both at once — animates in after both panels seen */}
+      <AnimatePresence>
+        {bothSeen && (
+          <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}}
+            className="flex flex-col gap-4">
+            <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5 flex flex-col gap-3">
+              <p className="text-xs font-extrabold text-amber-700 uppercase tracking-wide">Both at once</p>
+              <p className="text-sm text-slate-700 leading-[1.6]">Say your keywords out loud. Put them in on-screen text. Write captions the way someone would search — <span className="font-bold text-slate-800">"how I organize my outfits using Cloud Closet"</span> beats <span className="font-bold text-slate-800">"game changing app 🤍."</span> This costs nothing extra and makes your content findable through both paths simultaneously.</p>
+            </div>
+            <PrimaryBtn onClick={onDone}>Continue to Section 5 <IcoChevronRight size={16}/></PrimaryBtn>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Section 5 — Creator commitment checklist ─────────────────────────────────────
+
+const COMMITMENTS = [
+  "I will design every video around one question: will someone watch this to the end?",
+  "I will name Cloud Closet out loud, in on-screen text, and in the caption on every video.",
+  "I will write at least one caption per week the way a viewer would actually search for it.",
+  "I will not chase likes. I will design for shares, saves, and completion.",
+  "I understand that the first 3 hours after posting matter most — I will post when my audience is active.",
+];
+
+function CreatorCommitments({ onDone }: { onDone: () => void }) {
+  const [checked, setChecked] = useState<boolean[]>(COMMITMENTS.map(() => false));
+  const allChecked = checked.every(Boolean);
+
+  function toggle(i: number) {
+    setChecked(prev => { const next = [...prev]; next[i] = !next[i]; return next; });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
+        {COMMITMENTS.map((text, i) => (
+          <motion.label key={i}
+            initial={{opacity:0,x:-10}} animate={{opacity:1,x:0}}
+            transition={{delay:i*0.06,duration:0.3,ease:"easeOut" as const}}
+            className={`flex items-start gap-3 cursor-pointer rounded-2xl border-2 px-4 py-3.5 transition-all duration-200 ${
+              checked[i]
+                ? "border-[#1a2f4a]/30 bg-[#1a2f4a]/4"
+                : "border-slate-200 bg-white hover:border-[#4a8fd4]/40 hover:bg-slate-50"
+            }`}>
+            <motion.div
+              onClick={() => toggle(i)}
+              whileTap={{ scale: 0.88 }}
+              className={`w-5 h-5 rounded-md border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors duration-200 ${
+                checked[i] ? "bg-[#1a2f4a] border-[#1a2f4a]" : "border-slate-300"
+              }`}>
+              {checked[i] && <IcoCheck size={11} className="text-white stroke-[3]"/>}
+            </motion.div>
+            <span className={`text-sm leading-[1.6] transition-colors ${checked[i] ? "text-slate-700 font-medium" : "text-slate-500"}`}>{text}</span>
+          </motion.label>
+        ))}
+      </div>
+
+      <AnimatePresence>
+        {allChecked && (
+          <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}}
+            className="flex flex-col gap-3">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3">
+              <IcoCheck size={16} className="text-emerald-500 flex-shrink-0"/>
+              <p className="text-sm font-extrabold text-emerald-700">All commitments confirmed. You're ready to create.</p>
+            </div>
+            <PrimaryBtn onClick={onDone}>Complete Module <IcoChevronRight size={16}/></PrimaryBtn>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Module 3 (index 2) — Full Multi-Section Component ───────────────────────────
 
 function Module3Content({ onComplete }: { onComplete: () => void }) {
   const [section, setSection] = useState(1);
-  const [sDone, setSDone] = useState<boolean[]>([false, false, false]);
-  const TOTAL_SECTIONS = 3;
+  const [sDone, setSDone] = useState<boolean[]>([false, false, false, false, false]);
+  const TOTAL_SECTIONS = 5;
 
   function completeSection(n: number) {
     setSDone(prev => { const next = [...prev]; next[n - 1] = true; return next; });
@@ -1768,7 +1914,7 @@ function Module3Content({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div className="flex flex-col gap-8">
-      {/* 3-segment progress bar */}
+      {/* 5-segment progress bar */}
       <div className="flex gap-1">
         {Array.from({length: TOTAL_SECTIONS}, (_, i) => i + 1).map(n => (
           <div key={n} className={`h-1 flex-1 rounded-full transition-all duration-500 ${segmentClass(n)}`}/>
@@ -1808,7 +1954,28 @@ function Module3Content({ onComplete }: { onComplete: () => void }) {
             <h3 className="text-base font-extrabold text-slate-800">How a video actually gets distributed</h3>
             <p className="text-sm text-slate-600 leading-[1.6]">TikTok doesn't show your video to everyone at once. It runs a series of tests, expanding distribution only when each wave performs.</p>
           </div>
-          {!sDone[2] ? <WaveSystem onDone={() => completeSection(3)}/> : (
+          {!sDone[2] ? <WaveSystem onDone={() => completeSection(3)}/> : <SectionDoneTag/>}
+        </motion.div>
+      )}
+
+      {/* ── Section 4 ── */}
+      {section >= 4 && (
+        <motion.div key="s4" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={4} total={TOTAL_SECTIONS} label="FYP and Search are different engines"/>
+          <p className="text-sm text-slate-600 leading-[1.6]">TikTok has two discovery paths and most creators optimize for only one of them — usually by accident.</p>
+          {!sDone[3] ? <DiscoveryToggle onDone={() => completeSection(4)}/> : <SectionDoneTag/>}
+        </motion.div>
+      )}
+
+      {/* ── Section 5 ── */}
+      {section >= 5 && (
+        <motion.div key="s5" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={5} total={TOTAL_SECTIONS} label="Apply this to Cloud Closet content"/>
+          <div className="flex flex-col gap-2">
+            <h3 className="text-base font-extrabold text-slate-800">Your algorithm commitments</h3>
+            <p className="text-xs text-slate-500 leading-[1.6]">Check each box to confirm you understand. These are the habits that separate creators who grow from creators who plateau.</p>
+          </div>
+          {!sDone[4] ? <CreatorCommitments onDone={() => completeSection(5)}/> : (
             <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-center gap-4">
               <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0"><IcoCheck size={18} className="text-white"/></div>
               <div>
