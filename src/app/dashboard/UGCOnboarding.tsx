@@ -107,7 +107,7 @@ const MODULES = [
   { id:1, title:"What Cloud Closet Is and What We're Building", subtitle:"Brand foundation & why your content has to feel different", time:"8 min" },
   { id:2, title:"Account Setup & Warm-Up Protocol",            subtitle:"Profile optimization, account linking, and the warm-up plan", time:"10 min", wizardMode:true },
   { id:3, title:"How the TikTok Algorithm Actually Works",      subtitle:"Distribution waves, ranking signals, and why follower count doesn't protect you", time:"10 min" },
-  { id:4, title:"Guidelines, Upkeep & Going Live",             subtitle:"Brand rules, daily routine, and how to sustain momentum", time:"10 min" },
+  { id:4, title:"The Anatomy of a High-Performing UGC Video",  subtitle:"Structure, hooks, and how to demonstrate a product without making it feel like an ad", time:"12 min" },
 ];
 
 const WARM_UP_DAYS = [
@@ -1990,6 +1990,478 @@ function Module3Content({ onComplete }: { onComplete: () => void }) {
   );
 }
 
+// ─── Module 4 — Interactive components ──────────────────────────────────────────
+
+// Section 1 — Video structure timeline
+const VIDEO_SEGMENTS = [
+  { start:"0s", end:"3s", label:"The Hook", color:"#4a8fd4", bgLight:"bg-[#4a8fd4]/10 border-[#4a8fd4]/30", pct:10,
+    detail:"The only job of the hook is to earn the next few seconds. It answers the viewer's unconscious question: 'why should I not scroll right now?' It can be a statement, a visual, a question, or a reaction — but it must create enough tension or curiosity to delay the scroll. Everything else in your video depends on this working." },
+  { start:"3s", end:"8s", label:"The Setup", color:"#1e3a5f", bgLight:"bg-[#1e3a5f]/8 border-[#1e3a5f]/25", pct:17,
+    detail:"Establish the context. Who are you, what's the situation, and why does this matter to the viewer right now? Keep it lean — the setup is not where you live. It's the bridge from the hook to the payoff. Drag this out and you lose people here." },
+  { start:"8s", end:"25s", label:"The Body", color:"#1a2f4a", bgLight:"bg-[#1a2f4a]/6 border-[#1a2f4a]/20", pct:57,
+    detail:"The substance. Show the product in real use, demonstrate the feature, walk through the moment, tell the story. Pacing matters here — cut dead air, keep movement in the frame, use on-screen text to reinforce spoken points. Every sentence should earn the next one." },
+  { start:"25s", end:"30s", label:"The Close", color:"#0f1f33", bgLight:"bg-slate-100 border-slate-300", pct:17,
+    detail:"Land the point and give the viewer somewhere to go. A strong close either wraps the story with a satisfying conclusion (which earns replays) or issues a clear, low-friction CTA. It should feel like a period, not a trail-off. Weak endings kill completion rate right at the finish line." },
+];
+
+function VideoTimeline({ onDone }: { onDone: () => void }) {
+  const [active, setActive] = useState<number | null>(null);
+  const [seen, setSeen] = useState<number[]>([]);
+
+  function select(i: number) {
+    setActive(i);
+    setSeen(prev => prev.includes(i) ? prev : [...prev, i]);
+  }
+
+  const allSeen = VIDEO_SEGMENTS.every((_, i) => seen.includes(i));
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2 mb-1">
+        <IcoStar size={13} className="text-amber-400"/>
+        <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Tap each segment to explore</p>
+      </div>
+
+      {/* Timeline bar */}
+      <div className="flex rounded-xl overflow-hidden border border-slate-200 h-10">
+        {VIDEO_SEGMENTS.map((seg, i) => (
+          <button key={i} onClick={() => select(i)}
+            style={{ width:`${seg.pct}%`, backgroundColor: active === i ? seg.color : seen.includes(i) ? seg.color + "99" : "#e2e8f0" }}
+            className="relative flex items-center justify-center transition-all duration-250 overflow-hidden group">
+            <span className={`text-[9px] font-extrabold truncate px-1 transition-colors ${active === i || seen.includes(i) ? "text-white" : "text-slate-400"}`}>
+              {seg.label}
+            </span>
+            {seen.includes(i) && active !== i && (
+              <span className="absolute top-0.5 right-0.5"><IcoCheck size={8} className="text-white/80"/></span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Time labels */}
+      <div className="flex text-[9px] font-bold text-slate-400 -mt-2">
+        <span>0s</span>
+        <span className="ml-[10%]">3s</span>
+        <span className="ml-[17%]">8s</span>
+        <span className="ml-[57%]">25s</span>
+        <span className="ml-auto">30s</span>
+      </div>
+
+      {/* Detail panel */}
+      <AnimatePresence mode="wait">
+        {active !== null && (
+          <motion.div key={active} initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}}
+            transition={{duration:0.25,ease:"easeOut" as const}}
+            className={`rounded-2xl border-2 p-5 flex flex-col gap-2 ${VIDEO_SEGMENTS[active].bgLight}`}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest" style={{color:VIDEO_SEGMENTS[active].color}}>
+                {VIDEO_SEGMENTS[active].start}–{VIDEO_SEGMENTS[active].end}
+              </span>
+              <span className="text-xs font-extrabold text-slate-700">{VIDEO_SEGMENTS[active].label}</span>
+            </div>
+            <p className="text-sm text-slate-600 leading-[1.6]">{VIDEO_SEGMENTS[active].detail}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {allSeen && (
+          <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:0.35,ease:"easeOut" as const}}>
+            <PrimaryBtn onClick={onDone}>Continue to Section 2 <IcoChevronRight size={16}/></PrimaryBtn>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Section 2 — Hook type carousel
+const HOOK_TYPES = [
+  { name:"The Bold Statement",   example:'"This app changed how I get dressed in the morning."',
+    why:"Creates immediate intrigue. The viewer needs to know if they agree or disagree — either way they keep watching." },
+  { name:"The Relatable Problem", example:'"My camera roll has 4,000 outfit photos and I can never find anything."',
+    why:"If the viewer sees themselves in the problem, they watch to see the solution. Cloud Closet is built for this hook type." },
+  { name:"The Curiosity Gap",    example:'"I didn\'t expect to find my next fit on an app — but here we are."',
+    why:"Withholds information just long enough to force the viewer to stay. The gap between what they know and what they want to know keeps them watching." },
+  { name:"The Visual Hook",      example:"Open mid-outfit change, or with your phone screen showing Cloud Closet — no talking yet.",
+    why:"Movement and visual novelty in the first second is a pattern interrupt. Stops the scroll before a single word is said." },
+  { name:"The Reaction Face",    example:"Open with a genuine surprised or delighted expression, then explain what you found.",
+    why:"Humans are wired to respond to other people's emotional reactions. An authentic expression creates instant connection and earns the next moment." },
+  { name:"The Direct Question",  example:'"Do you actually remember every outfit you wore last month?"',
+    why:"Questions activate the brain. A viewer who mentally answers the question is already invested. Make it sting just slightly — comfort doesn't create engagement." },
+];
+
+function HookCarousel({ onDone }: { onDone: () => void }) {
+  const [idx, setIdx] = useState(0);
+  const [seen, setSeen] = useState<number[]>([0]);
+  const allSeen = HOOK_TYPES.every((_, i) => seen.includes(i));
+
+  function go(next: number) {
+    const clamped = Math.max(0, Math.min(HOOK_TYPES.length - 1, next));
+    setIdx(clamped);
+    setSeen(prev => prev.includes(clamped) ? prev : [...prev, clamped]);
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Progress pips */}
+      <div className="flex items-center gap-1.5">
+        {HOOK_TYPES.map((_, i) => (
+          <button key={i} onClick={() => go(i)}
+            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+              i === idx ? "bg-[#4a8fd4]" : seen.includes(i) ? "bg-[#4a8fd4]/40" : "bg-slate-200"
+            }`}/>
+        ))}
+      </div>
+
+      {/* Card */}
+      <AnimatePresence mode="wait">
+        <motion.div key={idx} initial={{opacity:0,x:24}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-24}}
+          transition={{duration:0.25,ease:"easeOut" as const}}
+          className="bg-gradient-to-br from-[#1a2f4a] to-[#1e3a5f] rounded-2xl p-6 flex flex-col gap-4">
+          <div>
+            <p className="text-[10px] font-bold text-[#4a8fd4] uppercase tracking-widest mb-1">Hook {idx + 1} of {HOOK_TYPES.length}</p>
+            <h4 className="text-base font-extrabold text-white">{HOOK_TYPES[idx].name}</h4>
+          </div>
+          <div className="bg-white/10 border border-white/15 rounded-xl px-4 py-3.5">
+            <p className="text-xs font-bold text-white/50 uppercase tracking-wide mb-1.5">Example</p>
+            <p className="text-sm text-white leading-[1.6] italic">{HOOK_TYPES[idx].example}</p>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-[#4a8fd4] uppercase tracking-wide mb-1.5">Why it works</p>
+            <p className="text-sm text-white/80 leading-[1.6]">{HOOK_TYPES[idx].why}</p>
+          </div>
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Nav arrows */}
+      <div className="flex gap-3">
+        <button onClick={() => go(idx - 1)} disabled={idx === 0}
+          className="flex-1 py-3 rounded-xl border-2 border-slate-200 flex items-center justify-center gap-1 text-xs font-bold text-slate-500 hover:border-[#4a8fd4]/40 disabled:opacity-30 disabled:pointer-events-none transition-all">
+          <IcoChevronLeft size={13}/> Prev
+        </button>
+        <button onClick={() => go(idx + 1)} disabled={idx === HOOK_TYPES.length - 1}
+          className="flex-1 py-3 rounded-xl border-2 border-slate-200 flex items-center justify-center gap-1 text-xs font-bold text-slate-500 hover:border-[#4a8fd4]/40 disabled:opacity-30 disabled:pointer-events-none transition-all">
+          Next <IcoChevronRight size={13}/>
+        </button>
+      </div>
+
+      {/* Rule card + continue — after all seen */}
+      <AnimatePresence>
+        {allSeen && (
+          <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}}
+            className="flex flex-col gap-4">
+            <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5 flex flex-col gap-2">
+              <p className="text-xs font-extrabold text-amber-700 uppercase tracking-wide">The rule</p>
+              <p className="text-sm text-slate-700 leading-[1.6]">Put your hook in on-screen text within the first 3 seconds — every time. It catches viewers with sound off, reinforces your spoken hook, and gives TikTok's algorithm a keyword to index. There is no downside.</p>
+            </div>
+            <PrimaryBtn onClick={onDone}>Continue to Section 3 <IcoChevronRight size={16}/></PrimaryBtn>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Section 3 — Script rewriter
+const REWRITES = [
+  {
+    ad:     "Cloud Closet's intuitive interface makes it easy to organize your wardrobe in one place.",
+    person: "I just uploaded the fits I wore this week and honestly it's the first time I can actually see patterns in what I reach for.",
+    insight:"The person version doesn't describe the app — it describes what using the app feels like. That's the distinction.",
+  },
+  {
+    ad:     "With Cloud Closet you can share outfits, get inspiration, and connect with a community of style lovers.",
+    person: "My friend texted me asking what I was wearing and I just sent her my Cloud Closet link.",
+    insight:"One sentence, one real moment, communicates community sharing better than a feature list ever could.",
+  },
+  {
+    ad:     "This app has so many amazing features I think you're going to love.",
+    person: "I haven't bought anything in two months because I keep finding stuff I forgot I owned.",
+    insight:"Lead with the human outcome. The feature (closet organization) is implied. The feeling is explicit. Feelings retain viewers.",
+  },
+];
+
+function ScriptRewriter({ onDone }: { onDone: () => void }) {
+  const [revealed, setRevealed] = useState<boolean[]>([false, false, false]);
+  const allRevealed = revealed.every(Boolean);
+
+  function reveal(i: number) {
+    setRevealed(prev => { const next = [...prev]; next[i] = true; return next; });
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {REWRITES.map((r, i) => (
+        <div key={i} className="flex flex-col gap-3">
+          <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Round {i + 1}</p>
+
+          {/* Ad version */}
+          <div className="rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3.5">
+            <p className="text-[10px] font-bold text-red-400 uppercase tracking-wide mb-1.5">Ad-speak</p>
+            <p className="text-sm text-slate-600 leading-[1.6] italic">&ldquo;{r.ad}&rdquo;</p>
+          </div>
+
+          {/* Translate button / person version */}
+          {!revealed[i] ? (
+            <button onClick={() => reveal(i)}
+              className="w-full py-3.5 rounded-xl border-2 border-dashed border-[#4a8fd4]/40 text-sm font-bold text-[#4a8fd4] hover:bg-[#1a2f4a]/4 transition-all flex items-center justify-center gap-2">
+              <IcoRefresh size={13}/> Translate to person-speak
+            </button>
+          ) : (
+            <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:0.35,ease:"easeOut" as const}}
+              className="flex flex-col gap-2">
+              <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50 px-4 py-3.5">
+                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mb-1.5">Person-speak</p>
+                <p className="text-sm text-slate-700 leading-[1.6] italic">&ldquo;{r.person}&rdquo;</p>
+              </div>
+              <div className="flex items-start gap-2 px-1">
+                <IcoStar size={11} className="text-amber-400 flex-shrink-0 mt-0.5"/>
+                <p className="text-xs text-slate-500 leading-[1.6]">{r.insight}</p>
+              </div>
+            </motion.div>
+          )}
+        </div>
+      ))}
+
+      <AnimatePresence>
+        {allRevealed && (
+          <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:0.35,ease:"easeOut" as const}}>
+            <PrimaryBtn onClick={onDone}>Continue to Section 4 <IcoChevronRight size={16}/></PrimaryBtn>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Section 4 — Element guide accordion
+const ELEMENTS = [
+  { name:"Audio",         detail:"Trending sounds can give an early algorithmic boost. Original audio gets a slight ranking preference. For Cloud Closet: use trending sounds when they fit naturally. Don't force it — awkward audio pairings hurt the native feel of the video. Use trending sounds in their first 24–48 hours. After that the trend declines and the benefit disappears." },
+  { name:"Captions",      detail:"Write captions the way someone would search, not the way a brand would announce. 'How I organize my outfits without a spreadsheet' outperforms 'Introducing Cloud Closet ✨.' Keywords in captions boost discoverability by 20–40%. Keep them 1–2 sentences — long captions on TikTok get ignored." },
+  { name:"Hashtags",      detail:"Use 3–5 specific, relevant hashtags. Avoid #fyp and #foryou — these are so overused they provide no targeting benefit. Use niche hashtags: #outfitinspo, #styleorganization, #wardrobeapp. Quality over quantity." },
+  { name:"On-screen text",detail:"Use it to reinforce — not repeat — what you're saying. If you say 'I found this app last week,' the text might say 'my camera roll has never recovered.' Add a second layer of meaning, a punchline, or a key phrase worth remembering. Keep it readable in 2 seconds and out of the center of the frame." },
+  { name:"Pacing",        detail:"Cut anything where nothing is happening. Silence, walking to the camera, setup, re-dos — none of it belongs in the final video. Jump cuts are TikTok-native and expected. Viewers don't need transitions; they need momentum. When in doubt, cut earlier than you think you should." },
+  { name:"The CTA",       detail:"One CTA per video. Pick the most important action and ask for it clearly — saves, comments, link in bio, DM for the link. Too many CTAs gets you none of them. For Cloud Closet content: 'link in bio to download' is the primary CTA unless the brief says otherwise. The best CTAs feel like a natural close to the story, not an obligation tacked on at the end." },
+];
+
+function ElementGuide({ onDone }: { onDone: () => void }) {
+  const [expanded, setExpanded] = useState<number[]>([]);
+  const [seen, setSeen] = useState<number[]>([]);
+  const allSeen = ELEMENTS.every((_, i) => seen.includes(i));
+
+  function toggle(i: number) {
+    const isOpen = expanded.includes(i);
+    setExpanded(prev => isOpen ? prev.filter(x => x !== i) : [...prev, i]);
+    if (!seen.includes(i)) setSeen(prev => [...prev, i]);
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2 mb-1">
+        <IcoStar size={13} className="text-amber-400"/>
+        <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Open all 6 to continue</p>
+      </div>
+
+      {ELEMENTS.map((el, i) => {
+        const isOpen = expanded.includes(i);
+        const isSeen = seen.includes(i);
+        return (
+          <motion.div key={i} layout className={`rounded-2xl border-2 overflow-hidden transition-colors duration-200 ${
+            isOpen ? "border-[#1a2f4a]/30 bg-[#1a2f4a]/3" : "border-slate-200 bg-white"
+          }`}>
+            <button onClick={() => toggle(i)} className="w-full flex items-center gap-3 px-5 py-4 text-left">
+              <span className="text-sm font-extrabold text-slate-800 flex-1">{el.name}</span>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+                isSeen ? "bg-[#1a2f4a] text-white" : "bg-slate-100 text-slate-400"
+              }`}>
+                {isSeen ? <IcoCheck size={11}/> : <IcoChevronRight size={11}/>}
+              </div>
+            </button>
+            <AnimatePresence>
+              {isOpen && (
+                <motion.div initial={{opacity:0,height:0}} animate={{opacity:1,height:"auto"}} exit={{opacity:0,height:0}}
+                  transition={{duration:0.28,ease:"easeOut" as const}} className="overflow-hidden">
+                  <div className="px-5 pb-5 pt-1 border-t border-slate-100">
+                    <p className="text-sm text-slate-600 leading-[1.6]">{el.detail}</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        );
+      })}
+
+      <AnimatePresence>
+        {allSeen && (
+          <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:0.35,ease:"easeOut" as const}}>
+            <PrimaryBtn onClick={onDone}>Continue to Section 5 <IcoChevronRight size={16}/></PrimaryBtn>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Section 5 — Pre-post checklist
+const PRE_POST_ITEMS = [
+  "Does my hook land in the first 3 seconds? Is there on-screen text reinforcing it?",
+  "Would someone who scrolled past this at half speed still want to stop and go back?",
+  "Does this feel like a person talking about something they use — or does it sound like an ad?",
+  "Did I say Cloud Closet out loud? Is it in the caption and on-screen text?",
+  "Is there anything in here that doesn't earn its place — silence, filler, slow moments?",
+  "Would both a maximalist and a minimalist see themselves in this content?",
+  "Is there one clear CTA at the end?",
+  "Does this feel like a TikTok, or does it feel like an ad that lives on TikTok?",
+];
+
+function PrePostChecklist({ onDone }: { onDone: () => void }) {
+  const [checked, setChecked] = useState<boolean[]>(PRE_POST_ITEMS.map(() => false));
+  const allChecked = checked.every(Boolean);
+
+  function toggle(i: number) {
+    setChecked(prev => { const next = [...prev]; next[i] = !next[i]; return next; });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2.5">
+        {PRE_POST_ITEMS.map((text, i) => (
+          <motion.label key={i}
+            initial={{opacity:0,x:-10}} animate={{opacity:1,x:0}}
+            transition={{delay:i*0.05,duration:0.3,ease:"easeOut" as const}}
+            className={`flex items-start gap-3 cursor-pointer rounded-2xl border-2 px-4 py-3.5 transition-all duration-200 ${
+              checked[i] ? "border-[#1a2f4a]/30 bg-[#1a2f4a]/4" : "border-slate-200 bg-white hover:border-[#4a8fd4]/40 hover:bg-slate-50"
+            }`}>
+            <motion.div onClick={() => toggle(i)} whileTap={{scale:0.88}}
+              className={`w-5 h-5 rounded-md border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors duration-200 ${
+                checked[i] ? "bg-[#1a2f4a] border-[#1a2f4a]" : "border-slate-300"
+              }`}>
+              {checked[i] && <IcoCheck size={11} className="text-white stroke-[3]"/>}
+            </motion.div>
+            <span className={`text-sm leading-[1.6] transition-colors ${checked[i] ? "text-slate-700 font-medium" : "text-slate-500"}`}>{text}</span>
+          </motion.label>
+        ))}
+      </div>
+
+      <AnimatePresence>
+        {allChecked && (
+          <motion.div initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}}
+            className="flex flex-col gap-4">
+            <div className="border-l-4 border-[#4a8fd4] pl-5 py-2 bg-slate-50/80 rounded-r-xl">
+              <p className="text-xs font-bold text-[#4a8fd4] uppercase tracking-wide mb-1.5">Before you move on</p>
+              <p className="text-sm text-slate-600 leading-[1.6]">Finish this sentence in your head: <span className="font-bold text-slate-700">"Someone will watch this to the end because <span className="text-[#4a8fd4]">___________</span>."</span> If you can answer it from the viewer's perspective, you're ready.</p>
+            </div>
+            <PrimaryBtn onClick={onDone}>Complete Module <IcoChevronRight size={16}/></PrimaryBtn>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Module 4 (index 3) — Full Multi-Section Component ───────────────────────────
+
+function Module4Content({ onComplete }: { onComplete: () => void }) {
+  const [section, setSection] = useState(1);
+  const [sDone, setSDone] = useState<boolean[]>([false, false, false, false, false]);
+  const TOTAL_SECTIONS = 5;
+
+  function completeSection(n: number) {
+    setSDone(prev => { const next = [...prev]; next[n - 1] = true; return next; });
+    if (n < TOTAL_SECTIONS) setTimeout(() => setSection(n + 1), 600);
+    else setTimeout(onComplete, 900);
+  }
+
+  const segmentClass = (n: number) => {
+    if (sDone[n - 1]) return "bg-[#4a8fd4]";
+    if (n === section) return "bg-[#4a8fd4]/40";
+    return "bg-slate-200";
+  };
+
+  function SectionDoneTag() {
+    return (
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} className="flex items-center gap-2 text-xs font-bold text-emerald-600">
+        <IcoCheck size={13}/> Section complete
+      </motion.div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      {/* 5-segment progress bar */}
+      <div className="flex gap-1">
+        {Array.from({length: TOTAL_SECTIONS}, (_, i) => i + 1).map(n => (
+          <div key={n} className={`h-1 flex-1 rounded-full transition-all duration-500 ${segmentClass(n)}`}/>
+        ))}
+      </div>
+
+      {/* ── Section 1 ── */}
+      <motion.div initial={{opacity:0,y:14}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6">
+        <SectionHeader n={1} total={TOTAL_SECTIONS} label="The structure"/>
+        <div className="flex flex-col gap-4">
+          <h3 className="text-lg font-extrabold text-slate-800 leading-tight">A UGC video is not a vlog. It's a small argument.</h3>
+          <p className="text-sm text-slate-600 leading-[1.6]">Every high-performing UGC video makes a case — usually something like 'here is a thing that exists, here is why it matters, here is what it looks like in real life.' The best ones feel like a conversation, not a pitch. The structure below is a starting framework, not a rigid script. Once you understand why each section exists, you can bend it.</p>
+        </div>
+        {!sDone[0] ? <VideoTimeline onDone={() => completeSection(1)}/> : <SectionDoneTag/>}
+      </motion.div>
+
+      {/* ── Section 2 ── */}
+      {section >= 2 && (
+        <motion.div key="s2" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={2} total={TOTAL_SECTIONS} label="The most important 3 seconds you'll ever film"/>
+          <div className="flex flex-col gap-3">
+            <h3 className="text-base font-extrabold text-slate-800">The hook</h3>
+            <p className="text-sm text-slate-600 leading-[1.6]">You should write at least 3 hook variations for every video you make. Different hooks reach different viewers, and you won't always know which one will land until you test it.</p>
+          </div>
+          {!sDone[1] ? <HookCarousel onDone={() => completeSection(2)}/> : <SectionDoneTag/>}
+        </motion.div>
+      )}
+
+      {/* ── Section 3 ── */}
+      {section >= 3 && (
+        <motion.div key="s3" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={3} total={TOTAL_SECTIONS} label="Showing the product without making it feel like an ad"/>
+          <div className="flex flex-col gap-3">
+            <h3 className="text-base font-extrabold text-slate-800">The hardest part</h3>
+            <p className="text-sm text-slate-600 leading-[1.6]">The goal is to demonstrate Cloud Closet in a way that feels like a person sharing something they actually use — not a product walkthrough. The difference is framing. "Here are the features" is a tour. "Here's how I actually use this on a Wednesday morning" is a story. Always lead with the moment, not the feature.</p>
+          </div>
+          {!sDone[2] ? <ScriptRewriter onDone={() => completeSection(3)}/> : <SectionDoneTag/>}
+        </motion.div>
+      )}
+
+      {/* ── Section 4 ── */}
+      {section >= 4 && (
+        <motion.div key="s4" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={4} total={TOTAL_SECTIONS} label="Every other element"/>
+          <p className="text-xs text-slate-400 -mt-3 leading-[1.6]">The details that separate a video that does okay from one that gets resurfaced.</p>
+          {!sDone[3] ? <ElementGuide onDone={() => completeSection(4)}/> : <SectionDoneTag/>}
+        </motion.div>
+      )}
+
+      {/* ── Section 5 ── */}
+      {section >= 5 && (
+        <motion.div key="s5" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={5} total={TOTAL_SECTIONS} label="Run every video through this before you submit"/>
+          <div className="flex flex-col gap-2">
+            <h3 className="text-base font-extrabold text-slate-800">Pre-post checklist</h3>
+            <p className="text-xs text-slate-500 leading-[1.6]">Check all 8 boxes. If you can't check one, the video isn't ready.</p>
+          </div>
+          {!sDone[4] ? <PrePostChecklist onDone={() => completeSection(5)}/> : (
+            <motion.div initial={{opacity:0,scale:0.95}} animate={{opacity:1,scale:1}} className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0"><IcoCheck size={18} className="text-white"/></div>
+              <div>
+                <p className="text-sm font-extrabold text-emerald-700">Module 4 complete!</p>
+                <p className="text-xs text-slate-500 mt-0.5 leading-[1.6]">Training complete — you know everything you need to start creating.</p>
+              </div>
+            </motion.div>
+          )}
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
 // ─── Stepper ─────────────────────────────────────────────────────────────────────
 // Numbered circles → checkmarks on complete; "Level X of Y" lives in module header
 
@@ -2250,14 +2722,20 @@ export function UGCOnboardingPage({ profile }: { profile:{ full_name?:string } }
                 </div>
               )}
 
-              {/* Module 4 — coming soon */}
-              {currentModule === 3 && (
-                <div className="flex flex-col items-center gap-3 py-10 text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-[#1a2f4a]/8 flex items-center justify-center">
-                    <IcoStar size={24} className="text-[#4a8fd4]"/>
+              {/* Module 4 — Anatomy of a High-Performing UGC Video */}
+              {currentModule === 3 && !isCompleted && (
+                <Module4Content onComplete={() => handlePass(3)}/>
+              )}
+              {currentModule === 3 && isCompleted && (
+                <div className="flex flex-col items-center gap-3 py-8 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center">
+                    <IcoCheck size={28} className="text-emerald-500"/>
                   </div>
-                  <p className="text-base font-extrabold text-slate-700">Coming soon</p>
-                  <p className="text-sm text-slate-500 leading-[1.6] max-w-xs">This module is being built out. Check back soon.</p>
+                  <p className="text-base font-extrabold text-slate-700">Module 4 Complete!</p>
+                  <p className="text-sm text-slate-500 leading-[1.6]">Training complete — you know everything you need to start creating.</p>
+                  <button onClick={() => setView("overview")} className="mt-2 text-xs font-bold text-[#4a8fd4] hover:text-[#1a2f4a] transition-colors flex items-center gap-1">
+                    <IcoChevronLeft size={12}/> Back to overview
+                  </button>
                 </div>
               )}
             </div>
