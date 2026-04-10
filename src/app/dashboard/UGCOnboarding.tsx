@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Track2OnboardingPage } from "./Track2Onboarding";
 
 // ─── Color tokens ────────────────────────────────────────────────────────────────
 // Navy dark:  #1a2f4a   Navy mid: #1e3a5f   Accent: #4a8fd4
@@ -108,6 +109,7 @@ const MODULES = [
   { id:2, title:"Account Setup & Warm-Up Protocol",            subtitle:"Profile optimization, account linking, and the warm-up plan", time:"10 min", wizardMode:true },
   { id:3, title:"How the TikTok Algorithm Actually Works",      subtitle:"Distribution waves, ranking signals, and why follower count doesn't protect you", time:"10 min" },
   { id:4, title:"The Anatomy of a High-Performing UGC Video",  subtitle:"Structure, hooks, and how to demonstrate a product without making it feel like an ad", time:"12 min" },
+  { id:5, title:"Content Formats You'll Be Creating for Cloud Closet", subtitle:"Seven proven format containers — and how to know which one fits your concept", time:"10 min" },
 ];
 
 const WARM_UP_DAYS = [
@@ -202,7 +204,7 @@ function SlideItem({ children, i }: { children:React.ReactNode; i:number }) {
 
 // ─── Level 1 Wizard ─────────────────────────────────────────────────────────────
 
-function Level1Wizard({ onPass, onStepChange }: { onPass:()=>void; onStepChange:(s:WizardStep)=>void }) {
+function Level1Wizard({ onPass, onStepChange, isAdmin = false }: { onPass:()=>void; onStepChange:(s:WizardStep)=>void; isAdmin?: boolean }) {
   const [step, setStep] = useState<WizardStep>("intro");
   const [username, setUsername]       = useState("");
   const [usernameSubmitted, setUSubmit] = useState(false);
@@ -237,6 +239,13 @@ function Level1Wizard({ onPass, onStepChange }: { onPass:()=>void; onStepChange:
   const pageTransition = { duration:0.3, ease:"easeOut" as const };
 
   return (
+    <>
+      {isAdmin && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3 mb-4">
+          <p className="text-xs text-amber-700 font-semibold">Admin view — preview steps or skip wizard.</p>
+          <button onClick={onPass} className="text-xs font-extrabold text-amber-700 hover:text-amber-900 underline whitespace-nowrap">Skip wizard →</button>
+        </div>
+      )}
     <AnimatePresence mode="wait">
       {/* ── Intro ── */}
       {step === "intro" && (
@@ -627,6 +636,7 @@ function Level1Wizard({ onPass, onStepChange }: { onPass:()=>void; onStepChange:
         </motion.div>
       )}
     </AnimatePresence>
+    </>
   );
 }
 
@@ -1291,12 +1301,12 @@ function OneSentenceTest({ onDone }: { onDone: () => void }) {
 
 // ─── Module 1 — Full Multi-Section Component ─────────────────────────────────────
 
-function Module1Content({ onComplete }: { onComplete: () => void }) {
-  const [section, setSection] = useState(1);
+function Module1Content({ onComplete, isAdmin = false }: { onComplete: () => void; isAdmin?: boolean }) {
+  const TOTAL_SECTIONS = 7;
+  const [section, setSection] = useState(isAdmin ? TOTAL_SECTIONS : 1);
   const [sDone, setSDone] = useState<boolean[]>([false,false,false,false,false,false,false]);
   const [flipped, setFlipped] = useState([false, false, false]);
   const allFlipped = flipped.every(Boolean);
-  const TOTAL_SECTIONS = 7;
 
   function flip(i: number) { setFlipped(prev => { const n=[...prev]; n[i]=true; return n; }); }
 
@@ -1425,6 +1435,11 @@ function Module1Content({ onComplete }: { onComplete: () => void }) {
             </motion.div>
           )}
         </motion.div>
+      )}
+      {isAdmin && (
+        <div className="pt-4 border-t border-slate-100 mt-2">
+          <button onClick={onComplete} className="text-xs font-bold text-slate-400 hover:text-slate-600 underline transition-colors">Mark module complete — admin view</button>
+        </div>
       )}
     </div>
   );
@@ -1887,10 +1902,10 @@ function CreatorCommitments({ onDone }: { onDone: () => void }) {
 
 // ─── Module 3 (index 2) — Full Multi-Section Component ───────────────────────────
 
-function Module3Content({ onComplete }: { onComplete: () => void }) {
-  const [section, setSection] = useState(1);
-  const [sDone, setSDone] = useState<boolean[]>([false, false, false, false, false]);
+function Module3Content({ onComplete, isAdmin = false }: { onComplete: () => void; isAdmin?: boolean }) {
   const TOTAL_SECTIONS = 5;
+  const [section, setSection] = useState(isAdmin ? TOTAL_SECTIONS : 1);
+  const [sDone, setSDone] = useState<boolean[]>([false, false, false, false, false]);
 
   function completeSection(n: number) {
     setSDone(prev => { const next = [...prev]; next[n - 1] = true; return next; });
@@ -1985,6 +2000,11 @@ function Module3Content({ onComplete }: { onComplete: () => void }) {
             </motion.div>
           )}
         </motion.div>
+      )}
+      {isAdmin && (
+        <div className="pt-4 border-t border-slate-100 mt-2">
+          <button onClick={onComplete} className="text-xs font-bold text-slate-400 hover:text-slate-600 underline transition-colors">Mark module complete — admin view</button>
+        </div>
       )}
     </div>
   );
@@ -2362,10 +2382,10 @@ function PrePostChecklist({ onDone }: { onDone: () => void }) {
 
 // ─── Module 4 (index 3) — Full Multi-Section Component ───────────────────────────
 
-function Module4Content({ onComplete }: { onComplete: () => void }) {
-  const [section, setSection] = useState(1);
-  const [sDone, setSDone] = useState<boolean[]>([false, false, false, false, false]);
+function Module4Content({ onComplete, isAdmin = false }: { onComplete: () => void; isAdmin?: boolean }) {
   const TOTAL_SECTIONS = 5;
+  const [section, setSection] = useState(isAdmin ? TOTAL_SECTIONS : 1);
+  const [sDone, setSDone] = useState<boolean[]>([false, false, false, false, false]);
 
   function completeSection(n: number) {
     setSDone(prev => { const next = [...prev]; next[n - 1] = true; return next; });
@@ -2458,6 +2478,563 @@ function Module4Content({ onComplete }: { onComplete: () => void }) {
           )}
         </motion.div>
       )}
+      {isAdmin && (
+        <div className="pt-4 border-t border-slate-100 mt-2">
+          <button onClick={onComplete} className="text-xs font-bold text-slate-400 hover:text-slate-600 underline transition-colors">Mark module complete — admin view</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Module 5 — Interactive components ──────────────────────────────────────────
+
+type FormatTagColor = "green" | "purple" | "teal";
+interface FormatTagDef { label: string; color: FormatTagColor; }
+interface FormatDef {
+  num: string; name: string; tags: FormatTagDef[];
+  description: string; include: string[]; avoid: string[]; hooks: string[];
+  trendFilter?: string;
+}
+
+const FORMAT_DATA: FormatDef[] = [
+  {
+    num: "01", name: "The Relatable Getting-Dressed Moment",
+    tags: [{ label:"Beginner-friendly", color:"green" }, { label:"High conversion", color:"teal" }],
+    description: "The most universal Cloud Closet format. You start with a moment everyone has experienced — the camera roll scroll, the 'I have nothing to wear' spiral, the group chat style question — and Cloud Closet shows up as the natural resolution. This format works because it leads with the problem, not the product.",
+    include: ["A specific, relatable moment (not vague)","Show the actual app in context","One genuine reaction to something you found","CTA: link in bio to download"],
+    avoid: ["Exaggerating the problem to the point it feels fake","Jumping to the app without the moment first","Describing features instead of showing them","Generic 'I love this app' close"],
+    hooks: ["My camera roll has 4,000 outfit photos and I genuinely cannot find anything.","My friend asked what I was wearing last Tuesday and I had no idea.","I spent 20 minutes getting dressed this morning and I'm wearing the same thing I always wear."],
+  },
+  {
+    num: "02", name: "The Outfit Showcase / Styling Demo",
+    tags: [{ label:"Beginner-friendly", color:"green" }],
+    description: "Show one or more real outfits — yours or ones you've discovered on Cloud Closet — and use the app naturally within the video. The app is part of the story, not the point. The outfit is the point.",
+    include: ["At least one full-body shot","Brief commentary on the choices — why this, why today","Natural integration of the app","Real pieces, real styling — not aspirational or unattainable"],
+    avoid: ["Over-styled editorial looks that feel out of reach","Treating the app as an afterthought","Listing pieces without personal context","Brand names or luxury signifiers"],
+    hooks: ["I've been uploading my fits to Cloud Closet for two weeks and I finally see what I actually wear.","Someone on Cloud Closet wore this better than I ever have — watch.","Here's every outfit I wore this week and what the app taught me about myself."],
+  },
+  {
+    num: "03", name: "GRWM / Day-in-the-Life Integration",
+    tags: [{ label:"Beginner-friendly", color:"green" }, { label:"High reach", color:"teal" }],
+    description: "GRWM is one of TikTok's most durable formats because it's inherently conversational. Cloud Closet slots in naturally — you reference the app while picking your outfit, uploading a fit, or checking what someone else wore. The app is part of the morning, not the subject of the video.",
+    include: ["A real, specific morning or getting-ready context","Natural mention of Cloud Closet mid-routine","Brief phone screen moment — feel incidental","End on the outfit or the moment, not the pitch"],
+    avoid: ["Stopping the routine to explain the app like a demo","Forcing Cloud Closet into a routine it doesn't fit","Over-produced setups that look nothing like a real morning","Long intros before anything visual happens"],
+    hooks: ["Getting ready for the day — and Cloud Closet is making this a lot faster than it used to be.","I started uploading my fits every day and my mornings are genuinely different now."],
+  },
+  {
+    num: "04", name: "The Discovery / Community Moment",
+    tags: [{ label:"High shareability", color:"teal" }],
+    description: "This format is built around The Spark — that moment of seeing someone else's outfit and feeling something shift. You're reacting to a fit you found on Cloud Closet, showing the community side of the app, and demonstrating that the value isn't just in logging your own closet — it's in what everyone else brings to it.",
+    include: ["A genuine reaction to a fit you actually liked","Brief explanation of why it moved you","Show the app's community/discovery interface","Keep it specific — 'this person styled X in a way I never would have'"],
+    avoid: ["Vague reactions like 'I love this' with no substance","Making it feel like a product tour","Overhyping — the tone should be observational, not exclamatory"],
+    hooks: ["I found someone on Cloud Closet who wears the same pieces I do completely differently — and now I need to rethink everything.","This person in Seoul stopped me cold and I've been thinking about it ever since."],
+  },
+  {
+    num: "05", name: "Before / After or Transformation",
+    tags: [{ label:"More experience helpful", color:"purple" }, { label:"High completion rate", color:"teal" }],
+    description: "Before/after is one of TikTok's highest-completion formats because the structure creates inherent tension — the viewer stays to see the resolution. For Cloud Closet this can be a closet before/after, a styling rethink, or the difference in your routine before and after using the app. The 'after' has to genuinely deliver on the 'before.'",
+    include: ["A clear, honest 'before' state — no exaggeration","The specific thing that changed","A concrete 'after' proportional to the before","The emotional shift, not just the visual one"],
+    avoid: ["Staging a fake 'before' for effect","Overselling the transformation","Making the 'after' unrelatable","Skipping the emotional layer"],
+    hooks: ["My outfit routine before Cloud Closet vs. now — not the same person.","I bought the same color in three different items and didn't know until I uploaded everything to one place."],
+  },
+  {
+    num: "06", name: "The Educational / How I Use It Breakdown",
+    tags: [{ label:"More experience helpful", color:"purple" }, { label:"High save rate", color:"teal" }],
+    description: "This format walks through how you actually use Cloud Closet — not a feature list, but a real workflow. Educational content earns saves, which are one of the strongest algorithmic signals. Best for creators comfortable explaining things on camera.",
+    include: ["A specific, concrete use case — not a general overview","Step-by-step structure that's easy to follow","Screen recording or closeup of the app where needed","A payoff — what becomes possible after this workflow"],
+    avoid: ["Narrating every tap like a tutorial video — keep it conversational","Covering too many features at once — one thing per video","Dry delivery","Making it feel like a walkthrough rather than a personal routine"],
+    hooks: ["How I log a week of outfits in under 10 minutes — and why I've been doing it every Sunday.","Three things I do on Cloud Closet that I don't see anyone talking about."],
+  },
+  {
+    num: "07", name: "Trend-Jacking",
+    tags: [{ label:"More experience helpful", color:"purple" }],
+    description: "Using a trending sound, format, or meme structure to carry Cloud Closet content. When it works, it's the highest-reach format because the trend already has algorithmic momentum. When it doesn't, it looks like a brand awkwardly forcing itself into a conversation it doesn't belong in.",
+    include: ["The trend used in its first 24–48 hours","A natural, not forced, connection to Cloud Closet","Brand voice intact — don't sacrifice it for the trend","Cloud Closet named clearly somewhere in the video"],
+    avoid: ["Using a trend after it's peaked","Any trend that contradicts Cloud Closet's voice (loud, hypey, performative)","Trends where Cloud Closet feels grafted on","Sacrificing quality for the sound"],
+    hooks: [],
+    trendFilter: "Ask before using any trend: does this speak to the experience of getting dressed, personal expression, or style discovery? If yes, Cloud Closet probably belongs in it. If Cloud Closet would be a stretch cameo — skip it.",
+  },
+];
+
+const FORMAT_QUIZ_ROUNDS = [
+  {
+    concept: "You upload your fits from the past two weeks and realize you've worn the same 4 colors without thinking about it.",
+    correct: "Before / After or Transformation",
+    explanation: "This is a discovery that reveals something about yourself — a natural transformation story arc.",
+  },
+  {
+    concept: "You're getting ready in the morning and you pull up Cloud Closet to see what you wore last Monday before deciding on today.",
+    correct: "GRWM / Day-in-the-Life Integration",
+    explanation: "Cloud Closet is integrated into the routine, not the subject of the video. That's the GRWM format.",
+  },
+  {
+    concept: "A trending audio is blowing up and it's people reacting to things they 'didn't know they needed.' Cloud Closet fits naturally.",
+    correct: "Trend-Jacking",
+    explanation: "Natural fit, trending window, brand voice intact. This is the right call.",
+  },
+  {
+    concept: "You want to show how to pack for a weekend trip using Cloud Closet to plan outfits in advance.",
+    correct: "The Educational / How I Use It Breakdown",
+    explanation: "Specific use case, step-by-step, concrete payoff. This is the educational format — and it'll earn saves.",
+  },
+  {
+    concept: "You found someone on Cloud Closet who styled a vintage blazer in a way that made you want to dig out three pieces you forgot you owned.",
+    correct: "The Discovery / Community Moment",
+    explanation: "This is The Spark — exactly what this format is built for.",
+  },
+];
+
+function TagPill({ label, color }: FormatTagDef) {
+  const cls = color === "green"  ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+              color === "purple" ? "bg-purple-50 text-purple-700 border-purple-200" :
+                                   "bg-teal-50 text-teal-700 border-teal-200";
+  return (
+    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${cls} uppercase tracking-[0.1em]`}>
+      {label}
+    </span>
+  );
+}
+
+function FormatExplorer({ onDone }: { onDone: () => void }) {
+  const [active, setActive] = useState(0);
+  const [visited, setVisited] = useState<Set<number>>(new Set([0]));
+
+  function goTo(i: number) {
+    setActive(i);
+    setVisited(prev => { const next = new Set(prev); next.add(i); return next; });
+  }
+
+  const allVisited = visited.size >= FORMAT_DATA.length;
+  const fmt = FORMAT_DATA[active];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <IcoStar size={13} className="text-amber-400"/>
+          <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">Explore all 7 formats to continue</p>
+        </div>
+        <span className="text-[10px] font-bold text-slate-400">{visited.size}/7 visited</span>
+      </div>
+
+      {/* Scrollable tab bar */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {FORMAT_DATA.map((f, i) => (
+          <button key={i} onClick={() => goTo(i)}
+            className={[
+              "flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold transition-all duration-200",
+              active === i
+                ? "bg-[#1a2f4a] text-white shadow-md"
+                : visited.has(i)
+                  ? "bg-slate-100 text-[#4a8fd4] border border-[#4a8fd4]/20"
+                  : "bg-slate-50 text-slate-400 border border-slate-200",
+            ].join(" ")}>
+            {visited.has(i) && active !== i ? <IcoCheck size={10}/> : null}
+            <span className="font-extrabold">{f.num}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Format panel */}
+      <AnimatePresence mode="wait">
+        <motion.div key={active} initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-6}}
+          transition={{duration:0.25,ease:"easeOut" as const}}
+          className="border-2 border-slate-200 rounded-2xl overflow-hidden">
+
+          {/* Panel header */}
+          <div className="bg-gradient-to-r from-[#1a2f4a] to-[#1e3a5f] px-5 py-4">
+            <p className="text-[10px] font-bold text-[#4a8fd4] uppercase tracking-widest mb-1">Format {fmt.num}</p>
+            <h4 className="text-base font-extrabold text-white leading-tight mb-2.5">{fmt.name}</h4>
+            <div className="flex flex-wrap gap-1.5">
+              {fmt.tags.map((t, ti) => <TagPill key={ti} label={t.label} color={t.color}/>)}
+            </div>
+          </div>
+
+          {/* Panel body */}
+          <div className="p-5 flex flex-col gap-5 bg-white">
+            <p className="text-sm text-slate-600 leading-[1.7]">{fmt.description}</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <p className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-widest mb-0.5">Include</p>
+                {fmt.include.map((item, ii) => (
+                  <div key={ii} className="flex items-start gap-2">
+                    <IcoCheck size={13} className="text-emerald-500 flex-shrink-0 mt-0.5"/>
+                    <p className="text-xs text-slate-600 leading-[1.6]">{item}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-col gap-2">
+                <p className="text-[10px] font-extrabold text-red-500 uppercase tracking-widest mb-0.5">Avoid</p>
+                {fmt.avoid.map((item, ai) => (
+                  <div key={ai} className="flex items-start gap-2">
+                    <IcoX size={13} className="text-red-400 flex-shrink-0 mt-0.5"/>
+                    <p className="text-xs text-slate-600 leading-[1.6]">{item}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {fmt.hooks.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-[10px] font-extrabold text-[#4a8fd4] uppercase tracking-widest mb-0.5">Sample hooks</p>
+                {fmt.hooks.map((hook, hi) => (
+                  <div key={hi} className="bg-[#4a8fd4]/6 border border-[#4a8fd4]/20 rounded-xl px-4 py-3">
+                    <p className="text-xs text-slate-700 leading-[1.6] italic">&ldquo;{hook}&rdquo;</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {fmt.trendFilter && (
+              <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl px-4 py-4 flex gap-3">
+                <IcoAlert size={16} className="text-amber-500 flex-shrink-0 mt-0.5"/>
+                <div>
+                  <p className="text-[10px] font-extrabold text-amber-700 uppercase tracking-widest mb-1">Trend filter test</p>
+                  <p className="text-xs text-slate-700 leading-[1.6]">{fmt.trendFilter}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Prev / Next nav */}
+      <div className="flex items-center justify-between">
+        <button onClick={() => goTo(Math.max(0, active - 1))} disabled={active === 0}
+          className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-slate-600 disabled:opacity-30 transition-colors">
+          <IcoChevronLeft size={13}/> Prev
+        </button>
+        <span className="text-[10px] text-slate-400 font-bold">{active + 1} / {FORMAT_DATA.length}</span>
+        <button onClick={() => goTo(Math.min(FORMAT_DATA.length - 1, active + 1))} disabled={active === FORMAT_DATA.length - 1}
+          className="flex items-center gap-1 text-xs font-bold text-[#4a8fd4] hover:text-[#1a2f4a] disabled:opacity-30 transition-colors">
+          Next <IcoChevronRight size={13}/>
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {allVisited && (
+          <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:0.35,ease:"easeOut" as const}}>
+            <PrimaryBtn onClick={onDone}>Continue to Section 2 <IcoChevronRight size={16}/></PrimaryBtn>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function FormatMatcherQuiz({ onDone }: { onDone: () => void }) {
+  const [round, setRound] = useState(0);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const current = FORMAT_QUIZ_ROUNDS[round];
+  const isCorrect = selected === current.correct;
+  const formatNames = FORMAT_DATA.map(f => f.name);
+
+  function pick(name: string) {
+    if (revealed) return;
+    setSelected(name);
+    setRevealed(true);
+  }
+
+  function next() {
+    if (round < FORMAT_QUIZ_ROUNDS.length - 1) {
+      setRound(r => r + 1);
+      setSelected(null);
+      setRevealed(false);
+    } else {
+      setDone(true);
+      setTimeout(onDone, 700);
+    }
+  }
+
+  if (done) {
+    return (
+      <motion.div initial={{opacity:0,scale:0.96}} animate={{opacity:1,scale:1}} transition={{duration:0.3,ease:"easeOut" as const}}
+        className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-center gap-3">
+        <IcoCheck size={18} className="text-emerald-500 flex-shrink-0"/>
+        <p className="text-sm font-extrabold text-emerald-700">All 5 rounds complete.</p>
+      </motion.div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-1.5">
+        {FORMAT_QUIZ_ROUNDS.map((_, i) => (
+          <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+            i < round ? "bg-[#4a8fd4]" : i === round ? "bg-[#4a8fd4]/40" : "bg-slate-200"
+          }`}/>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div key={round} initial={{opacity:0,x:20}} animate={{opacity:1,x:0}} exit={{opacity:0,x:-20}}
+          transition={{duration:0.25,ease:"easeOut" as const}} className="flex flex-col gap-4">
+
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
+            <p className="text-[10px] font-bold text-[#4a8fd4] uppercase tracking-widest mb-3">
+              Round {round + 1} of {FORMAT_QUIZ_ROUNDS.length}
+            </p>
+            <p className="text-sm font-semibold text-slate-700 leading-[1.6]">&ldquo;{current.concept}&rdquo;</p>
+          </div>
+
+          {!revealed && (
+            <div className="flex flex-col gap-2">
+              {formatNames.map(name => (
+                <button key={name} onClick={() => pick(name)}
+                  className="text-left px-4 py-3 rounded-xl border-2 border-slate-200 text-xs font-semibold text-slate-700
+                    hover:border-[#4a8fd4]/50 hover:bg-[#1a2f4a]/3 active:scale-[0.98] transition-all duration-150">
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {revealed && (
+            <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:0.3,ease:"easeOut" as const}}
+              className={`rounded-2xl p-5 border-2 flex flex-col gap-3 ${
+                isCorrect ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"
+              }`}>
+              <div className="flex items-start gap-2">
+                {isCorrect
+                  ? <IcoCheck size={16} className="text-emerald-500 flex-shrink-0 mt-0.5"/>
+                  : <IcoAlert size={16} className="text-amber-500 flex-shrink-0 mt-0.5"/>}
+                <div className="flex flex-col gap-1">
+                  <span className={`text-sm font-extrabold ${isCorrect ? "text-emerald-700" : "text-amber-700"}`}>
+                    {isCorrect ? "Correct." : `The right call: ${current.correct}`}
+                  </span>
+                  {!isCorrect && selected && (
+                    <span className="text-[10px] font-bold text-slate-500">You selected: {selected}</span>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-slate-600 leading-[1.6]">{current.explanation}</p>
+              <button onClick={next}
+                className="mt-1 self-start flex items-center gap-1 text-xs font-bold text-[#4a8fd4] hover:text-[#1a2f4a] transition-colors">
+                {round < FORMAT_QUIZ_ROUNDS.length - 1 ? "Next round" : "Finish"} <IcoChevronRight size={12}/>
+              </button>
+            </motion.div>
+          )}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function FinalReflection({ onDone }: { onDone: (a1: string, a2: string) => void }) {
+  const [a1, setA1] = useState("");
+  const [a2, setA2] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  const ready = a1.trim().length >= 20 && a2.trim().length >= 20;
+
+  function submit() {
+    if (!ready) return;
+    setSubmitted(true);
+    setTimeout(() => onDone(a1.trim(), a2.trim()), 600);
+  }
+
+  if (submitted) {
+    return (
+      <motion.div initial={{opacity:0,scale:0.96}} animate={{opacity:1,scale:1}} transition={{duration:0.3,ease:"easeOut" as const}}
+        className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-center gap-3">
+        <IcoCheck size={18} className="text-emerald-500 flex-shrink-0"/>
+        <p className="text-sm font-extrabold text-emerald-700">Reflection saved.</p>
+      </motion.div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-extrabold text-slate-700 leading-[1.5]">
+          Which Cloud Closet brand pillar does your natural content instinct connect with most, and what&apos;s one video concept it gives you?
+        </label>
+        <textarea
+          value={a1} onChange={e => setA1(e.target.value)} rows={3}
+          placeholder="e.g. The Closet — I want to show what happens when I actually catalogue everything I own..."
+          className="w-full border-2 border-slate-200 rounded-2xl px-4 py-3.5 text-sm text-slate-800 outline-none focus:border-[#4a8fd4] transition-colors resize-none placeholder:text-slate-300 shadow-sm font-medium leading-[1.6]"
+        />
+        <p className={`text-[10px] font-bold text-right transition-colors ${a1.trim().length >= 20 ? "text-emerald-500" : "text-slate-300"}`}>
+          {a1.trim().length} chars{a1.trim().length < 20 ? ` · ${20 - a1.trim().length} more to unlock` : " · ✓"}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-extrabold text-slate-700 leading-[1.5]">
+          What&apos;s one habit from the algorithm module you&apos;re committing to starting with your first video?
+        </label>
+        <textarea
+          value={a2} onChange={e => setA2(e.target.value)} rows={3}
+          placeholder="e.g. I'm going to write 3 hook variations before filming so I have options..."
+          className="w-full border-2 border-slate-200 rounded-2xl px-4 py-3.5 text-sm text-slate-800 outline-none focus:border-[#4a8fd4] transition-colors resize-none placeholder:text-slate-300 shadow-sm font-medium leading-[1.6]"
+        />
+        <p className={`text-[10px] font-bold text-right transition-colors ${a2.trim().length >= 20 ? "text-emerald-500" : "text-slate-300"}`}>
+          {a2.trim().length} chars{a2.trim().length < 20 ? ` · ${20 - a2.trim().length} more to unlock` : " · ✓"}
+        </p>
+      </div>
+
+      <PrimaryBtn onClick={submit} disabled={!ready}>Submit reflection <IcoChevronRight size={16}/></PrimaryBtn>
+    </div>
+  );
+}
+
+// ─── Module 5 (index 4) — Full Multi-Section + L1 Completion ─────────────────────
+
+function Module5Content({ onComplete, isAdmin = false }: { onComplete: () => void; isAdmin?: boolean }) {
+  const TOTAL_SECTIONS = 2;
+  const [section, setSection] = useState(isAdmin ? TOTAL_SECTIONS : 1);
+  const [explorerDone, setExplorerDone] = useState(false);
+  const [quizDone, setQuizDone]       = useState(false);
+  const [reflectionDone, setReflectionDone] = useState(false);
+  const [reflectionAnswers, setReflectionAnswers] = useState<{ a1: string; a2: string } | null>(null);
+  const [showL1, setShowL1] = useState(false);
+
+  function onExplorerDone() {
+    setExplorerDone(true);
+    setTimeout(() => setSection(2), 600);
+  }
+
+  function onReflectionDone(a1: string, a2: string) {
+    setReflectionAnswers({ a1, a2 });
+    setReflectionDone(true);
+    setTimeout(() => setShowL1(true), 900);
+  }
+
+  const segmentClass = (n: number) => {
+    const done = n === 1 ? explorerDone : reflectionDone;
+    if (done) return "bg-[#4a8fd4]";
+    if (n === section) return "bg-[#4a8fd4]/40";
+    return "bg-slate-200";
+  };
+
+  function SectionDoneTag() {
+    return (
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} className="flex items-center gap-2 text-xs font-bold text-emerald-600">
+        <IcoCheck size={13}/> Section complete
+      </motion.div>
+    );
+  }
+
+  // Level 1 completion screen
+  if (showL1 && reflectionAnswers) {
+    return (
+      <motion.div initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{duration:0.5,ease:"easeOut" as const}}
+        className="flex flex-col gap-6">
+        {/* Full progress bar */}
+        <div className="flex gap-1">
+          {[1,2].map(n => <div key={n} className="h-1 flex-1 rounded-full bg-[#4a8fd4]"/>)}
+        </div>
+
+        {/* Hero */}
+        <div className="flex flex-col items-center text-center gap-3 py-2">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#1a2f4a] to-[#26476e] flex items-center justify-center shadow-lg">
+            <IcoCheck size={28} className="text-white"/>
+          </div>
+          <div>
+            <h3 className="text-2xl font-extrabold text-slate-800 leading-tight">Level 1 complete.</h3>
+            <p className="text-sm text-slate-500 mt-2 leading-[1.7] max-w-sm mx-auto">
+              You know what Cloud Closet is, how the algorithm works, how a video is structured, and what formats you&apos;ll be making. Everything else builds from here.
+            </p>
+          </div>
+        </div>
+
+        {/* Reflection recap */}
+        <div className="flex flex-col gap-3">
+          <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Your reflections</p>
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+            <p className="text-[10px] font-extrabold text-[#4a8fd4] uppercase tracking-widest mb-2">Brand pillar + concept</p>
+            <p className="text-sm text-slate-700 leading-[1.6]">{reflectionAnswers.a1}</p>
+          </div>
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+            <p className="text-[10px] font-extrabold text-[#4a8fd4] uppercase tracking-widest mb-2">Algorithm habit commitment</p>
+            <p className="text-sm text-slate-700 leading-[1.6]">{reflectionAnswers.a2}</p>
+          </div>
+        </div>
+
+        {/* Level 2 + CTA */}
+        <div className="flex flex-col gap-3">
+          <div className="bg-slate-50 border-2 border-slate-100 rounded-2xl p-5 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-extrabold text-slate-400">Level 2</p>
+              <p className="text-xs text-slate-300 mt-0.5 leading-[1.5]">Coming soon — check back after your first week of filming.</p>
+            </div>
+            <IcoLock size={16} className="text-slate-300 flex-shrink-0"/>
+          </div>
+          <PrimaryBtn onClick={onComplete}>Finish Level 1 <IcoChevronRight size={16}/></PrimaryBtn>
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      {/* 2-segment progress bar */}
+      <div className="flex gap-1">
+        {[1,2].map(n => (
+          <div key={n} className={`h-1 flex-1 rounded-full transition-all duration-500 ${segmentClass(n)}`}/>
+        ))}
+      </div>
+
+      {/* ── Section 1 ── */}
+      <motion.div initial={{opacity:0,y:14}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}} className="flex flex-col gap-6">
+        <SectionHeader n={1} total={TOTAL_SECTIONS} label="Seven formats. One rule."/>
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-slate-600 leading-[1.7]">
+            Each format below is a proven container for Cloud Closet content. They&apos;re not rigid scripts — they&apos;re starting points. For every video you make, pick one format, write at least two hook variations, and ask yourself which pillar it connects to (The Closet, The Cloud, or The Spark). If you can&apos;t answer that last question, rethink the concept before filming.
+          </p>
+          {/* Tag legend */}
+          <div className="flex flex-wrap items-center gap-2 p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest w-full">Tag legend</span>
+            <TagPill label="Beginner-friendly" color="green"/>
+            <TagPill label="More experience helpful" color="purple"/>
+            <TagPill label="High algorithmic signal" color="teal"/>
+          </div>
+        </div>
+        {!explorerDone ? <FormatExplorer onDone={onExplorerDone}/> : <SectionDoneTag/>}
+      </motion.div>
+
+      {/* ── Section 2 ── */}
+      {section >= 2 && (
+        <motion.div key="s2" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}}
+          className="flex flex-col gap-6 pt-2 border-t border-slate-100">
+          <SectionHeader n={2} total={TOTAL_SECTIONS} label="Put it together"/>
+
+          {!reflectionDone ? (
+            <div className="flex flex-col gap-6">
+              {/* Format matcher quiz */}
+              <div className="flex flex-col gap-3">
+                <h3 className="text-base font-extrabold text-slate-800">Match the concept to the format</h3>
+                <p className="text-xs text-slate-500 leading-[1.6]">Read each content concept and pick the format it belongs in. 5 rounds.</p>
+              </div>
+              <FormatMatcherQuiz onDone={() => setQuizDone(true)}/>
+
+              {/* Final reflection — unlocks after quiz */}
+              {quizDone && (
+                <motion.div key="reflection" initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{duration:0.4,ease:"easeOut" as const}}
+                  className="flex flex-col gap-5 pt-4 border-t border-slate-100">
+                  <div className="flex flex-col gap-1">
+                    <h3 className="text-base font-extrabold text-slate-800">Before you finish Level 1</h3>
+                    <p className="text-xs text-slate-500 leading-[1.6]">Answer these two questions. They don&apos;t have a right answer — they&apos;re here to help you show up better.</p>
+                  </div>
+                  <FinalReflection onDone={onReflectionDone}/>
+                </motion.div>
+              )}
+            </div>
+          ) : (
+            <SectionDoneTag/>
+          )}
+        </motion.div>
+      )}
+      {isAdmin && (
+        <div className="pt-4 border-t border-slate-100 mt-2">
+          <button onClick={onComplete} className="text-xs font-bold text-slate-400 hover:text-slate-600 underline transition-colors">Mark module complete — admin view</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -2525,12 +3102,15 @@ function WelcomeModal({ onClose }: { onClose:()=>void }) {
 
 // ─── Main Export ─────────────────────────────────────────────────────────────────
 
-export function UGCOnboardingPage({ profile }: { profile:{ full_name?:string } }) {
+export function UGCOnboardingPage({ profile, isAdmin = false }: { profile:{ full_name?:string }; isAdmin?: boolean }) {
   const [view, setView] = useState<"overview"|"module">("overview");
   const [currentModule, setCurrentModule] = useState(0);
-  const [statuses, setStatuses] = useState<ModuleStatus[]>(["active","locked","locked","locked"]);
+  const [statuses, setStatuses] = useState<ModuleStatus[]>(
+    isAdmin ? ["active","active","active","active","active"] : ["active","locked","locked","locked","locked"]
+  );
   const [showModal, setShowModal] = useState(false);
   const [l2Step, setL2Step] = useState<WizardStep>("intro");
+  const [showTrack2, setShowTrack2] = useState(false);
 
   // Progress: each completed module = 25%
   const completedCount = statuses.filter(s => s === "completed").length;
@@ -2565,13 +3145,17 @@ export function UGCOnboardingPage({ profile }: { profile:{ full_name?:string } }
   const mod = MODULES[currentModule];
   const isCompleted = statuses[currentModule] === "completed";
 
+  if (showTrack2) {
+    return <Track2OnboardingPage onBack={() => setShowTrack2(false)} isAdmin={isAdmin}/>;
+  }
+
   return (
     <div className="flex flex-col gap-5 max-w-2xl mx-auto pb-12">
       {/* Page header */}
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-800 leading-tight">Creator Onboarding</h1>
-          <p className="text-sm text-slate-500 mt-1 leading-[1.6]">Complete all 4 modules to unlock your creator dashboard</p>
+          <p className="text-sm text-slate-500 mt-1 leading-[1.6]">Complete all {MODULES.length} modules to unlock your creator dashboard</p>
         </div>
         {view === "module" && (
           <button onClick={() => setView("overview")} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors mt-1 flex-shrink-0">
@@ -2656,6 +3240,24 @@ export function UGCOnboardingPage({ profile }: { profile:{ full_name?:string } }
                 );
               })}
             </div>
+
+            {/* Continue to Track 2 — appears when all Track 1 modules complete, or always for admin */}
+            {(completedCount === MODULES.length || isAdmin) && (
+              <motion.div initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} transition={{duration:0.45,ease:"easeOut" as const}}>
+                <button onClick={() => setShowTrack2(true)}
+                  className="w-full mt-1 rounded-2xl border-2 border-[#1a2f4a]/15 bg-gradient-to-r from-[#1a2f4a]/4 to-[#4a8fd4]/6
+                    hover:border-[#4a8fd4]/40 hover:shadow-md p-5 flex items-center justify-between gap-3 transition-all duration-200 text-left group">
+                  <div>
+                    <p className="text-[10px] font-extrabold text-[#4a8fd4] uppercase tracking-widest mb-1">Up next</p>
+                    <p className="text-sm font-extrabold text-slate-800">Track 2 — Creator Training</p>
+                    <p className="text-xs text-slate-500 mt-0.5 leading-[1.5]">Account setup, production, and portfolio building</p>
+                  </div>
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1a2f4a] to-[#26476e] text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform">
+                    <IcoChevronRight size={16}/>
+                  </div>
+                </button>
+              </motion.div>
+            )}
           </motion.div>
         )}
 
@@ -2680,17 +3282,17 @@ export function UGCOnboardingPage({ profile }: { profile:{ full_name?:string } }
             <div className="p-5">
               {/* Module 1 */}
               {currentModule === 0 && !isCompleted && (
-                <Module1Content onComplete={() => handlePass(0)}/>
+                <Module1Content onComplete={() => handlePass(0)} isAdmin={isAdmin}/>
               )}
               {currentModule === 0 && isCompleted && (
                 <div className="flex flex-col gap-5">
-                  <Module1Content onComplete={() => {}}/>
+                  <Module1Content onComplete={() => {}} isAdmin={isAdmin}/>
                 </div>
               )}
 
               {/* Module 2 — setup wizard */}
               {currentModule === 1 && !isCompleted && (
-                <Level1Wizard key="l2" onPass={() => handlePass(1)} onStepChange={s => setL2Step(s)}/>
+                <Level1Wizard key="l2" onPass={() => handlePass(1)} onStepChange={s => setL2Step(s)} isAdmin={isAdmin}/>
               )}
               {currentModule === 1 && isCompleted && (
                 <div className="flex flex-col items-center gap-3 py-8 text-center">
@@ -2707,7 +3309,7 @@ export function UGCOnboardingPage({ profile }: { profile:{ full_name?:string } }
 
               {/* Module 3 — How the Algorithm Works */}
               {currentModule === 2 && !isCompleted && (
-                <Module3Content onComplete={() => handlePass(2)}/>
+                <Module3Content onComplete={() => handlePass(2)} isAdmin={isAdmin}/>
               )}
               {currentModule === 2 && isCompleted && (
                 <div className="flex flex-col items-center gap-3 py-8 text-center">
@@ -2724,7 +3326,7 @@ export function UGCOnboardingPage({ profile }: { profile:{ full_name?:string } }
 
               {/* Module 4 — Anatomy of a High-Performing UGC Video */}
               {currentModule === 3 && !isCompleted && (
-                <Module4Content onComplete={() => handlePass(3)}/>
+                <Module4Content onComplete={() => handlePass(3)} isAdmin={isAdmin}/>
               )}
               {currentModule === 3 && isCompleted && (
                 <div className="flex flex-col items-center gap-3 py-8 text-center">
@@ -2732,7 +3334,24 @@ export function UGCOnboardingPage({ profile }: { profile:{ full_name?:string } }
                     <IcoCheck size={28} className="text-emerald-500"/>
                   </div>
                   <p className="text-base font-extrabold text-slate-700">Module 4 Complete!</p>
-                  <p className="text-sm text-slate-500 leading-[1.6]">Training complete — you know everything you need to start creating.</p>
+                  <p className="text-sm text-slate-500 leading-[1.6]">You know how a high-performing video is built. On to formats.</p>
+                  <button onClick={() => setView("overview")} className="mt-2 text-xs font-bold text-[#4a8fd4] hover:text-[#1a2f4a] transition-colors flex items-center gap-1">
+                    <IcoChevronLeft size={12}/> Back to overview
+                  </button>
+                </div>
+              )}
+
+              {/* Module 5 — Content Formats */}
+              {currentModule === 4 && !isCompleted && (
+                <Module5Content onComplete={() => handlePass(4)} isAdmin={isAdmin}/>
+              )}
+              {currentModule === 4 && isCompleted && (
+                <div className="flex flex-col items-center gap-3 py-8 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center">
+                    <IcoCheck size={28} className="text-emerald-500"/>
+                  </div>
+                  <p className="text-base font-extrabold text-slate-700">Level 1 Complete!</p>
+                  <p className="text-sm text-slate-500 leading-[1.6]">You know what Cloud Closet is, how the algorithm works, how a video is structured, and what formats you&apos;ll be making.</p>
                   <button onClick={() => setView("overview")} className="mt-2 text-xs font-bold text-[#4a8fd4] hover:text-[#1a2f4a] transition-colors flex items-center gap-1">
                     <IcoChevronLeft size={12}/> Back to overview
                   </button>
