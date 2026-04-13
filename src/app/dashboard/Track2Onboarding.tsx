@@ -2006,6 +2006,7 @@ export function Track2OnboardingPage({ onBack, isAdmin = false }: { onBack: () =
   const [currentModule, setCurrentModule] = useState(0);
   const [statuses, setStatuses] = useState<ModuleStatus[]>(["locked","locked","locked"]);
   const [allDone, setAllDone] = useState(false);
+  const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
 
   const completedCount = statuses.filter(s => s === "completed").length;
   const progressPct = path ? (completedCount / 3) * 100 : 0;
@@ -2118,6 +2119,32 @@ export function Track2OnboardingPage({ onBack, isAdmin = false }: { onBack: () =
             <IcoChevronLeft size={13}/> Track 1
           </button>
         </div>
+
+        {!showSwitchConfirm ? (
+          <button onClick={() => setShowSwitchConfirm(true)}
+            className="self-start text-[11px] font-bold text-slate-400 hover:text-[#4a8fd4] transition-colors underline underline-offset-2">
+            Switch to {path === "beginner" ? "Advanced" : "Beginner"} path →
+          </button>
+        ) : (
+          <motion.div initial={{opacity:0,y:6}} animate={{opacity:1,y:0}} transition={{duration:0.25,ease:"easeOut" as const}}
+            className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4 flex flex-col gap-3">
+            <p className="text-xs font-extrabold text-amber-700">Switch to the {path === "beginner" ? "Advanced" : "Beginner"} path?</p>
+            {completedCount > 0
+              ? <p className="text-xs text-slate-600 leading-[1.65]">You&apos;ve completed {completedCount} module{completedCount > 1 ? "s" : ""} on the {path} path. Switching will start the new path from scratch — your progress here won&apos;t be lost, but you&apos;ll need to complete the new path separately.</p>
+              : <p className="text-xs text-slate-600 leading-[1.65]">You haven&apos;t started any modules yet, so switching is free.</p>
+            }
+            <div className="flex items-center gap-2">
+              <button onClick={() => { selectPath(path === "beginner" ? "advanced" : "beginner"); setShowSwitchConfirm(false); }}
+                className="flex-1 py-2.5 rounded-xl bg-[#1a2f4a] text-white text-xs font-extrabold hover:bg-[#26476e] transition-colors">
+                Yes, switch path
+              </button>
+              <button onClick={() => setShowSwitchConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border-2 border-slate-200 text-xs font-extrabold text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-colors">
+                Stay on {path} path
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         <div className="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
