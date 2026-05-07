@@ -216,6 +216,9 @@ export async function POST(
       .eq('contract_token', token);
 
     // ── Invite intern to Supabase Auth (or send magic link if already exists) ───
+    let authStatus = 'skipped';
+    let authError: string | null = null;
+
     if (contract.intern_email) {
       const redirectTo = `${SITE_URL}/auth/callback`;
 
@@ -246,6 +249,7 @@ export async function POST(
 
       if (!inviteErr && invited?.user?.id) {
         // ── New user: invite email sent automatically by Supabase ──────────────
+        authStatus = 'invited';
         const userId = invited.user.id;
         const avatarUrl = await uploadHeadshot(userId);
 
@@ -279,15 +283,23 @@ export async function POST(
             options: { shouldCreateUser: false, emailRedirectTo: redirectTo },
           });
           if (otpErr) {
+            authStatus = 'otp_failed';
+            authError = otpErr.message;
             console.error('[contract sign] OTP send failed:', otpErr.message);
+          } else {
+            authStatus = 'magic_link_sent';
           }
+        } else {
+          authStatus = 'existing_user_not_found';
         }
       } else if (inviteErr) {
+        authStatus = 'invite_failed';
+        authError = inviteErr.message;
         console.error('[contract sign] invite error:', inviteErr.message);
       }
     }
 
-    return NextResponse.json({ ok: true, pdf_url });
+    return NextResponse.json({ ok: true, pdf_url, auth_status: authStatus, auth_error: authError });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

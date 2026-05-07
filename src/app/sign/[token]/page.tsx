@@ -112,10 +112,12 @@ export default function SignContractPage() {
       body: JSON.stringify({ signature_data: signatureData, headshot_data: headshotData }),
     });
 
+    const json = await res.json();
     if (res.ok) {
+      // Log auth status to console for debugging
+      console.log('[contract sign] auth_status:', json.auth_status, json.auth_error || '');
       router.push(`/sign/${token}/confirm`);
     } else {
-      const json = await res.json();
       setState({
         status: "error",
         message: json.error || "Signing failed. Please try again.",
