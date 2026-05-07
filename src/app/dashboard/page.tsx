@@ -7,6 +7,16 @@ import { PwaSetup } from "@/components/PwaSetup";
 import ExternalUGCPanel from "./ExternalUGCPanel";
 import SoraaCreatorView, { SoraaCreatorQuestionsPage } from "./SoraaCreatorView";
 import SororityRushPlan from "./SororityRushPlan";
+import ContractsPanel from "./ContractsPanel";
+import {
+  type MTTeamRole, type MTTeam, type MTSubteam, type MTInternNote, type InternRosterEntry,
+  MultiTeamInternDash, SubteamExecDash, TeamExecDash, IRMDash, AdminSchoolsTab, AdminMTInternMgmt, AdminInternMasterList,
+} from "./MultiTeamDashboard";
+import {
+  type Sprint, type SprintAssignment, type SprintDeliverable, type SprintCheckin,
+  AdminSprintView, ExecSprintView, InternSprintView,
+} from "./SprintDashboard";
+import { type Storm, InternStormsView, AdminStormsView } from "./StormsDashboard";
 import TikTokContent from "./TikTokContent";
 import { UGCOnboardingPage } from "./UGCOnboarding";
 import {
@@ -18,12 +28,12 @@ import {
   CalendarClock, ShoppingBag, Coffee, HelpCircle, MapPin,
   Play, Trophy, ExternalLink, ArrowUpRight, MessageSquare, TrendingUp,
   Settings as SettingsIcon, Zap, ChevronDown, ChevronUp, AlertTriangle, Bookmark, Copy,
-  BookOpen, RefreshCw, Palette, Link as LinkIcon, Image, Sparkles,
+  BookOpen, RefreshCw, Palette, Link as LinkIcon, Image, Sparkles, CloudRain,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Role = "admin" | "intern" | "ugc_creator" | "director" | "wisconsin_admin" | "soraa_creator" | "cc_exec" | "ugc_manager";
-type Profile = { id: string; full_name: string; email: string; role: Role; team?: string; active?: boolean; rush_access?: boolean };
+type Profile = { id: string; full_name: string; email: string; role: Role; team?: string; active?: boolean; rush_access?: boolean; university?: string };
 type TaskComment = { id: string; task_id: string; author_id?: string; body: string; created_at: string };
 type Task = { id: string; title: string; description?: string; assigned_to?: string; co_assignees?: string[]; category?: string; priority?: string; status: string; due_date?: string; created_at: string; completed_at?: string; task_comments?: TaskComment[] };
 type Outreach = { id: string; intern_id?: string; brand_or_creator: string; platform?: string; contact_name?: string; date_contacted?: string; status: string; notes?: string; created_at: string };
@@ -31,7 +41,7 @@ type Reply = { id: string; question_id: string; author_id?: string; body: string
 type Question = { id: string; author_id?: string; title: string; category?: string; description?: string; status: string; created_at: string; question_replies?: Reply[] };
 type Report = { id: string; intern_id?: string; week_of?: string; tasks_completed?: string; outreach_sent?: string; responses_received?: string; wins?: string; challenges?: string; ideas?: string; reviewed: boolean; created_at: string; file_url?: string; custom_data?: Record<string,any> };
 type Resource = { id: string; title: string; description?: string; category?: string; file_url?: string; created_at: string };
-type Announcement = { id: string; title: string; body?: string; pinned?: boolean; target_teams?: string[] | null; created_at: string };
+type Announcement = { id: string; title: string; body?: string; pinned?: boolean; target_teams?: string[] | null; target_type?: string; team_id?: string | null; subteam_id?: string | null; tags?: string[]; created_by?: string | null; created_at: string };
 type Activity = { id: string; user_id?: string; user_name?: string; activity?: string; metadata?: any; created_at: string };
 type RequestType = { id: string; name: string; description?: string; icon?: string; kind?: string; calendly_ella?: string; calendly_noel?: string; active?: boolean };
 type Request = { id: string; intern_id?: string; type_id?: string; type_name?: string; message: string; status: string; replies: RequestReply[]; created_at: string };
@@ -344,6 +354,10 @@ function AdminDash({ interns, tasks, outreach, questions, activity, announcement
 // ── Intern Dashboard ───────────────────────────────────────────────────────────
 function InternDash({ profile, tasks, outreach, announcements, requests, meetingRequests, setMeetingRequests, interns, sb, setPage }: { profile:Profile; tasks:Task[]; outreach:Outreach[]; announcements:Announcement[]; requests:Request[]; meetingRequests:MeetingRequest[]; setMeetingRequests:(m:MeetingRequest[])=>void; interns:Profile[]; sb:any; setPage:(p:string)=>void }) {
   const [selMR, setSelMR] = useState<MeetingRequest|null>(null);
+  const [myContract, setMyContract] = useState<{signed_at:string|null;pdf_url:string|null}|null>(null);
+  useEffect(() => {
+    sb.from("contracts").select("signed_at,pdf_url").eq("user_id", profile.id).maybeSingle().then(({ data }: any) => { if (data) setMyContract(data); });
+  }, [profile.id, sb]);
   const myTasks = tasks.filter(t=>t.assigned_to===profile.id);
   const active = myTasks.filter(t=>t.status!=="completed").length;
   const myOut = outreach.filter(o=>o.intern_id===profile.id);
@@ -443,6 +457,20 @@ function InternDash({ profile, tasks, outreach, announcements, requests, meeting
           </div>
         )}
       </div>
+      {myContract?.signed_at && myContract?.pdf_url && (
+        <div className="bg-white border border-stone-200/60 rounded-xl p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText size={14} className="text-stone-400"/>
+              <p className="text-sm font-semibold text-stone-700">My Contract</p>
+            </div>
+            <a href={myContract.pdf_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-3 py-1.5 bg-stone-100 text-stone-600 text-xs font-medium rounded-lg hover:bg-stone-200 transition-colors">
+              <ArrowUpRight size={12}/> View PDF
+            </a>
+          </div>
+          <p className="text-xs text-stone-400 mt-1">Signed {fmt(myContract.signed_at)}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1780,6 +1808,8 @@ function InternHubPage({ profile, interns, setInterns, techProjects, setTechProj
 function IntMgmt({ interns, setInterns, sb }: { interns:Profile[]; setInterns:(i:Profile[])=>void; sb:any }) {
   const [modal,setModal]=useState(false);
   const [edit,setEdit]=useState<Profile|null>(null);
+  const [contractsMap, setContractsMap] = useState<Record<string,string>>({});
+  useEffect(()=>{ sb.from("contracts").select("user_id,pdf_url").not("signed_at","is",null).then(({data}:any)=>{ if(data){ const m:Record<string,string>={}; data.forEach((c:any)=>{ if(c.user_id&&c.pdf_url) m[c.user_id]=c.pdf_url; }); setContractsMap(m); } }); },[sb]);
   const [form,setForm]=useState({full_name:"",email:"",team:"Tech/AI",role:"intern"});
   const [generatedSQL,setGeneratedSQL]=useState<string|null>(null);
   const [copied,setCopied]=useState(false);
@@ -1857,6 +1887,9 @@ VALUES (
                   {i.team&&<div className="mt-1"><TB team={i.team}/></div>}
                 </div>
                 <div className="flex gap-1 items-center">
+                  {contractsMap[i.id] && (
+                    <a href={contractsMap[i.id]} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition-colors" title="View signed contract"><FileText size={12}/></a>
+                  )}
                   <button onClick={()=>open(i)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition-colors"><Pencil size={12}/></button>
                   <button onClick={()=>toggleActive(i.id,i.active===false)} className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors ${i.active===false?"bg-stone-100 text-stone-500 hover:bg-emerald-50 hover:text-emerald-600":"bg-stone-100 text-stone-500 hover:bg-red-50 hover:text-red-500"}`}>
                     {i.active===false?"Activate":"Deactivate"}
@@ -9850,6 +9883,18 @@ export default function DashboardPage() {
   const [savedCaptions, setSavedCaptions] = useState<SavedCaption[]>([]);
   const [qaSeenAt, setQaSeenAt] = useState(() => parseInt(typeof window !== "undefined" ? (localStorage.getItem("ugc_qa_seen") || "0") : "0"));
   const [pivotSeenAt, setPivotSeenAt] = useState(() => parseInt(typeof window !== "undefined" ? (localStorage.getItem("ugc_pivots_seen") || "0") : "0"));
+  const [myTeamRoles, setMyTeamRoles] = useState<MTTeamRole[]>([]);
+  const [mtTeams, setMtTeams] = useState<MTTeam[]>([]);
+  const [mtSubteams, setMtSubteams] = useState<MTSubteam[]>([]);
+  const [allTeamRoles, setAllTeamRoles] = useState<MTTeamRole[]>([]);
+  const [internNotes, setInternNotes] = useState<MTInternNote[]>([]);
+  const [mtProfiles, setMtProfiles] = useState<{ id: string; full_name: string; email?: string }[]>([]);
+  const [internRoster, setInternRoster] = useState<InternRosterEntry[]>([]);
+  const [storms, setStorms] = useState<Storm[]>([]);
+  const [sprints, setSprints] = useState<Sprint[]>([]);
+  const [sprintAssignments, setSprintAssignments] = useState<SprintAssignment[]>([]);
+  const [sprintDeliverables, setSprintDeliverables] = useState<SprintDeliverable[]>([]);
+  const [sprintCheckins, setSprintCheckins] = useState<SprintCheckin[]>([]);
 
   useEffect(() => {
     const mark = (key: string, set: (t: number) => void) => { const t = Date.now(); localStorage.setItem(key, t.toString()); set(t); };
@@ -9993,6 +10038,64 @@ export default function DashboardPage() {
         }
       }
 
+      // Multi-team program data — always loaded (needed for intern/exec/IRM/admin views)
+      const [{ data: myRolesD }, { data: teamsD }, { data: subteamsD }, { data: allRolesD }] = await Promise.all([
+        supabase.from("user_team_roles").select("*").eq("user_id", prof.id),
+        supabase.from("teams").select("*").order("name"),
+        supabase.from("subteams").select("*").order("name"),
+        supabase.from("user_team_roles").select("*"),
+      ]);
+      const myRoles = (myRolesD || []) as MTTeamRole[];
+      setMyTeamRoles(myRoles);
+      setMtTeams((teamsD || []) as MTTeam[]);
+      setMtSubteams((subteamsD || []) as MTSubteam[]);
+      setAllTeamRoles((allRolesD || []) as MTTeamRole[]);
+
+      // IRM and admin: load intern notes
+      const hasIRM = myRoles.some(r => r.role === "irm");
+      if (prof.role === "admin" || prof.role === "wisconsin_admin" || hasIRM) {
+        const { data: notesD } = await supabase.from("intern_notes").select("*").order("created_at", { ascending: false });
+        setInternNotes((notesD || []) as MTInternNote[]);
+      }
+
+      // Sprint data — load for all MT program roles + admin
+      const hasMTRole = myRoles.length > 0 || prof.role === "admin" || prof.role === "wisconsin_admin";
+      if (hasMTRole) {
+        const [{ data: sprintsD }, { data: saD }, { data: sdD }, { data: scD }, { data: rosterD }, { data: stormsD }] = await Promise.all([
+          supabase.from("sprints").select("*").order("created_at", { ascending: false }),
+          supabase.from("sprint_assignments").select("*"),
+          supabase.from("sprint_deliverables").select("*"),
+          supabase.from("sprint_checkins").select("*"),
+          supabase.from("intern_roster").select("*").order("created_at", { ascending: false }),
+          supabase.from("storms").select("*").order("created_at", { ascending: false }),
+        ]);
+        setSprints((sprintsD || []) as Sprint[]);
+        setSprintAssignments((saD || []) as SprintAssignment[]);
+        setSprintDeliverables((sdD || []) as SprintDeliverable[]);
+        setSprintCheckins((scD || []) as SprintCheckin[]);
+        setInternRoster((rosterD || []) as InternRosterEntry[]);
+        setStorms((stormsD || []) as Storm[]);
+
+        // Fetch profiles for all team role holders (for sprint assignment display)
+        const allUserIds = [...new Set((allRolesD || []).map((r: any) => r.user_id as string))];
+        if (allUserIds.length > 0) {
+          const { data: mtProfD } = await supabase.from("profiles").select("id,full_name,email").in("id", allUserIds);
+          setMtProfiles((mtProfD || []) as { id: string; full_name: string; email: string }[]);
+        }
+      }
+
+      // Set initial page for MT roles (only if not already redirected to a special role page)
+      if (!["ugc_creator","director","soraa_creator","cc_exec","ugc_manager"].includes(prof.role) &&
+          prof.role !== "admin" && prof.role !== "wisconsin_admin") {
+        const hasTeamExec    = myRoles.some(r => r.role === "team_exec");
+        const hasSubteamExec = myRoles.some(r => r.role === "subteam_exec");
+        const hasIRMRole     = myRoles.some(r => r.role === "irm");
+        if (hasTeamExec)         setPage("team_exec_home");
+        else if (hasSubteamExec) setPage("subteam_exec_home");
+        else if (hasIRMRole)     setPage("irm_home");
+        else if (myRoles.length > 0) setPage("mt_intern_home");
+      }
+
       setLoading(false);
     }
     init().catch(err => { console.error("[dashboard init]", err); setLoading(false); });
@@ -10053,7 +10156,11 @@ export default function DashboardPage() {
   const isCCExec = profile.role === "cc_exec";
   const isUGCManager = profile.role === "ugc_manager";
   const canSeeRush = profile.rush_access === true;
-  const isIntern = !isAdmin && !isUGC && !isDirector && !isSoraaCreator && !isCCExec && !isUGCManager;
+  const isTeamExec    = myTeamRoles.some(r => r.role === "team_exec");
+  const isSubteamExec = myTeamRoles.some(r => r.role === "subteam_exec") && !isTeamExec;
+  const isIRM         = myTeamRoles.some(r => r.role === "irm") && !isTeamExec && !isSubteamExec;
+  const isMTIntern    = myTeamRoles.some(r => r.role === "intern") && !isTeamExec && !isSubteamExec && !isIRM;
+  const isIntern = !isAdmin && !isUGC && !isDirector && !isSoraaCreator && !isCCExec && !isUGCManager && !isTeamExec && !isSubteamExec && !isIRM && !isMTIntern;
   const isTech = profile.team === "Tech/AI";
   const isDesign = profile.team === "Design";
   const isStrategy = profile.team === "Strategy";
@@ -10071,6 +10178,24 @@ export default function DashboardPage() {
   const CC_EXEC_NAV = [
     { id: "resources", icon: <FolderOpen size={16}/>, label: "Resources" },
     { id: "rush",      icon: <Bookmark size={16}/>,   label: "Rush Plan" },
+  ];
+
+  const MT_INTERN_NAV = [
+    { id: "mt_intern_home", icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
+    { id: "sprints",        icon: <CheckSquare size={16}/>,     label: "My Sprint" },
+    { id: "storms",         icon: <CloudRain size={16}/>,       label: "Storms" },
+  ];
+  const SUBTEAM_EXEC_NAV = [
+    { id: "subteam_exec_home", icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
+    { id: "sprints",           icon: <CheckSquare size={16}/>,     label: "Sprints" },
+  ];
+  const TEAM_EXEC_NAV = [
+    { id: "team_exec_home", icon: <LayoutDashboard size={16}/>, label: "Team Dashboard" },
+    { id: "sprints",        icon: <CheckSquare size={16}/>,     label: "Sprints" },
+  ];
+  const IRM_NAV = [
+    { id: "irm_home", icon: <Users size={16}/>, label: "Intern Roster" },
+    { id: "sprints",  icon: <CheckSquare size={16}/>, label: "Sprints" },
   ];
 
   const NAV = isUGC ? [
@@ -10120,6 +10245,17 @@ export default function DashboardPage() {
         { id: "reports_analytics",   icon: <FileText size={16}/>,     label: "Reports & Analytics" },
         { id: "resources",           icon: <FolderOpen size={16}/>,   label: "Resources" },
         { id: "interns",             icon: <Users size={16}/>,        label: "Intern Mgmt" },
+      ],
+    },
+    {
+      label: "PROGRAM",
+      items: [
+        { id: "sprints",          icon: <CheckSquare size={16}/>, label: "Sprints" },
+        { id: "mt_intern_mgmt",   icon: <Users size={16}/>,       label: "Intern Management" },
+        { id: "intern_roster",    icon: <FileText size={16}/>,     label: "Intern Master List" },
+        { id: "storms",           icon: <CloudRain size={16}/>,   label: "Storms" },
+        { id: "contracts",        icon: <FileText size={16}/>,    label: "Contracts" },
+        { id: "schools",          icon: <BookOpen size={16}/>,    label: "Schools" },
       ],
     },
     {
@@ -10237,6 +10373,14 @@ export default function DashboardPage() {
           SORAA_NAV.map(item => <NavItem key={item.id} item={item} />)
         ) : isCCExec ? (
           CC_EXEC_NAV.map(item => <NavItem key={item.id} item={item} />)
+        ) : isTeamExec ? (
+          TEAM_EXEC_NAV.map(item => <NavItem key={item.id} item={item} />)
+        ) : isSubteamExec ? (
+          SUBTEAM_EXEC_NAV.map(item => <NavItem key={item.id} item={item} />)
+        ) : isIRM ? (
+          IRM_NAV.map(item => <NavItem key={item.id} item={item} />)
+        ) : isMTIntern ? (
+          MT_INTERN_NAV.map(item => <NavItem key={item.id} item={item} />)
         ) : isUGCManager ? (
           UGC_MANAGER_SECTIONS.map(section => {
             const sectionHasActivePage = section.items.some(i => i.id === page);
@@ -10265,7 +10409,7 @@ export default function DashboardPage() {
           <Av name={profile.full_name} size={32}/>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-stone-800 truncate">{profile.full_name}</p>
-            <p className="text-xs text-stone-400 capitalize">{isWisconsinAdmin ? "Wisconsin Admin" : isFullAdmin ? "Admin" : isDirector ? "Director" : isUGC ? "UGC Creator" : isSoraaCreator ? "Soraa Creator" : isCCExec ? "CC Exec" : isUGCManager ? "UGC Manager" : (profile.team || "Intern")}</p>
+            <p className="text-xs text-stone-400 capitalize">{isWisconsinAdmin ? "Wisconsin Admin" : isFullAdmin ? "Admin" : isDirector ? "Director" : isUGC ? "UGC Creator" : isSoraaCreator ? "Soraa Creator" : isCCExec ? "CC Exec" : isUGCManager ? "UGC Manager" : isTeamExec ? "Team Exec" : isSubteamExec ? "Subteam Exec" : isIRM ? "IRM" : (profile.team || "Intern")}</p>
           </div>
           <button onClick={handleSignOut} className="p-1.5 rounded-lg text-stone-300 hover:text-stone-600 hover:bg-stone-100 transition-colors" title="Sign out"><LogOut size={14}/></button>
         </div>
@@ -10335,6 +10479,23 @@ export default function DashboardPage() {
       case "alerts": return isAdmin ? <AlertsPage alerts={smartAlerts} setAlerts={setSmartAlerts} sb={supabase}/> : null;
       case "tiktok_content": return isAdmin ? <TikTokContent profile={p} sb={supabase}/> : null;
       case "rush":   return canSeeRush ? <SororityRushPlan profile={p} sb={supabase}/> : null;
+      case "contracts":      return isAdmin ? <ContractsPanel profile={p} sb={supabase}/> : null;
+      case "mt_intern_mgmt": { const activeInterns = interns.filter(i => i.active !== false); return isAdmin ? <AdminMTInternMgmt interns={activeInterns as any[]} setInterns={setInterns as (p:any[])=>void} tasks={tasks} setTasks={setTasks} allTeamRoles={allTeamRoles} setAllTeamRoles={setAllTeamRoles} teams={mtTeams} setTeams={setMtTeams} subteams={mtSubteams} setSubteams={setMtSubteams} profileId={p.id} sb={supabase}/> : null; }
+      case "intern_roster":  return isAdmin ? <AdminInternMasterList roster={internRoster} setRoster={setInternRoster} teams={mtTeams} subteams={mtSubteams} sb={supabase}/> : null;
+      case "storms":
+        if (isAdmin) return <AdminStormsView storms={storms} profiles={[...interns.map(i => ({ id: i.id, full_name: i.full_name, email: i.email })), ...mtProfiles.map(p => ({ id: p.id, full_name: p.full_name, email: p.email||"" }))].filter((p,i,a) => a.findIndex(x=>x.id===p.id)===i)}/>;
+        if (isMTIntern) return <InternStormsView profile={{ id: p.id, full_name: p.full_name, email: p.email }} storms={storms} setStorms={setStorms} calendlyElla={settings.calendly_ella} sb={supabase}/>;
+        return null;
+      case "schools":        { const activeInterns = interns.filter(i => i.active !== false); return isAdmin ? <AdminSchoolsTab interns={activeInterns as any[]} setInterns={setInterns as (p:any[])=>void} tasks={tasks} allTeamRoles={allTeamRoles} setAllTeamRoles={setAllTeamRoles} teams={mtTeams} subteams={mtSubteams} sb={supabase}/> : null; }
+      case "sprints":
+        if (isAdmin) return <AdminSprintView sprints={sprints} setSprints={setSprints} sprintAssignments={sprintAssignments} setSprintAssignments={setSprintAssignments} sprintDeliverables={sprintDeliverables} setSprintDeliverables={setSprintDeliverables} sprintCheckins={sprintCheckins} allPeople={mtProfiles} allTeamRoles={allTeamRoles} teams={mtTeams} profile={p} sb={supabase}/>;
+        if (isTeamExec || isSubteamExec || isIRM) return <ExecSprintView sprints={sprints} sprintAssignments={sprintAssignments} setSprintAssignments={setSprintAssignments} sprintDeliverables={sprintDeliverables} setSprintDeliverables={setSprintDeliverables} sprintCheckins={sprintCheckins} profile={p} myTeamRoles={myTeamRoles} allPeople={mtProfiles} allTeamRoles={allTeamRoles} sb={supabase}/>;
+        if (isMTIntern) return <InternSprintView sprints={sprints} sprintAssignments={sprintAssignments} sprintDeliverables={sprintDeliverables} setSprintDeliverables={setSprintDeliverables} sprintCheckins={sprintCheckins} setSprintCheckins={setSprintCheckins} profile={p} sb={supabase}/>;
+        return null;
+      case "mt_intern_home": return (isMTIntern || isAdmin) ? <MultiTeamInternDash profile={p} myTeamRoles={myTeamRoles} teams={mtTeams} subteams={mtSubteams} tasks={tasks} announcements={announcements} reports={reports} setReports={setReports} sb={supabase}/> : null;
+      case "subteam_exec_home": return (isSubteamExec || isAdmin) ? <SubteamExecDash profile={p} myTeamRoles={myTeamRoles} teams={mtTeams} subteams={mtSubteams} allTeamRoles={allTeamRoles} interns={interns} tasks={tasks} setTasks={setTasks} reports={reports} announcements={announcements} setAnnouncements={setAnnouncements} sb={supabase}/> : null;
+      case "team_exec_home": return (isTeamExec || isAdmin) ? <TeamExecDash profile={p} myTeamRoles={myTeamRoles} teams={mtTeams} subteams={mtSubteams} allTeamRoles={allTeamRoles} interns={interns} tasks={tasks} setTasks={setTasks} reports={reports} announcements={announcements} setAnnouncements={setAnnouncements} sb={supabase}/> : null;
+      case "irm_home": return (isIRM || isAdmin) ? <IRMDash profile={p} teams={mtTeams} subteams={mtSubteams} allTeamRoles={allTeamRoles} interns={interns} tasks={tasks} internNotes={internNotes} setInternNotes={setInternNotes} sb={supabase}/> : null;
       default:          return null;
     }
   }
@@ -10372,6 +10533,17 @@ export default function DashboardPage() {
           { id: "ugc_submit",         icon: <BarChart3 size={20}/>,       label: "Submit" },
           { id: "ugc_pivots",         icon: <TrendingUp size={20}/>,      label: "Pivots" },
           { id: "ugc_hook_generator", icon: <Zap size={20}/>,             label: "Hooks" },
+        ].map(item => (
+          <button key={item.id} onClick={() => setPage(item.id)} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all ${page === item.id ? "text-stone-800" : "text-stone-400"}`}>
+            {item.icon}
+            <span className="text-[10px] font-medium">{item.label}</span>
+          </button>
+        ))}
+        {(isMTIntern || isTeamExec || isSubteamExec || isIRM) && [
+          isTeamExec    ? { id: "team_exec_home",    icon: <LayoutDashboard size={20}/>, label: "Dashboard" } :
+          isSubteamExec ? { id: "subteam_exec_home", icon: <LayoutDashboard size={20}/>, label: "Dashboard" } :
+          isIRM         ? { id: "irm_home",          icon: <Users size={20}/>,           label: "Roster" } :
+                          { id: "mt_intern_home",    icon: <LayoutDashboard size={20}/>, label: "Home" },
         ].map(item => (
           <button key={item.id} onClick={() => setPage(item.id)} className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all ${page === item.id ? "text-stone-800" : "text-stone-400"}`}>
             {item.icon}
