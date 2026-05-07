@@ -218,95 +218,72 @@ export async function POST(
     // ── Invite intern to Supabase Auth (or send magic link if already exists) ───
     if (contract.intern_email) {
       const redirectTo = `${SITE_URL}/auth/callback`;
-      try {
-        const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
-          contract.intern_email,
-          {
-            data: { full_name: contract.intern_name || '' },
-            redirectTo,
+
+      // Helper: upload headshot and return public URL
+      async function uploadHeadshot(userId: string): Promise<string | null> {
+        if (!headshot_data) return null;
+        try {
+          const mimeMatch = headshot_data.match(/^data:([^;]+);base64,/);
+          const mime = mimeMatch?.[1] || 'image/jpeg';
+          const ext = mime.includes('png') ? 'png' : 'jpg';
+          const base64 = headshot_data.replace(/^data:[^;]+;base64,/, '');
+          const imageBytes = Buffer.from(base64, 'base64');
+          const { error: uploadErr } = await admin.storage
+            .from('headshots')
+            .upload(`${userId}/photo.${ext}`, imageBytes, { contentType: mime, upsert: true });
+          if (uploadErr) return null;
+          const { data: urlData } = admin.storage.from('headshots').getPublicUrl(`${userId}/photo.${ext}`);
+          return urlData?.publicUrl ?? null;
+        } catch {
+          return null;
+        }
+      }
+
+      const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
+        contract.intern_email,
+        { data: { full_name: contract.intern_name || '' }, redirectTo }
+      );
+
+      if (!inviteErr && invited?.user?.id) {
+        // ── New user: invite email sent automatically by Supabase ──────────────
+        const userId = invited.user.id;
+        const avatarUrl = await uploadHeadshot(userId);
+
+        await admin.from('profiles').upsert({
+          id: userId,
+          full_name: contract.intern_name || '',
+          email: contract.intern_email,
+          role: 'intern',
+          active: true,
+          ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+        }, { onConflict: 'id' });
+
+        await admin.from('contracts').update({ user_id: userId }).eq('id', contract.id);
+
+      } else if (inviteErr?.message?.toLowerCase().includes('already')) {
+        // ── Existing user: send magic link email via OTP ────────────────────────
+        const { data: { users } } = await admin.auth.admin.listUsers();
+        const existing = users.find(u => u.email?.toLowerCase() === contract.intern_email.toLowerCase());
+
+        if (existing) {
+          await admin.from('contracts').update({ user_id: existing.id }).eq('id', contract.id);
+
+          const avatarUrl = await uploadHeadshot(existing.id);
+          if (avatarUrl) {
+            await admin.from('profiles').update({ avatar_url: avatarUrl }).eq('id', existing.id);
           }
-        );
 
-        if (!inviteErr && invited?.user?.id) {
-          const userId = invited.user.id;
-
-          // Upload headshot to storage if provided
-          let avatarUrl: string | null = null;
-          if (headshot_data) {
-            try {
-              const mimeMatch = headshot_data.match(/^data:([^;]+);base64,/);
-              const mime = mimeMatch?.[1] || 'image/jpeg';
-              const ext = mime.includes('png') ? 'png' : 'jpg';
-              const base64 = headshot_data.replace(/^data:[^;]+;base64,/, '');
-              const imageBytes = Buffer.from(base64, 'base64');
-              const { error: uploadErr } = await admin.storage
-                .from('headshots')
-                .upload(`${userId}/photo.${ext}`, imageBytes, {
-                  contentType: mime,
-                  upsert: true,
-                });
-              if (!uploadErr) {
-                const { data: urlData } = admin.storage.from('headshots').getPublicUrl(`${userId}/photo.${ext}`);
-                avatarUrl = urlData?.publicUrl ?? null;
-              }
-            } catch {
-              // Non-fatal: headshot upload failed
-            }
-          }
-
-          // Upsert profile and link contract
-          await admin.from('profiles').upsert({
-            id: userId,
-            full_name: contract.intern_name || '',
+          // signInWithOtp actually sends the magic link email (unlike generateLink)
+          const { error: otpErr } = await admin.auth.signInWithOtp({
             email: contract.intern_email,
-            role: 'intern',
-            active: true,
-            ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
-          }, { onConflict: 'id' });
-
-          await admin
-            .from('contracts')
-            .update({ user_id: userId })
-            .eq('id', contract.id);
-        } else if (inviteErr?.message?.toLowerCase().includes('already')) {
-          // User already exists — find them, link contract, upload headshot, send magic link
-          const { data: { users } } = await admin.auth.admin.listUsers();
-          const existing = users.find(u => u.email?.toLowerCase() === contract.intern_email.toLowerCase());
-          if (existing) {
-            await admin.from('contracts').update({ user_id: existing.id }).eq('id', contract.id);
-
-            // Upload headshot for existing user
-            if (headshot_data) {
-              try {
-                const mimeMatch = headshot_data.match(/^data:([^;]+);base64,/);
-                const mime = mimeMatch?.[1] || 'image/jpeg';
-                const ext = mime.includes('png') ? 'png' : 'jpg';
-                const base64 = headshot_data.replace(/^data:[^;]+;base64,/, '');
-                const imageBytes = Buffer.from(base64, 'base64');
-                const { error: uploadErr } = await admin.storage
-                  .from('headshots')
-                  .upload(`${existing.id}/photo.${ext}`, imageBytes, { contentType: mime, upsert: true });
-                if (!uploadErr) {
-                  const { data: urlData } = admin.storage.from('headshots').getPublicUrl(`${existing.id}/photo.${ext}`);
-                  if (urlData?.publicUrl) {
-                    await admin.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', existing.id);
-                  }
-                }
-              } catch {
-                // Non-fatal
-              }
-            }
-
-            // Send magic link so they can log in
-            await admin.auth.admin.generateLink({
-              type: 'magiclink',
-              email: contract.intern_email,
-              options: { redirectTo },
-            });
+            options: { shouldCreateUser: false, emailRedirectTo: redirectTo },
+          });
+          if (otpErr) {
+            console.error('[contract sign] OTP send failed:', otpErr.message);
           }
         }
-      } catch {
-        // Auth failure is non-fatal — contract is still signed
+      } else if (inviteErr) {
+        console.error('[contract sign] invite error:', inviteErr.message);
       }
     }
 
