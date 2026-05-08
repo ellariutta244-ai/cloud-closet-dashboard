@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { Resend } from 'resend';
 
 const SUPABASE_URL = 'https://gfdurfdqrhjzxjperknw.supabase.co';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://cloud-closet-dashboard.vercel.app';
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Cloud Closet <onboarding@resend.dev>';
 
 function adminClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -11,6 +13,97 @@ function adminClient() {
   return createClient(SUPABASE_URL, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+}
+
+function resendClient() {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) throw new Error('RESEND_API_KEY not set');
+  return new Resend(key);
+}
+
+function dashboardInviteEmail(name: string, actionLink: string) {
+  const firstName = name.split(' ')[0] || name;
+  return {
+    subject: 'Welcome to Cloud Closet — Access Your Dashboard',
+    html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#fafaf9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafaf9;padding:40px 16px">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#fff;border-radius:20px;border:1px solid #e7e5e4;overflow:hidden">
+        <!-- Header -->
+        <tr><td style="background:#1c1917;padding:28px 36px;text-align:center">
+          <span style="color:#fff;font-size:18px;font-weight:700;letter-spacing:-0.3px">Cloud Closet</span>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:36px">
+          <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1c1917">You&rsquo;re in, ${firstName}! 🎉</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#78716c;line-height:1.6">
+            Your internship agreement is signed. Click below to set up your password and access the Cloud Closet intern dashboard.
+          </p>
+          <table cellpadding="0" cellspacing="0" style="margin:0 0 28px">
+            <tr><td style="background:#1c1917;border-radius:12px;padding:14px 28px;text-align:center">
+              <a href="${actionLink}" style="color:#fff;font-size:15px;font-weight:600;text-decoration:none">Access My Dashboard →</a>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 6px;font-size:13px;color:#a8a29e">This link expires in 24 hours. If you didn&rsquo;t expect this email, you can safely ignore it.</p>
+          <p style="margin:0;font-size:13px;color:#a8a29e">Or copy this URL into your browser:<br>
+            <span style="color:#57534e;word-break:break-all">${actionLink}</span>
+          </p>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="background:#fafaf9;border-top:1px solid #f5f5f4;padding:20px 36px;text-align:center">
+          <p style="margin:0;font-size:12px;color:#a8a29e">Cloud Closet Internship Program · Questions? Reply to this email.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+  };
+}
+
+function dashboardMagicLinkEmail(name: string, actionLink: string) {
+  const firstName = name.split(' ')[0] || name;
+  return {
+    subject: 'Your Cloud Closet Sign-In Link',
+    html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#fafaf9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafaf9;padding:40px 16px">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#fff;border-radius:20px;border:1px solid #e7e5e4;overflow:hidden">
+        <tr><td style="background:#1c1917;padding:28px 36px;text-align:center">
+          <span style="color:#fff;font-size:18px;font-weight:700;letter-spacing:-0.3px">Cloud Closet</span>
+        </td></tr>
+        <tr><td style="padding:36px">
+          <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1c1917">Hi ${firstName},</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#78716c;line-height:1.6">
+            Your contract is signed. Use the link below to log into your Cloud Closet dashboard.
+          </p>
+          <table cellpadding="0" cellspacing="0" style="margin:0 0 28px">
+            <tr><td style="background:#1c1917;border-radius:12px;padding:14px 28px;text-align:center">
+              <a href="${actionLink}" style="color:#fff;font-size:15px;font-weight:600;text-decoration:none">Log In to Dashboard →</a>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 6px;font-size:13px;color:#a8a29e">This link expires in 1 hour and can only be used once.</p>
+          <p style="margin:0;font-size:13px;color:#a8a29e">Or copy this URL:<br>
+            <span style="color:#57534e;word-break:break-all">${actionLink}</span>
+          </p>
+        </td></tr>
+        <tr><td style="background:#fafaf9;border-top:1px solid #f5f5f4;padding:20px 36px;text-align:center">
+          <p style="margin:0;font-size:12px;color:#a8a29e">Cloud Closet Internship Program</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+  };
 }
 
 // ── GET /api/contracts/[token] ─────────────────────────────────────────────────
@@ -215,14 +308,15 @@ export async function POST(
       .update({ contract_status: 'complete' })
       .eq('contract_token', token);
 
-    // ── Invite intern to Supabase Auth (or send magic link if already exists) ───
+    // ── Create/find Supabase Auth user and send dashboard email via Resend ───────
     let authStatus = 'skipped';
     let authError: string | null = null;
 
     if (contract.intern_email) {
       const redirectTo = `${SITE_URL}/auth/callback`;
+      const internName = contract.intern_name || contract.intern_email;
 
-      // Helper: upload headshot and return public URL
+      // Helper: upload headshot
       async function uploadHeadshot(userId: string): Promise<string | null> {
         if (!headshot_data) return null;
         try {
@@ -237,25 +331,36 @@ export async function POST(
           if (uploadErr) return null;
           const { data: urlData } = admin.storage.from('headshots').getPublicUrl(`${userId}/photo.${ext}`);
           return urlData?.publicUrl ?? null;
-        } catch {
-          return null;
+        } catch { return null; }
+      }
+
+      // Helper: send email via Resend
+      async function sendEmail(to: string, subject: string, html: string) {
+        try {
+          const resend = resendClient();
+          const { error: emailErr } = await resend.emails.send({ from: FROM_EMAIL, to, subject, html });
+          if (emailErr) console.error('[contract sign] Resend error:', emailErr);
+          return !emailErr;
+        } catch (e: any) {
+          console.error('[contract sign] Resend exception:', e.message);
+          return false;
         }
       }
 
+      // Try to create a new user
       const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
         contract.intern_email,
-        { data: { full_name: contract.intern_name || '' }, redirectTo }
+        { data: { full_name: internName }, redirectTo }
       );
 
       if (!inviteErr && invited?.user?.id) {
-        // ── New user: invite email sent automatically by Supabase ──────────────
-        authStatus = 'invited';
+        // ── New user created ────────────────────────────────────────────────────
         const userId = invited.user.id;
         const avatarUrl = await uploadHeadshot(userId);
 
         await admin.from('profiles').upsert({
           id: userId,
-          full_name: contract.intern_name || '',
+          full_name: internName,
           email: contract.intern_email,
           role: 'intern',
           active: true,
@@ -264,8 +369,27 @@ export async function POST(
 
         await admin.from('contracts').update({ user_id: userId }).eq('id', contract.id);
 
+        // Generate invite link and send via Resend (bypasses Supabase email entirely)
+        const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+          type: 'invite',
+          email: contract.intern_email,
+          options: { redirectTo, data: { full_name: internName } },
+        });
+
+        if (!linkErr && linkData?.properties?.action_link) {
+          const sent = await sendEmail(
+            contract.intern_email,
+            ...Object.values(dashboardInviteEmail(internName, linkData.properties.action_link)) as [string, string]
+          );
+          authStatus = sent ? 'invite_sent' : 'invite_email_failed';
+        } else {
+          authStatus = 'link_gen_failed';
+          authError = linkErr?.message || null;
+          console.error('[contract sign] generateLink failed:', linkErr?.message);
+        }
+
       } else if (inviteErr?.message?.toLowerCase().includes('already')) {
-        // ── Existing user: send magic link email via OTP ────────────────────────
+        // ── Existing user — generate magic link and send via Resend ────────────
         const { data: { users } } = await admin.auth.admin.listUsers();
         const existing = users.find(u => u.email?.toLowerCase() === contract.intern_email.toLowerCase());
 
@@ -273,21 +397,24 @@ export async function POST(
           await admin.from('contracts').update({ user_id: existing.id }).eq('id', contract.id);
 
           const avatarUrl = await uploadHeadshot(existing.id);
-          if (avatarUrl) {
-            await admin.from('profiles').update({ avatar_url: avatarUrl }).eq('id', existing.id);
-          }
+          if (avatarUrl) await admin.from('profiles').update({ avatar_url: avatarUrl }).eq('id', existing.id);
 
-          // signInWithOtp actually sends the magic link email (unlike generateLink)
-          const { error: otpErr } = await admin.auth.signInWithOtp({
+          const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+            type: 'magiclink',
             email: contract.intern_email,
-            options: { shouldCreateUser: false, emailRedirectTo: redirectTo },
+            options: { redirectTo },
           });
-          if (otpErr) {
-            authStatus = 'otp_failed';
-            authError = otpErr.message;
-            console.error('[contract sign] OTP send failed:', otpErr.message);
+
+          if (!linkErr && linkData?.properties?.action_link) {
+            const sent = await sendEmail(
+              contract.intern_email,
+              ...Object.values(dashboardMagicLinkEmail(internName, linkData.properties.action_link)) as [string, string]
+            );
+            authStatus = sent ? 'magic_link_sent' : 'magic_link_email_failed';
           } else {
-            authStatus = 'magic_link_sent';
+            authStatus = 'link_gen_failed';
+            authError = linkErr?.message || null;
+            console.error('[contract sign] generateLink (magic) failed:', linkErr?.message);
           }
         } else {
           authStatus = 'existing_user_not_found';
@@ -295,7 +422,7 @@ export async function POST(
       } else if (inviteErr) {
         authStatus = 'invite_failed';
         authError = inviteErr.message;
-        console.error('[contract sign] invite error:', inviteErr.message);
+        console.error('[contract sign] inviteUserByEmail failed:', inviteErr.message);
       }
     }
 
