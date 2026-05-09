@@ -2185,6 +2185,18 @@ export function AdminInternMasterList({roster,setRoster,teams,subteams,sb}:{
   const [linkSentId,setLinkSentId] = useState<string|null>(null);
   const [linkSending,setLinkSending] = useState<string|null>(null);
   const [linkErrId,setLinkErrId] = useState<string|null>(null);
+  const [profilePhotos,setProfilePhotos] = useState<Record<string,string>>({});
+
+  useEffect(()=>{
+    const emails = roster.map(e=>e.email).filter(Boolean) as string[];
+    if(!emails.length) return;
+    sb.from("profiles").select("email,avatar_url").in("email",emails).then(({data}:any)=>{
+      if(!data) return;
+      const map:Record<string,string> = {};
+      for(const p of data) if(p.email&&p.avatar_url) map[p.email]=p.avatar_url;
+      setProfilePhotos(map);
+    });
+  },[roster]);
 
   const filtered = roster.filter(e=>{
     if(search&&!`${e.first_name} ${e.last_name}`.toLowerCase().includes(search.toLowerCase())) return false;
@@ -2334,7 +2346,7 @@ export function AdminInternMasterList({roster,setRoster,teams,subteams,sb}:{
             <div key={entry.id} className="bg-white border border-stone-200/60 rounded-xl overflow-hidden">
               {/* Top: info section */}
               <div className="flex items-start gap-3 p-4">
-                <Av name={`${entry.first_name} ${entry.last_name}`} size={36}/>
+                <Av name={`${entry.first_name} ${entry.last_name}`} size={36} img={entry.email?profilePhotos[entry.email]:undefined}/>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-0.5">
                     <p className="text-sm font-semibold text-stone-800">{entry.first_name} {entry.last_name}</p>
