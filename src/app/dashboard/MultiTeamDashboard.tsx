@@ -2184,6 +2184,7 @@ export function AdminInternMasterList({roster,setRoster,teams,subteams,sb}:{
   const [copiedId,setCopiedId] = useState<string|null>(null);
   const [linkSentId,setLinkSentId] = useState<string|null>(null);
   const [linkSending,setLinkSending] = useState<string|null>(null);
+  const [linkErrId,setLinkErrId] = useState<string|null>(null);
 
   const filtered = roster.filter(e=>{
     if(search&&!`${e.first_name} ${e.last_name}`.toLowerCase().includes(search.toLowerCase())) return false;
@@ -2228,16 +2229,28 @@ export function AdminInternMasterList({roster,setRoster,teams,subteams,sb}:{
   async function sendLoginLink(entry:InternRosterEntry){
     if(!entry.email) return;
     setLinkSending(entry.id);
+    setLinkErrId(null);
     try {
       const res = await fetch("/api/auth/magic-link",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({email:entry.email, name:`${entry.first_name} ${entry.last_name}`}),
       });
+      const json = await res.json().catch(()=>({}));
       if(res.ok){
         setLinkSentId(entry.id);
         setTimeout(()=>setLinkSentId(null),4000);
+      } else {
+        console.error("[sendLoginLink] API error:", json);
+        setLinkErrId(entry.id);
+        setTimeout(()=>setLinkErrId(null),8000);
+        alert(`Failed to send login link: ${json.error||res.status}`);
       }
+    } catch(e:any){
+      console.error("[sendLoginLink] fetch error:", e);
+      setLinkErrId(entry.id);
+      setTimeout(()=>setLinkErrId(null),8000);
+      alert(`Error: ${e.message}`);
     } finally {
       setLinkSending(null);
     }
@@ -2397,9 +2410,9 @@ export function AdminInternMasterList({roster,setRoster,teams,subteams,sb}:{
                     <span className="text-xs text-stone-400">✓ Signed</span>
                     {entry.email&&(
                       <button onClick={()=>sendLoginLink(entry)} disabled={!!linkSending}
-                        className="text-xs px-3 py-1 bg-stone-800 text-white rounded-lg hover:bg-stone-700 disabled:opacity-50 transition-colors font-medium flex items-center gap-1">
+                        className={`text-xs px-3 py-1 rounded-lg hover:opacity-90 disabled:opacity-50 transition-colors font-medium flex items-center gap-1 ${linkErrId===entry.id?"bg-red-600 text-white":"bg-stone-800 text-white"}`}>
                         {linkSending===entry.id?<Loader2 size={11} className="animate-spin"/>:<Send size={11}/>}
-                        {linkSentId===entry.id?"Link Sent!":linkSending===entry.id?"Sending…":"Send Login Link"}
+                        {linkSentId===entry.id?"Link Sent!":linkSending===entry.id?"Sending…":linkErrId===entry.id?"Failed — retry":"Send Login Link"}
                       </button>
                     )}
                   </div>
