@@ -101,7 +101,8 @@ export async function POST(req: NextRequest) {
 
     if (emailErr) {
       console.error('[magic-link] Resend error:', emailErr);
-      return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });
+      const msg = (emailErr as any)?.message || (emailErr as any)?.name || JSON.stringify(emailErr);
+      return NextResponse.json({ error: `Resend: ${msg}` }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });
