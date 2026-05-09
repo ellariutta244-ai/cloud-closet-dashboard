@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import nodemailer from 'nodemailer';
 
 const SUPABASE_URL = 'https://gfdurfdqrhjzxjperknw.supabase.co';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmZHVyZmRxcmhqenhqcGVya253Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNjI3MDIsImV4cCI6MjA4ODkzODcwMn0.ciR7C4VK4vKvgqPHriiw7DmednNBBq7x_2zI1l-oAAY';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://cloud-closet-dashboard.vercel.app';
 
 // POST /api/auth/magic-link
-// Admin-only: generate a magic link for an intern and send it via Resend.
+// Admin-only: generate a magic link for an intern and send it via Gmail.
 export async function POST(req: NextRequest) {
   try {
     // Verify caller is admin
@@ -31,8 +32,9 @@ export async function POST(req: NextRequest) {
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!serviceKey) return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
 
-    const resendKey = process.env.RESEND_API_KEY;
-    if (!resendKey) return NextResponse.json({ error: 'RESEND_API_KEY not set' }, { status: 500 });
+    const gmailUser = process.env.GMAIL_USER;
+    const gmailPass = process.env.GMAIL_APP_PASSWORD;
+    if (!gmailUser || !gmailPass) return NextResponse.json({ error: 'GMAIL_USER or GMAIL_APP_PASSWORD not set' }, { status: 500 });
 
     const admin = createClient(SUPABASE_URL, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
     const redirectTo = `${SITE_URL}/auth/callback`;
     const firstName = (name || email).split(' ')[0];
 
-    // Generate a magic link (doesn't send email — we send via Resend)
+    // Generate magic link (doesn't send email — we send via Gmail)
     const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
       type: 'magiclink',
       email,
@@ -54,13 +56,14 @@ export async function POST(req: NextRequest) {
 
     const actionLink = linkData.properties.action_link;
 
-    // Send via Resend
-    const { Resend } = await import('resend');
-    const resend = new Resend(resendKey);
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Cloud Closet <onboarding@resend.dev>';
+    // Send via Gmail SMTP
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: gmailUser, pass: gmailPass },
+    });
 
-    const { error: emailErr } = await resend.emails.send({
-      from: fromEmail,
+    await transporter.sendMail({
+      from: `Cloud Closet <${gmailUser}>`,
       to: email,
       subject: 'Your Cloud Closet Dashboard Access',
       html: `
@@ -99,14 +102,9 @@ export async function POST(req: NextRequest) {
 </html>`,
     });
 
-    if (emailErr) {
-      console.error('[magic-link] Resend error:', emailErr);
-      const msg = (emailErr as any)?.message || (emailErr as any)?.name || JSON.stringify(emailErr);
-      return NextResponse.json({ error: `Resend: ${msg}` }, { status: 500 });
-    }
-
     return NextResponse.json({ ok: true });
   } catch (e: any) {
+    console.error('[magic-link] error:', e);
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
