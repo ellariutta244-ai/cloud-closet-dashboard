@@ -24,31 +24,26 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      // Implicit/magic-link flow: #access_token=xxx in hash
-      // The browser Supabase client auto-parses hash tokens on getSession()
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        router.replace('/dashboard');
+      // Implicit/magic-link flow: tokens are in the URL hash
+      const hash = window.location.hash.substring(1);
+      const params = new URLSearchParams(hash);
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+
+      if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        if (error) {
+          setMsg('Sign-in failed. Redirecting…');
+          setTimeout(() => router.replace('/auth'), 1500);
+        } else {
+          router.replace('/dashboard');
+        }
         return;
       }
 
-      // Watch for the client to process the hash and fire SIGNED_IN
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          router.replace('/dashboard');
-        }
-      });
-
-      // Timeout fallback
-      const t = setTimeout(() => {
-        setMsg('Sign-in failed. Redirecting…');
-        setTimeout(() => router.replace('/auth'), 1500);
-      }, 6000);
-
-      return () => {
-        subscription.unsubscribe();
-        clearTimeout(t);
-      };
+      // No code or hash tokens — nothing to work with
+      setMsg('Sign-in failed. Redirecting…');
+      setTimeout(() => router.replace('/auth'), 1500);
     }
 
     handle();
