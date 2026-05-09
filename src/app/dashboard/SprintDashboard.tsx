@@ -36,7 +36,8 @@ function daysSince(d: string) {
 }
 
 // ── Internal UI pieces ────────────────────────────────────────────────────────
-function Av({ name, size = 32 }: { name: string; size?: number }) {
+function Av({ name, size = 32, img }: { name: string; size?: number; img?: string }) {
+  if (img) return <img src={img} alt={name} className="rounded-full object-cover flex-shrink-0" style={{ width: size, height: size }}/>;
   const initials = name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
   const colors = ["#6366f1","#8b5cf6","#ec4899","#f59e0b","#10b981","#3b82f6","#ef4444","#14b8a6"];
   const bg = colors[name.charCodeAt(0) % colors.length];

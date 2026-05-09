@@ -33,7 +33,7 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Role = "admin" | "intern" | "ugc_creator" | "director" | "wisconsin_admin" | "soraa_creator" | "cc_exec" | "ugc_manager";
-type Profile = { id: string; full_name: string; email: string; role: Role; team?: string; active?: boolean; rush_access?: boolean; university?: string };
+type Profile = { id: string; full_name: string; email: string; role: Role; team?: string; active?: boolean; rush_access?: boolean; university?: string; avatar_url?: string };
 type TaskComment = { id: string; task_id: string; author_id?: string; body: string; created_at: string };
 type Task = { id: string; title: string; description?: string; assigned_to?: string; co_assignees?: string[]; category?: string; priority?: string; status: string; due_date?: string; created_at: string; completed_at?: string; task_comments?: TaskComment[] };
 type Outreach = { id: string; intern_id?: string; brand_or_creator: string; platform?: string; contact_name?: string; date_contacted?: string; status: string; notes?: string; created_at: string };
@@ -82,7 +82,8 @@ function initials(name: string) { return name.split(" ").map(w=>w[0]).join("").s
 function fmt(dt?: string) { if (!dt) return ""; return new Date(dt).toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
 
 // ── UI Primitives ─────────────────────────────────────────────────────────────
-function Av({ name, size=32 }: { name: string; size?: number }) {
+function Av({ name, size=32, img }: { name: string; size?: number; img?: string }) {
+  if (img) return <img src={img} alt={name} style={{ width:size, height:size, borderRadius:"50%", objectFit:"cover", flexShrink:0 }}/>;
   return (
     <div style={{ width:size, height:size, borderRadius:"50%", background:avColor(name), display:"flex", alignItems:"center", justifyContent:"center", fontSize:size*0.35, fontWeight:600, color:"#3D3229", flexShrink:0 }}>
       {initials(name)}
@@ -9888,7 +9889,7 @@ export default function DashboardPage() {
   const [mtSubteams, setMtSubteams] = useState<MTSubteam[]>([]);
   const [allTeamRoles, setAllTeamRoles] = useState<MTTeamRole[]>([]);
   const [internNotes, setInternNotes] = useState<MTInternNote[]>([]);
-  const [mtProfiles, setMtProfiles] = useState<{ id: string; full_name: string; email?: string }[]>([]);
+  const [mtProfiles, setMtProfiles] = useState<{ id: string; full_name: string; email?: string; avatar_url?: string }[]>([]);
   const [internRoster, setInternRoster] = useState<InternRosterEntry[]>([]);
   const [storms, setStorms] = useState<Storm[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
@@ -10079,7 +10080,7 @@ export default function DashboardPage() {
         // Fetch profiles for all team role holders (for sprint assignment display)
         const allUserIds = [...new Set((allRolesD || []).map((r: any) => r.user_id as string))];
         if (allUserIds.length > 0) {
-          const { data: mtProfD } = await supabase.from("profiles").select("id,full_name,email").in("id", allUserIds);
+          const { data: mtProfD } = await supabase.from("profiles").select("id,full_name,email,avatar_url").in("id", allUserIds);
           setMtProfiles((mtProfD || []) as { id: string; full_name: string; email: string }[]);
         }
       }
@@ -10406,7 +10407,7 @@ export default function DashboardPage() {
       </nav>
       <div className="p-3 border-t border-stone-100">
         <div className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-stone-50 transition-colors">
-          <Av name={profile.full_name} size={32}/>
+          <Av name={profile.full_name} size={32} img={profile.avatar_url}/>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-stone-800 truncate">{profile.full_name}</p>
             <p className="text-xs text-stone-400 capitalize">{isWisconsinAdmin ? "Wisconsin Admin" : isFullAdmin ? "Admin" : isDirector ? "Director" : isUGC ? "UGC Creator" : isSoraaCreator ? "Soraa Creator" : isCCExec ? "CC Exec" : isUGCManager ? "UGC Manager" : isTeamExec ? "Team Exec" : isSubteamExec ? "Subteam Exec" : isIRM ? "IRM" : (profile.team || "Intern")}</p>

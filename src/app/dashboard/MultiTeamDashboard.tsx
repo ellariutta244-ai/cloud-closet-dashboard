@@ -70,7 +70,8 @@ const FLAG_COLORS: Record<string,{bg:string;text:string;label:string}> = {
   urgent:  {bg:"#EDE9FE",text:"#5B21B6",label:"Urgent"},
 };
 
-function Av({name,size=32}:{name:string;size?:number}) {
+function Av({name,size=32,img}:{name:string;size?:number;img?:string}) {
+  if(img) return <img src={img} alt={name} style={{width:size,height:size,borderRadius:"50%",objectFit:"cover",flexShrink:0}}/>;
   return <div style={{width:size,height:size,borderRadius:"50%",background:avColor(name),display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.35,fontWeight:600,color:"#3D3229",flexShrink:0}}>{initials(name)}</div>;
 }
 function SD({status}:{status:string}) {
@@ -2181,6 +2182,8 @@ export function AdminInternMasterList({roster,setRoster,teams,subteams,sb}:{
   const [filterContract,setFilterContract] = useState("");
   const [search,setSearch] = useState("");
   const [copiedId,setCopiedId] = useState<string|null>(null);
+  const [linkSentId,setLinkSentId] = useState<string|null>(null);
+  const [linkSending,setLinkSending] = useState<string|null>(null);
 
   const filtered = roster.filter(e=>{
     if(search&&!`${e.first_name} ${e.last_name}`.toLowerCase().includes(search.toLowerCase())) return false;
@@ -2220,6 +2223,24 @@ export function AdminInternMasterList({roster,setRoster,teams,subteams,sb}:{
     if(entry.signing_url) navigator.clipboard.writeText(entry.signing_url);
     setCopiedId(entry.id);
     setTimeout(()=>setCopiedId(null),2000);
+  }
+
+  async function sendLoginLink(entry:InternRosterEntry){
+    if(!entry.email) return;
+    setLinkSending(entry.id);
+    try {
+      const res = await fetch("/api/auth/magic-link",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({email:entry.email, name:`${entry.first_name} ${entry.last_name}`}),
+      });
+      if(res.ok){
+        setLinkSentId(entry.id);
+        setTimeout(()=>setLinkSentId(null),4000);
+      }
+    } finally {
+      setLinkSending(null);
+    }
   }
 
   function getTeamName(teamId?:string|null){ return teams.find(t=>t.id===teamId)?.name||""; }
@@ -2372,7 +2393,16 @@ export function AdminInternMasterList({roster,setRoster,teams,subteams,sb}:{
                 </>)}
 
                 {entry.contract_status==="complete"&&(
-                  <span className="text-xs text-stone-400">✓ Signed</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-stone-400">✓ Signed</span>
+                    {entry.email&&(
+                      <button onClick={()=>sendLoginLink(entry)} disabled={!!linkSending}
+                        className="text-xs px-3 py-1 bg-stone-800 text-white rounded-lg hover:bg-stone-700 disabled:opacity-50 transition-colors font-medium flex items-center gap-1">
+                        {linkSending===entry.id?<Loader2 size={11} className="animate-spin"/>:<Send size={11}/>}
+                        {linkSentId===entry.id?"Link Sent!":linkSending===entry.id?"Sending…":"Send Login Link"}
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 {entry.contract_status!=="none"&&(

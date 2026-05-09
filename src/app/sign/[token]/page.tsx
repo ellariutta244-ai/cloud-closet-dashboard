@@ -216,8 +216,8 @@ export default function SignContractPage() {
             onClick={() => fileInputRef.current?.click()}
             className="w-full border-2 border-dashed border-stone-200 rounded-2xl py-8 flex flex-col items-center gap-2 text-stone-400 hover:border-stone-300 hover:text-stone-500 transition-colors cursor-pointer"
           >
-            <span className="text-2xl">📷</span>
-            <span className="text-sm">Tap to upload a photo</span>
+            <span className="text-2xl">🖼️</span>
+            <span className="text-sm">Choose a photo from your library</span>
             <span className="text-xs">JPG, PNG, HEIC accepted</span>
           </button>
         )}
@@ -225,7 +225,6 @@ export default function SignContractPage() {
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          capture="user"
           className="hidden"
           onChange={handleHeadshotChange}
         />

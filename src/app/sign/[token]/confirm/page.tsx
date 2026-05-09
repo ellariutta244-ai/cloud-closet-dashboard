@@ -15,32 +15,30 @@ export default function ContractConfirmPage() {
         </div>
 
         <h1 className="text-xl font-semibold text-stone-800 mb-2">
-          You&rsquo;re all signed up!
+          You&rsquo;re all set!
         </h1>
         <p className="text-sm text-stone-500 leading-relaxed mb-6">
-          Your contract is signed and saved. Check your email — you&rsquo;ll receive a
-          link to set your password and access the Cloud Closet intern dashboard.
+          Your contract is signed and saved. You&rsquo;ll receive a link to log in to the
+          Cloud Closet intern dashboard shortly.
         </p>
 
         <div className="bg-stone-50 rounded-2xl p-4 text-left space-y-2">
           <div className="flex items-start gap-3">
-            <span className="mt-0.5 text-stone-400 flex-shrink-0">📧</span>
+            <span className="mt-0.5 text-stone-400 flex-shrink-0">📩</span>
             <p className="text-xs text-stone-500">
-              <strong className="text-stone-700">Check your inbox</strong> for an email from Cloud Closet
-              with a link to set up your password.
+              <strong className="text-stone-700">Keep an eye on your inbox</strong> — your team lead will send you a link to access the dashboard.
             </p>
           </div>
           <div className="flex items-start gap-3">
             <span className="mt-0.5 text-stone-400 flex-shrink-0">📋</span>
             <p className="text-xs text-stone-500">
-              <strong className="text-stone-700">A PDF copy</strong> of your signed contract is
-              available in your dashboard profile once you log in.
+              <strong className="text-stone-700">A PDF copy</strong> of your signed contract will be available in your dashboard once you log in.
             </p>
           </div>
           <div className="flex items-start gap-3">
             <span className="mt-0.5 text-stone-400 flex-shrink-0">❓</span>
             <p className="text-xs text-stone-500">
-              Questions? Reach out to your team exec directly.
+              Questions? Reach out to your team lead directly.
             </p>
           </div>
         </div>
