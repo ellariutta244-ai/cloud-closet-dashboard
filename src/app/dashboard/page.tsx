@@ -18,6 +18,7 @@ import {
 } from "./SprintDashboard";
 import { type Storm, InternStormsView, AdminStormsView } from "./StormsDashboard";
 import { InternTeamTab, InternTasksTab, InternRequestsTab, InternProfileTab } from "./InternPortal";
+import { CompanyCalendar, type CompanyEvent } from "./CompanyCalendar";
 import TikTokContent from "./TikTokContent";
 import { UGCOnboardingPage } from "./UGCOnboarding";
 import {
@@ -10353,23 +10354,27 @@ export default function DashboardPage() {
   ];
 
   const MT_INTERN_NAV = [
-    { id: "mt_intern_team",     icon: <Users size={16}/>,       label: "My Team" },
-    { id: "mt_intern_tasks",    icon: <CheckSquare size={16}/>, label: "Tasks" },
-    { id: "mt_intern_requests", icon: <Inbox size={16}/>,       label: "Requests" },
-    { id: "storms",             icon: <CloudRain size={16}/>,   label: "Storms" },
-    { id: "mt_intern_profile",  icon: <User size={16}/>,        label: "Profile" },
+    { id: "mt_intern_team",     icon: <Users size={16}/>,        label: "My Team" },
+    { id: "company_calendar",   icon: <CalendarDays size={16}/>, label: "Calendar" },
+    { id: "mt_intern_tasks",    icon: <CheckSquare size={16}/>,  label: "Tasks" },
+    { id: "mt_intern_requests", icon: <Inbox size={16}/>,        label: "Requests" },
+    { id: "storms",             icon: <CloudRain size={16}/>,    label: "Storms" },
+    { id: "mt_intern_profile",  icon: <User size={16}/>,         label: "Profile" },
   ];
   const SUBTEAM_EXEC_NAV = [
     { id: "subteam_exec_home", icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
+    { id: "company_calendar",  icon: <CalendarDays size={16}/>,    label: "Calendar" },
     { id: "sprints",           icon: <CheckSquare size={16}/>,     label: "Sprints" },
   ];
   const TEAM_EXEC_NAV = [
-    { id: "team_exec_home", icon: <LayoutDashboard size={16}/>, label: "Team Dashboard" },
-    { id: "sprints",        icon: <CheckSquare size={16}/>,     label: "Sprints" },
+    { id: "team_exec_home",   icon: <LayoutDashboard size={16}/>, label: "Team Dashboard" },
+    { id: "company_calendar", icon: <CalendarDays size={16}/>,    label: "Calendar" },
+    { id: "sprints",          icon: <CheckSquare size={16}/>,     label: "Sprints" },
   ];
   const IRM_NAV = [
-    { id: "irm_home", icon: <Users size={16}/>, label: "Intern Roster" },
-    { id: "sprints",  icon: <CheckSquare size={16}/>, label: "Sprints" },
+    { id: "irm_home",         icon: <Users size={16}/>,        label: "Intern Roster" },
+    { id: "company_calendar", icon: <CalendarDays size={16}/>, label: "Calendar" },
+    { id: "sprints",          icon: <CheckSquare size={16}/>,  label: "Sprints" },
   ];
 
   const NAV = isUGC ? [
@@ -10424,9 +10429,10 @@ export default function DashboardPage() {
     {
       label: "PROGRAM",
       items: [
+        { id: "company_calendar",      icon: <CalendarDays size={16}/>, label: "Company Calendar" },
         { id: "sprints",               icon: <CheckSquare size={16}/>, label: "Sprints" },
         { id: "mt_intern_mgmt",        icon: <Users size={16}/>,       label: "Intern Management" },
-        { id: "intern_roster",         icon: <FileText size={16}/>,     label: "Intern Master List" },
+        { id: "intern_roster",         icon: <FileText size={16}/>,    label: "Intern Master List" },
         { id: "intern_request_types",  icon: <Inbox size={16}/>,       label: "Request Options" },
         { id: "storms",                icon: <CloudRain size={16}/>,   label: "Storms" },
         { id: "contracts",             icon: <FileText size={16}/>,    label: "Contracts" },
@@ -10658,6 +10664,7 @@ export default function DashboardPage() {
       case "mt_intern_mgmt": { const activeInterns = interns.filter(i => i.active !== false); return isAdmin ? <AdminMTInternMgmt interns={activeInterns as any[]} setInterns={setInterns as (p:any[])=>void} tasks={tasks} setTasks={setTasks} allTeamRoles={allTeamRoles} setAllTeamRoles={setAllTeamRoles} teams={mtTeams} setTeams={setMtTeams} subteams={mtSubteams} setSubteams={setMtSubteams} profileId={p.id} sb={supabase}/> : null; }
       case "intern_roster":         return isAdmin ? <AdminInternMasterList roster={internRoster} setRoster={setInternRoster} teams={mtTeams} subteams={mtSubteams} sb={supabase}/> : null;
       case "intern_request_types":  return isAdmin ? <AdminInternRequestTypes requestTypes={requestTypes} setRequestTypes={setRequestTypes} sb={supabase}/> : null;
+      case "company_calendar": return <CompanyCalendar isAdmin={isAdmin} profile={{ id: p.id, full_name: p.full_name }} teams={mtTeams} sb={supabase}/>;
       case "storms":
         if (isAdmin) return <AdminStormsView storms={storms} profiles={[...interns.map(i => ({ id: i.id, full_name: i.full_name, email: i.email })), ...mtProfiles.map(p => ({ id: p.id, full_name: p.full_name, email: p.email||"" }))].filter((p,i,a) => a.findIndex(x=>x.id===p.id)===i)}/>;
         if (isMTIntern) return <InternStormsView profile={{ id: p.id, full_name: p.full_name, email: p.email }} storms={storms} setStorms={setStorms} calendlyElla={settings.calendly_ella} sb={supabase}/>;
