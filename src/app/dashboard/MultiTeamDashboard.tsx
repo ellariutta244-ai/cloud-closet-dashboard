@@ -2232,6 +2232,20 @@ export function AdminInternMasterList({roster,setRoster,teams,subteams,sb}:{
     setRoster(roster.filter(e=>e.id!==id));
   }
 
+  async function syncTeamRole(entry:InternRosterEntry){
+    if(!entry.email||!entry.team_id) return;
+    // Find their auth user by email
+    const {data:profiles} = await sb.from("profiles").select("id").eq("email",entry.email).maybeSingle();
+    if(!profiles?.id){ alert("No profile found for this intern yet."); return; }
+    const userId = profiles.id;
+    const {data:existing} = await sb.from("user_team_roles").select("id").eq("user_id",userId).eq("team_id",entry.team_id).maybeSingle();
+    if(existing){ alert("Team role already exists for this intern."); return; }
+    const subteamId = (entry.subteam_ids||[])[0]||null;
+    const {error} = await sb.from("user_team_roles").insert({user_id:userId,team_id:entry.team_id,subteam_id:subteamId,role:"intern"});
+    if(error) alert(`Failed: ${error.message}`);
+    else alert("Team role synced! The intern can now see their team portal.");
+  }
+
   function copyLink(entry:InternRosterEntry){
     if(entry.signing_url) navigator.clipboard.writeText(entry.signing_url);
     setCopiedId(entry.id);
@@ -2418,8 +2432,14 @@ export function AdminInternMasterList({roster,setRoster,teams,subteams,sb}:{
                 </>)}
 
                 {entry.contract_status==="complete"&&(
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs text-stone-400">✓ Signed</span>
+                    {entry.email&&entry.team_id&&(
+                      <button onClick={()=>syncTeamRole(entry)}
+                        className="text-xs px-3 py-1 bg-stone-100 text-stone-600 rounded-lg hover:bg-stone-200 transition-colors font-medium">
+                        Sync Team Role
+                      </button>
+                    )}
                     {entry.email&&(
                       <button onClick={()=>sendLoginLink(entry)} disabled={!!linkSending}
                         className={`text-xs px-3 py-1 rounded-lg hover:opacity-90 disabled:opacity-50 transition-colors font-medium flex items-center gap-1 ${linkErrId===entry.id?"bg-red-600 text-white":"bg-stone-800 text-white"}`}>

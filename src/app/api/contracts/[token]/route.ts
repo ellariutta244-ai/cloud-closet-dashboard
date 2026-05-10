@@ -242,6 +242,33 @@ export async function POST(
         { data: { full_name: internName }, redirectTo }
       );
 
+      // Look up intern_roster to get team assignment
+      const { data: rosterRow } = await admin
+        .from('intern_roster')
+        .select('team_id, subteam_ids')
+        .eq('contract_token', token)
+        .maybeSingle();
+
+      async function assignTeamRole(userId: string) {
+        if (!rosterRow?.team_id) return;
+        const subteamId: string | null = (rosterRow.subteam_ids || [])[0] || null;
+        // Check if row already exists before inserting
+        const { data: existing } = await admin
+          .from('user_team_roles')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('team_id', rosterRow.team_id)
+          .maybeSingle();
+        if (!existing) {
+          await admin.from('user_team_roles').insert({
+            user_id: userId,
+            team_id: rosterRow.team_id,
+            subteam_id: subteamId,
+            role: 'intern',
+          });
+        }
+      }
+
       if (!inviteErr && invited?.user?.id) {
         const userId = invited.user.id;
         const avatarUrl = await uploadHeadshot(userId);
@@ -254,6 +281,7 @@ export async function POST(
           ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
         }, { onConflict: 'id' });
         await admin.from('contracts').update({ user_id: userId }).eq('id', contract.id);
+        await assignTeamRole(userId);
 
       } else if (inviteErr?.message?.toLowerCase().includes('already')) {
         const { data: { users } } = await admin.auth.admin.listUsers();
@@ -262,6 +290,7 @@ export async function POST(
           await admin.from('contracts').update({ user_id: existing.id }).eq('id', contract.id);
           const avatarUrl = await uploadHeadshot(existing.id);
           if (avatarUrl) await admin.from('profiles').update({ avatar_url: avatarUrl }).eq('id', existing.id);
+          await assignTeamRole(existing.id);
         }
       } else if (inviteErr) {
         console.error('[contract sign] inviteUserByEmail failed:', inviteErr.message);

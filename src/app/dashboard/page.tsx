@@ -10096,7 +10096,7 @@ export default function DashboardPage() {
         if (hasTeamExec)         setPage("team_exec_home");
         else if (hasSubteamExec) setPage("subteam_exec_home");
         else if (hasIRMRole)     setPage("irm_home");
-        else if (myRoles.length > 0) setPage("mt_intern_home");
+        else if (myRoles.length > 0) setPage("mt_intern_team");
       }
 
       setLoading(false);
