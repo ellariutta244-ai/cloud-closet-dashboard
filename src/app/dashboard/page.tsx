@@ -10358,6 +10358,7 @@ export default function DashboardPage() {
     { id: "company_calendar",   icon: <CalendarDays size={16}/>, label: "Calendar" },
     { id: "mt_intern_tasks",    icon: <CheckSquare size={16}/>,  label: "Tasks" },
     { id: "mt_intern_requests", icon: <Inbox size={16}/>,        label: "Requests" },
+    { id: "resources",          icon: <FolderOpen size={16}/>,   label: "Resources" },
     { id: "storms",             icon: <CloudRain size={16}/>,    label: "Storms" },
     { id: "mt_intern_profile",  icon: <User size={16}/>,         label: "Profile" },
   ];
