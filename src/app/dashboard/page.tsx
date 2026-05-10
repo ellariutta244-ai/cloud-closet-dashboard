@@ -17,6 +17,7 @@ import {
   AdminSprintView, ExecSprintView, InternSprintView,
 } from "./SprintDashboard";
 import { type Storm, InternStormsView, AdminStormsView } from "./StormsDashboard";
+import { InternTeamTab, InternTasksTab, InternRequestsTab, InternProfileTab } from "./InternPortal";
 import TikTokContent from "./TikTokContent";
 import { UGCOnboardingPage } from "./UGCOnboarding";
 import {
@@ -29,6 +30,7 @@ import {
   Play, Trophy, ExternalLink, ArrowUpRight, MessageSquare, TrendingUp,
   Settings as SettingsIcon, Zap, ChevronDown, ChevronUp, AlertTriangle, Bookmark, Copy,
   BookOpen, RefreshCw, Palette, Link as LinkIcon, Image, Sparkles, CloudRain,
+  User,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -10182,9 +10184,11 @@ export default function DashboardPage() {
   ];
 
   const MT_INTERN_NAV = [
-    { id: "mt_intern_home", icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
-    { id: "sprints",        icon: <CheckSquare size={16}/>,     label: "My Sprint" },
-    { id: "storms",         icon: <CloudRain size={16}/>,       label: "Storms" },
+    { id: "mt_intern_team",     icon: <Users size={16}/>,       label: "My Team" },
+    { id: "mt_intern_tasks",    icon: <CheckSquare size={16}/>, label: "Tasks" },
+    { id: "mt_intern_requests", icon: <Inbox size={16}/>,       label: "Requests" },
+    { id: "storms",             icon: <CloudRain size={16}/>,   label: "Storms" },
+    { id: "mt_intern_profile",  icon: <User size={16}/>,        label: "Profile" },
   ];
   const SUBTEAM_EXEC_NAV = [
     { id: "subteam_exec_home", icon: <LayoutDashboard size={16}/>, label: "Dashboard" },
@@ -10494,6 +10498,10 @@ export default function DashboardPage() {
         if (isMTIntern) return <InternSprintView sprints={sprints} sprintAssignments={sprintAssignments} sprintDeliverables={sprintDeliverables} setSprintDeliverables={setSprintDeliverables} sprintCheckins={sprintCheckins} setSprintCheckins={setSprintCheckins} profile={p} sb={supabase}/>;
         return null;
       case "mt_intern_home": return (isMTIntern || isAdmin) ? <MultiTeamInternDash profile={p} myTeamRoles={myTeamRoles} teams={mtTeams} subteams={mtSubteams} tasks={tasks} announcements={announcements} reports={reports} setReports={setReports} sb={supabase}/> : null;
+      case "mt_intern_team": return (isMTIntern || isAdmin) ? <InternTeamTab profile={{...p,avatar_url:p.avatar_url}} myTeamRoles={myTeamRoles} teams={mtTeams} subteams={mtSubteams} allTeamRoles={allTeamRoles} sb={supabase}/> : null;
+      case "mt_intern_tasks": return (isMTIntern || isAdmin) ? <InternTasksTab profile={{...p,avatar_url:p.avatar_url}} sprints={sprints} sprintAssignments={sprintAssignments} sprintDeliverables={sprintDeliverables} setSprintDeliverables={setSprintDeliverables} sb={supabase}/> : null;
+      case "mt_intern_requests": return (isMTIntern || isAdmin) ? <InternRequestsTab profile={{...p,avatar_url:p.avatar_url}} requests={requests as any[]} setRequests={setRequests as any} sb={supabase}/> : null;
+      case "mt_intern_profile": return (isMTIntern || isAdmin) ? <InternProfileTab profile={{...p,avatar_url:p.avatar_url}} onAvatarUpdate={(url)=>setProfile(prev=>prev?{...prev,avatar_url:url}:prev)} sb={supabase}/> : null;
       case "subteam_exec_home": return (isSubteamExec || isAdmin) ? <SubteamExecDash profile={p} myTeamRoles={myTeamRoles} teams={mtTeams} subteams={mtSubteams} allTeamRoles={allTeamRoles} interns={interns} tasks={tasks} setTasks={setTasks} reports={reports} announcements={announcements} setAnnouncements={setAnnouncements} sb={supabase}/> : null;
       case "team_exec_home": return (isTeamExec || isAdmin) ? <TeamExecDash profile={p} myTeamRoles={myTeamRoles} teams={mtTeams} subteams={mtSubteams} allTeamRoles={allTeamRoles} interns={interns} tasks={tasks} setTasks={setTasks} reports={reports} announcements={announcements} setAnnouncements={setAnnouncements} sb={supabase}/> : null;
       case "irm_home": return (isIRM || isAdmin) ? <IRMDash profile={p} teams={mtTeams} subteams={mtSubteams} allTeamRoles={allTeamRoles} interns={interns} tasks={tasks} internNotes={internNotes} setInternNotes={setInternNotes} sb={supabase}/> : null;
