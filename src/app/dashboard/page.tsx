@@ -2131,8 +2131,18 @@ const REQ_ICONS: Record<string, React.ElementType> = {
   merch_order: ShoppingBag, other: HelpCircle,
 };
 
-function InternRequests({ requests, setRequests, profile, sb, settings }: { requests:Request[]; setRequests:(r:Request[])=>void; profile:Profile; sb:any; settings:Record<string,string> }) {
+const DB_REQ_ICONS: Record<string, React.ElementType> = {
+  calendar: CalendarClock, shopping: ShoppingBag, coffee: Coffee, help: HelpCircle,
+  mail: Mail, inbox: Inbox, message: MessageCircle,
+};
+
+function InternRequests({ requests, setRequests, profile, sb, settings, requestTypes }: { requests:Request[]; setRequests:(r:Request[])=>void; profile:Profile; sb:any; settings:Record<string,string>; requestTypes?: RequestType[] }) {
+  // Use DB-driven types when provided, otherwise fall back to hardcoded options
+  const useDbTypes = !!requestTypes && requestTypes.filter(t => t.active !== false).length > 0;
+  const dbTypes = useDbTypes ? requestTypes!.filter(t => t.active !== false) : [];
+
   const [selOpt, setSelOpt] = useState<ReqOption|null>(null);
+  const [selDbType, setSelDbType] = useState<RequestType|null>(null);
   const [msg, setMsg] = useState("");
   const [availability, setAvailability] = useState("");
   const [reason, setReason] = useState("");
@@ -2142,6 +2152,22 @@ function InternRequests({ requests, setRequests, profile, sb, settings }: { requ
   const SV: Record<string,BV> = {new:"warning",in_progress:"info",resolved:"success"};
   const SL: Record<string,string> = {new:"New",in_progress:"In Progress",resolved:"Resolved"};
   const isCaroline = selOpt?.value === "caroline_meeting";
+
+  function openDbType(t: RequestType) { setSelDbType(t); setSelOpt(null); setMsg(""); }
+  function closeDbModal() { setSelDbType(null); setMsg(""); }
+  async function submitDbType() {
+    if (!selDbType || !msg.trim()) return;
+    setSending(true);
+    const { data, error } = await sb.from("requests").insert({
+      intern_id: profile.id, type_name: selDbType.name, message: msg.trim(),
+      status: "new", replies: [], created_at: new Date().toISOString(),
+    }).select().single();
+    setSending(false);
+    if (error || !data) return;
+    setRequests([data as Request, ...myRequests]);
+    fetch("/api/send-notification",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({role:"admin",title:`New Request: ${selDbType.name} 📥`,body:`${profile.full_name} submitted a request`})}).catch(()=>{});
+    closeDbModal();
+  }
 
   function openOpt(opt: ReqOption) { setSelOpt(opt); setMsg(""); setAvailability(""); setReason(""); }
   function closeModal() { setSelOpt(null); setMsg(""); setAvailability(""); setReason(""); }
@@ -2200,11 +2226,28 @@ function InternRequests({ requests, setRequests, profile, sb, settings }: { requ
         </div>
       )}
 
-      {/* Request type cards — always visible */}
+      {/* Request type cards */}
       <div>
         <p className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-3">Select a request type</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {REQ_OPTIONS.map(opt => {
+          {useDbTypes ? dbTypes.map(t => {
+            const Icon = DB_REQ_ICONS[t.icon||"help"] || HelpCircle;
+            const isCalendar = t.kind === "calendar";
+            const calendlyUrl = t.calendly_ella || t.calendly_noel || null;
+            return (
+              <button key={t.id} onClick={() => isCalendar && calendlyUrl ? window.open(calendlyUrl,"_blank") : openDbType(t)}
+                className="bg-white border border-stone-200/60 rounded-xl p-4 text-left hover:border-stone-400 hover:shadow-sm transition-all flex items-center gap-4 group">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isCalendar ? "bg-violet-50" : "bg-stone-100"}`}>
+                  <Icon size={18} className={isCalendar ? "text-violet-600" : "text-stone-500"}/>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-stone-800">{t.name}</p>
+                  <p className="text-xs text-stone-400 mt-0.5">{t.description || (isCalendar ? "Opens booking link" : "Send a message")}</p>
+                </div>
+                <ChevronRight size={14} className="text-stone-300 group-hover:text-stone-500 shrink-0"/>
+              </button>
+            );
+          }) : REQ_OPTIONS.map(opt => {
             const Icon = REQ_ICONS[opt.value] || HelpCircle;
             const isCalendar = opt.kind === "calendar";
             return (
@@ -2215,9 +2258,7 @@ function InternRequests({ requests, setRequests, profile, sb, settings }: { requ
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-stone-800">{opt.label}</p>
-                  <p className="text-xs text-stone-400 mt-0.5">
-                    {isCalendar ? "Opens booking link" : "Send a message"}
-                  </p>
+                  <p className="text-xs text-stone-400 mt-0.5">{isCalendar ? "Opens booking link" : "Send a message"}</p>
                 </div>
                 <ChevronRight size={14} className="text-stone-300 group-hover:text-stone-500 shrink-0"/>
               </button>
@@ -2243,6 +2284,20 @@ function InternRequests({ requests, setRequests, profile, sb, settings }: { requ
           </div>
         </div>
       )}
+
+      {/* DB type modal */}
+      <Md open={!!selDbType} onClose={closeDbModal} title={selDbType?.name||"Request"}>
+        {selDbType && (
+          <div className="flex flex-col gap-4">
+            {selDbType.description && <p className="text-sm text-stone-500">{selDbType.description}</p>}
+            <TA label="Message" placeholder="Describe your request..." value={msg} onChange={v=>setMsg(v)}/>
+            <div className="flex justify-end gap-2 pt-2 border-t border-stone-100">
+              <Btn variant="secondary" onClick={closeDbModal}>Cancel</Btn>
+              <Btn onClick={submitDbType} disabled={sending||!msg.trim()}><Send size={14}/>{sending?"Sending...":"Send Request"}</Btn>
+            </div>
+          </div>
+        )}
+      </Md>
 
       {/* Modal */}
       <Md open={!!selOpt} onClose={closeModal} title={selOpt?.label||"Request"}>
@@ -2458,6 +2513,120 @@ function AdminRequestInbox({ requests, setRequests, requestTypes, setRequestType
           </Md>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Admin: Intern Request Options ─────────────────────────────────────────────
+function AdminInternRequestTypes({ requestTypes, setRequestTypes, sb }: { requestTypes: RequestType[]; setRequestTypes: (t: RequestType[]) => void; sb: any }) {
+  const blank = { name: "", description: "", icon: "help", kind: "form", calendly_ella: "", calendly_noel: "", active: true };
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState<typeof blank>(blank);
+  const [editItem, setEditItem] = useState<RequestType | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const ICON_OPTIONS = ["help","calendar","shopping","coffee","mail","inbox","message"].map(i => ({ value: i, label: i }));
+  const KIND_OPTIONS = [{ value: "form", label: "Message form" }, { value: "calendar", label: "Calendly link" }];
+
+  async function add() {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    const { data, error } = await sb.from("request_types").insert({ ...form, active: true }).select().single();
+    setSaving(false);
+    if (error || !data) { alert(error?.message); return; }
+    setRequestTypes([...requestTypes, data]);
+    setShowAdd(false); setForm(blank);
+  }
+
+  async function save() {
+    if (!editItem) return;
+    setSaving(true);
+    await sb.from("request_types").update(editItem).eq("id", editItem.id);
+    setSaving(false);
+    setRequestTypes(requestTypes.map(t => t.id === editItem.id ? editItem : t));
+    setEditItem(null);
+  }
+
+  async function del(id: string) {
+    if (!confirm("Delete this request type?")) return;
+    await sb.from("request_types").delete().eq("id", id);
+    setRequestTypes(requestTypes.filter(t => t.id !== id));
+  }
+
+  async function toggle(t: RequestType) {
+    const active = !t.active;
+    await sb.from("request_types").update({ active }).eq("id", t.id);
+    setRequestTypes(requestTypes.map(x => x.id === t.id ? { ...x, active } : x));
+  }
+
+  function CardForm({ vals, set, onSubmit, onCancel, title }: { vals: any; set: (v: any) => void; onSubmit: () => void; onCancel: () => void; title: string }) {
+    return (
+      <Md open title={title} onClose={onCancel}>
+        <div className="flex flex-col gap-3">
+          <TI label="Card label" value={vals.name} onChange={v => set({ ...vals, name: v })} required/>
+          <TA label="Description (optional)" value={vals.description || ""} onChange={v => set({ ...vals, description: v })}/>
+          <Sel label="Icon" value={vals.icon || "help"} onChange={v => set({ ...vals, icon: v })} options={ICON_OPTIONS}/>
+          <Sel label="Type" value={vals.kind || "form"} onChange={v => set({ ...vals, kind: v })} options={KIND_OPTIONS}/>
+          {vals.kind === "calendar" && (
+            <>
+              <TI label="Calendly URL" value={vals.calendly_ella || ""} onChange={v => set({ ...vals, calendly_ella: v })} placeholder="https://calendly.com/..."/>
+            </>
+          )}
+          <div className="flex justify-end gap-2 pt-2 border-t border-stone-100">
+            <Btn variant="secondary" onClick={onCancel}>Cancel</Btn>
+            <Btn onClick={onSubmit} disabled={saving || !vals.name?.trim()}>{saving ? "Saving…" : "Save"}</Btn>
+          </div>
+        </div>
+      </Md>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-stone-800">Intern Request Options</h1>
+          <p className="text-sm text-stone-400 mt-0.5">These cards appear on the intern Requests tab.</p>
+        </div>
+        <Btn onClick={() => setShowAdd(true)}><Plus size={14}/>Add Card</Btn>
+      </div>
+
+      {requestTypes.length === 0 ? (
+        <div className="bg-white border border-stone-200/60 rounded-2xl p-10 text-center">
+          <Inbox size={28} className="mx-auto text-stone-300 mb-3"/>
+          <p className="text-sm text-stone-500 mb-4">No request cards yet. Add one to get started.</p>
+          <Btn onClick={() => setShowAdd(true)}><Plus size={14}/>Add Card</Btn>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {requestTypes.map(t => {
+            const Icon = DB_REQ_ICONS[t.icon || "help"] || HelpCircle;
+            return (
+              <div key={t.id} className={`bg-white border border-stone-200/60 rounded-2xl p-4 flex items-center gap-4 ${t.active === false ? "opacity-50" : ""}`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${t.kind === "calendar" ? "bg-violet-50" : "bg-stone-100"}`}>
+                  <Icon size={18} className={t.kind === "calendar" ? "text-violet-600" : "text-stone-500"}/>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-stone-800">{t.name}</p>
+                  {t.description && <p className="text-xs text-stone-400 mt-0.5 truncate">{t.description}</p>}
+                  <div className="flex gap-2 mt-1">
+                    <span className="text-xs bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded">{t.kind === "calendar" ? "Calendly" : "Form"}</span>
+                    {t.active === false && <span className="text-xs bg-red-50 text-red-400 px-1.5 py-0.5 rounded">Hidden</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setEditItem(t)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-700 transition-colors"><Pencil size={13}/></button>
+                  <button onClick={() => toggle(t)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-700 transition-colors text-xs px-2">{t.active === false ? "Show" : "Hide"}</button>
+                  <button onClick={() => del(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-stone-300 hover:text-red-500 transition-colors"><Trash2 size={13}/></button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showAdd && <CardForm vals={form} set={setForm} onSubmit={add} onCancel={() => { setShowAdd(false); setForm(blank); }} title="Add Request Card"/>}
+      {editItem && <CardForm vals={editItem} set={setEditItem} onSubmit={save} onCancel={() => setEditItem(null)} title="Edit Request Card"/>}
     </div>
   );
 }
@@ -10255,12 +10424,13 @@ export default function DashboardPage() {
     {
       label: "PROGRAM",
       items: [
-        { id: "sprints",          icon: <CheckSquare size={16}/>, label: "Sprints" },
-        { id: "mt_intern_mgmt",   icon: <Users size={16}/>,       label: "Intern Management" },
-        { id: "intern_roster",    icon: <FileText size={16}/>,     label: "Intern Master List" },
-        { id: "storms",           icon: <CloudRain size={16}/>,   label: "Storms" },
-        { id: "contracts",        icon: <FileText size={16}/>,    label: "Contracts" },
-        { id: "schools",          icon: <BookOpen size={16}/>,    label: "Schools" },
+        { id: "sprints",               icon: <CheckSquare size={16}/>, label: "Sprints" },
+        { id: "mt_intern_mgmt",        icon: <Users size={16}/>,       label: "Intern Management" },
+        { id: "intern_roster",         icon: <FileText size={16}/>,     label: "Intern Master List" },
+        { id: "intern_request_types",  icon: <Inbox size={16}/>,       label: "Request Options" },
+        { id: "storms",                icon: <CloudRain size={16}/>,   label: "Storms" },
+        { id: "contracts",             icon: <FileText size={16}/>,    label: "Contracts" },
+        { id: "schools",               icon: <BookOpen size={16}/>,    label: "Schools" },
       ],
     },
     {
@@ -10486,7 +10656,8 @@ export default function DashboardPage() {
       case "rush":   return canSeeRush ? <SororityRushPlan profile={p} sb={supabase}/> : null;
       case "contracts":      return isAdmin ? <ContractsPanel profile={p} sb={supabase}/> : null;
       case "mt_intern_mgmt": { const activeInterns = interns.filter(i => i.active !== false); return isAdmin ? <AdminMTInternMgmt interns={activeInterns as any[]} setInterns={setInterns as (p:any[])=>void} tasks={tasks} setTasks={setTasks} allTeamRoles={allTeamRoles} setAllTeamRoles={setAllTeamRoles} teams={mtTeams} setTeams={setMtTeams} subteams={mtSubteams} setSubteams={setMtSubteams} profileId={p.id} sb={supabase}/> : null; }
-      case "intern_roster":  return isAdmin ? <AdminInternMasterList roster={internRoster} setRoster={setInternRoster} teams={mtTeams} subteams={mtSubteams} sb={supabase}/> : null;
+      case "intern_roster":         return isAdmin ? <AdminInternMasterList roster={internRoster} setRoster={setInternRoster} teams={mtTeams} subteams={mtSubteams} sb={supabase}/> : null;
+      case "intern_request_types":  return isAdmin ? <AdminInternRequestTypes requestTypes={requestTypes} setRequestTypes={setRequestTypes} sb={supabase}/> : null;
       case "storms":
         if (isAdmin) return <AdminStormsView storms={storms} profiles={[...interns.map(i => ({ id: i.id, full_name: i.full_name, email: i.email })), ...mtProfiles.map(p => ({ id: p.id, full_name: p.full_name, email: p.email||"" }))].filter((p,i,a) => a.findIndex(x=>x.id===p.id)===i)}/>;
         if (isMTIntern) return <InternStormsView profile={{ id: p.id, full_name: p.full_name, email: p.email }} storms={storms} setStorms={setStorms} calendlyElla={settings.calendly_ella} sb={supabase}/>;
@@ -10500,7 +10671,7 @@ export default function DashboardPage() {
       case "mt_intern_home": return (isMTIntern || isAdmin) ? <MultiTeamInternDash profile={p} myTeamRoles={myTeamRoles} teams={mtTeams} subteams={mtSubteams} tasks={tasks} announcements={announcements} reports={reports} setReports={setReports} sb={supabase}/> : null;
       case "mt_intern_team": return (isMTIntern || isAdmin) ? <InternTeamTab profile={{...p,avatar_url:p.avatar_url}} myTeamRoles={myTeamRoles} teams={mtTeams} subteams={mtSubteams} allTeamRoles={allTeamRoles} sb={supabase}/> : null;
       case "mt_intern_tasks": return (isMTIntern || isAdmin) ? <InternTasksTab profile={{...p,avatar_url:p.avatar_url}} sprints={sprints} sprintAssignments={sprintAssignments} sprintDeliverables={sprintDeliverables} setSprintDeliverables={setSprintDeliverables} sb={supabase}/> : null;
-      case "mt_intern_requests": return (isMTIntern || isAdmin) ? <InternRequests profile={p} requests={requests.filter(r=>r.intern_id===p.id)} setRequests={setRequests} sb={supabase} settings={settings}/> : null;
+      case "mt_intern_requests": return (isMTIntern || isAdmin) ? <InternRequests profile={p} requests={requests.filter(r=>r.intern_id===p.id)} setRequests={setRequests} sb={supabase} settings={settings} requestTypes={requestTypes}/> : null;
       case "mt_intern_profile": return (isMTIntern || isAdmin) ? <InternProfileTab profile={{...p,avatar_url:p.avatar_url}} onAvatarUpdate={(url)=>setProfile(prev=>prev?{...prev,avatar_url:url}:prev)} sb={supabase}/> : null;
       case "subteam_exec_home": return (isSubteamExec || isAdmin) ? <SubteamExecDash profile={p} myTeamRoles={myTeamRoles} teams={mtTeams} subteams={mtSubteams} allTeamRoles={allTeamRoles} interns={interns} tasks={tasks} setTasks={setTasks} reports={reports} announcements={announcements} setAnnouncements={setAnnouncements} sb={supabase}/> : null;
       case "team_exec_home": return (isTeamExec || isAdmin) ? <TeamExecDash profile={p} myTeamRoles={myTeamRoles} teams={mtTeams} subteams={mtSubteams} allTeamRoles={allTeamRoles} interns={interns} tasks={tasks} setTasks={setTasks} reports={reports} announcements={announcements} setAnnouncements={setAnnouncements} sb={supabase}/> : null;
