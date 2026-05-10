@@ -10424,7 +10424,6 @@ export default function DashboardPage() {
         { id: "questions",           icon: <MessageCircle size={16}/>,label: "Questions", badge: openQCount || null },
         { id: "reports_analytics",   icon: <FileText size={16}/>,     label: "Reports & Analytics" },
         { id: "resources",           icon: <FolderOpen size={16}/>,   label: "Resources" },
-        { id: "interns",             icon: <Users size={16}/>,        label: "Intern Mgmt" },
       ],
     },
     {
