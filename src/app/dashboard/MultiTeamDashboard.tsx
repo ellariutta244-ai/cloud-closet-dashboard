@@ -2186,6 +2186,8 @@ export function AdminInternMasterList({roster,setRoster,teams,subteams,sb}:{
   const [linkSending,setLinkSending] = useState<string|null>(null);
   const [linkErrId,setLinkErrId] = useState<string|null>(null);
   const [profilePhotos,setProfilePhotos] = useState<Record<string,string>>({});
+  const [importing,setImporting] = useState(false);
+  const [importResult,setImportResult] = useState<string|null>(null);
 
   useEffect(()=>{
     const emails = roster.map(e=>e.email).filter(Boolean) as string[];
@@ -2293,6 +2295,54 @@ export function AdminInternMasterList({roster,setRoster,teams,subteams,sb}:{
     complete: roster.filter(e=>e.contract_status==="complete").length,
   };
 
+  async function importFromSchools(){
+    setImporting(true);
+    setImportResult(null);
+
+    // Fetch all intern profiles + their team roles
+    const [{data:profiles},{data:roles}] = await Promise.all([
+      sb.from("profiles").select("id,full_name,email,university").eq("role","intern"),
+      sb.from("user_team_roles").select("*").eq("role","intern"),
+    ]);
+    if(!profiles?.length){ setImporting(false); setImportResult("No interns found in profiles."); return; }
+
+    // Skip emails already in roster
+    const existingEmails = new Set(roster.map(r=>r.email?.toLowerCase()).filter(Boolean));
+
+    const toInsert = profiles
+      .filter((p:any) => p.email && !existingEmails.has(p.email.toLowerCase()))
+      .map((p:any) => {
+        const nameParts = (p.full_name||"").trim().split(" ");
+        const first = nameParts[0] || "";
+        const last  = nameParts.slice(1).join(" ") || "";
+        const internRoles = (roles||[]).filter((r:any)=>r.user_id===p.id);
+        const teamId    = internRoles[0]?.team_id || null;
+        const subteamIds = internRoles.map((r:any)=>r.subteam_id).filter(Boolean);
+        return {
+          first_name: first, last_name: last,
+          email: p.email,
+          school: p.university || null,
+          team_id: teamId,
+          subteam_ids: subteamIds,
+          contract_status: "none",
+        };
+      });
+
+    if(!toInsert.length){
+      setImporting(false);
+      setImportResult("All school list interns are already in the roster.");
+      setTimeout(()=>setImportResult(null), 4000);
+      return;
+    }
+
+    const {data:inserted,error} = await sb.from("intern_roster").insert(toInsert).select();
+    setImporting(false);
+    if(error){ setImportResult(`Error: ${error.message}`); return; }
+    setRoster([...(inserted as InternRosterEntry[]), ...roster]);
+    setImportResult(`Added ${inserted.length} intern${inserted.length!==1?"s":""} to the roster.`);
+    setTimeout(()=>setImportResult(null), 5000);
+  }
+
   return (
     <div className="flex flex-col gap-5">
       {/* Header */}
@@ -2301,11 +2351,21 @@ export function AdminInternMasterList({roster,setRoster,teams,subteams,sb}:{
           <h1 className="text-xl font-bold text-stone-800">Intern Master List</h1>
           <p className="text-sm text-stone-400 mt-0.5">{roster.length} intern{roster.length!==1?"s":""} · {stats.complete} contract{stats.complete!==1?"s":""} signed</p>
         </div>
+        <button onClick={importFromSchools} disabled={importing}
+          className="flex items-center gap-1.5 px-3 py-2 bg-stone-100 text-stone-700 text-xs font-semibold rounded-xl hover:bg-stone-200 disabled:opacity-50 transition-colors">
+          {importing?<Loader2 size={13} className="animate-spin"/>:<ArrowUpRight size={13}/>}
+          {importing?"Importing…":"Import from Schools"}
+        </button>
         <button onClick={()=>setShowAdd(true)}
           className="flex items-center gap-1.5 px-3 py-2 bg-stone-800 text-white text-xs font-semibold rounded-xl hover:bg-stone-700 transition-colors">
           <Plus size={13}/>Add Intern
         </button>
       </div>
+      {importResult&&(
+        <div className="px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700">
+          {importResult}
+        </div>
+      )}
 
       {/* Stats row */}
       <div className="grid grid-cols-4 gap-3">
