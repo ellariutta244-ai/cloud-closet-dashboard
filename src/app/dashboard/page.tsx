@@ -10,7 +10,7 @@ import SororityRushPlan from "./SororityRushPlan";
 import ContractsPanel from "./ContractsPanel";
 import {
   type MTTeamRole, type MTTeam, type MTSubteam, type MTInternNote, type InternRosterEntry,
-  MultiTeamInternDash, SubteamExecDash, TeamExecDash, IRMDash, AdminSchoolsTab, AdminMTInternMgmt, AdminInternMasterList,
+  MultiTeamInternDash, SubteamExecDash, TeamExecDash, IRMDash, AdminSchoolsTab, AdminMTInternMgmt, AdminInternMasterList, AdminTeamLeadsTab,
 } from "./MultiTeamDashboard";
 import {
   type Sprint, type SprintAssignment, type SprintDeliverable, type SprintCheckin,
@@ -31,7 +31,7 @@ import {
   Play, Trophy, ExternalLink, ArrowUpRight, MessageSquare, TrendingUp,
   Settings as SettingsIcon, Zap, ChevronDown, ChevronUp, AlertTriangle, Bookmark, Copy,
   BookOpen, RefreshCw, Palette, Link as LinkIcon, Image, Sparkles, CloudRain,
-  User,
+  User, UserCog,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -2518,116 +2518,228 @@ function AdminRequestInbox({ requests, setRequests, requestTypes, setRequestType
   );
 }
 
-// ── Admin: Intern Request Options ─────────────────────────────────────────────
-function AdminInternRequestTypes({ requestTypes, setRequestTypes, sb }: { requestTypes: RequestType[]; setRequestTypes: (t: RequestType[]) => void; sb: any }) {
+// ── Admin: Intern Request Options (Inbox + Cards) ─────────────────────────────
+function AdminInternRequestTypes({ requestTypes, setRequestTypes, requests, setRequests, interns, settings, sb }: {
+  requestTypes: RequestType[]; setRequestTypes: (t: RequestType[]) => void;
+  requests: Request[]; setRequests: (r: Request[]) => void;
+  interns: Profile[]; settings: AppSettings; sb: any;
+}) {
+  const [tab, setTab] = useState<"inbox"|"resolved"|"cards">("inbox");
+  const [replyText, setReplyText] = useState<Record<string,string>>({});
+
+  // Card management state
   const blank = { name: "", description: "", icon: "help", kind: "form", calendly_ella: "", calendly_noel: "", active: true };
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState<typeof blank>(blank);
+  const [cardForm, setCardForm] = useState<typeof blank>(blank);
   const [editItem, setEditItem] = useState<RequestType | null>(null);
   const [saving, setSaving] = useState(false);
 
   const ICON_OPTIONS = ["help","calendar","shopping","coffee","mail","inbox","message"].map(i => ({ value: i, label: i }));
   const KIND_OPTIONS = [{ value: "form", label: "Message form" }, { value: "calendar", label: "Calendly link" }];
 
-  async function add() {
-    if (!form.name.trim()) return;
+  const internIds = new Set(interns.map(i => i.id));
+  const mtRequests = requests.filter(r => r.intern_id && internIds.has(r.intern_id));
+  const active   = mtRequests.filter(r => r.status !== "resolved").sort((a,b) => new Date(b.created_at).getTime()-new Date(a.created_at).getTime());
+  const resolved = mtRequests.filter(r => r.status === "resolved").sort((a,b) => new Date(b.created_at).getTime()-new Date(a.created_at).getTime());
+  const newCount = mtRequests.filter(r => r.status === "new").length;
+
+  const gn = (id?:string) => interns.find(i=>i.id===id)?.full_name || "Intern";
+  const SV: Record<string,BV> = {new:"warning",in_progress:"info",resolved:"success"};
+  const SL: Record<string,string> = {new:"New",in_progress:"In Progress",resolved:"Resolved"};
+
+  // ── Inbox actions ──────────────────────────────────────────────────────────
+  async function updateStatus(id:string, status:string) {
+    await sb.from("requests").update({status}).eq("id",id);
+    setRequests(requests.map(r => r.id===id ? {...r,status} : r));
+  }
+  async function sendReply(reqId:string) {
+    const text = replyText[reqId];
+    if (!text?.trim()) return;
+    const reply: RequestReply = {author:"admin",author_name:"Ella",body:text.trim(),created_at:new Date().toISOString()};
+    const req = requests.find(r=>r.id===reqId);
+    if (!req) return;
+    const newReplies = [...req.replies, reply];
+    const newStatus = req.status==="new" ? "in_progress" : req.status;
+    await sb.from("requests").update({replies:newReplies,status:newStatus}).eq("id",reqId);
+    setRequests(requests.map(r => r.id===reqId ? {...r,replies:newReplies,status:newStatus} : r));
+    setReplyText(p => ({...p,[reqId]:""}));
+  }
+  async function deleteRequest(id:string) {
+    if (!confirm("Delete this request?")) return;
+    await sb.from("requests").delete().eq("id",id);
+    setRequests(requests.filter(r => r.id!==id));
+  }
+
+  function renderRequest(req:Request) {
+    return (
+      <div key={req.id} className={`bg-white border rounded-2xl p-5 transition-all ${req.status==="new"?"border-amber-200 shadow-sm shadow-amber-50":"border-stone-200/60"}`}>
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div className="flex items-center gap-3">
+            <Av name={gn(req.intern_id)} size={36}/>
+            <div>
+              <p className="text-sm font-semibold text-stone-800">{gn(req.intern_id)}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-stone-400">{fmt(req.created_at)}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {req.type_name && <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-stone-100 text-stone-500">{req.type_name}</span>}
+            <Bg v={SV[req.status]||"default"}>{SL[req.status]||req.status}</Bg>
+            <button onClick={()=>deleteRequest(req.id)} className="p-1 rounded text-stone-300 hover:text-red-500 hover:bg-red-50 transition-all"><Trash2 size={12}/></button>
+          </div>
+        </div>
+        <p className="text-sm text-stone-700 mb-3 leading-relaxed">{req.message}</p>
+        {req.replies.length>0 && (
+          <div className="flex flex-col gap-2 mb-3 pl-4 border-l-2 border-stone-100">
+            {req.replies.map((rp,i)=>(
+              <div key={i} className="bg-sky-50 border border-sky-100 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1"><Av name={rp.author_name||"Admin"} size={20}/><span className="text-xs font-medium text-sky-700">{rp.author_name}</span><span className="text-xs text-stone-400">{fmt(rp.created_at)}</span></div>
+                <p className="text-sm text-stone-700 ml-6">{rp.body}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {req.status!=="resolved" && (
+          <div className="flex items-end gap-2 flex-wrap">
+            <input placeholder="Reply…" value={replyText[req.id]||""} onChange={e=>setReplyText(p=>({...p,[req.id]:e.target.value}))} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendReply(req.id);}}}
+              className="flex-1 min-w-40 px-3 py-2 text-sm bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:border-stone-400 placeholder:text-stone-300"/>
+            <Btn size="sm" onClick={()=>sendReply(req.id)} disabled={!replyText[req.id]?.trim()}><Send size={14}/>Reply</Btn>
+            {req.status!=="in_progress" && <Btn size="sm" variant="secondary" onClick={()=>updateStatus(req.id,"in_progress")}>In Progress</Btn>}
+            <Btn size="sm" variant="secondary" onClick={()=>updateStatus(req.id,"resolved")}><CheckCircle2 size={12}/>Resolve</Btn>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Card management ────────────────────────────────────────────────────────
+  async function addCard() {
+    if (!cardForm.name.trim()) return;
     setSaving(true);
-    const { data, error } = await sb.from("request_types").insert({ ...form, active: true }).select().single();
+    const { data, error } = await sb.from("request_types").insert({ ...cardForm, active: true }).select().single();
     setSaving(false);
     if (error || !data) { alert(error?.message); return; }
     setRequestTypes([...requestTypes, data]);
-    setShowAdd(false); setForm(blank);
+    setShowAdd(false); setCardForm(blank);
   }
-
-  async function save() {
+  async function saveCard() {
     if (!editItem) return;
     setSaving(true);
     await sb.from("request_types").update(editItem).eq("id", editItem.id);
     setSaving(false);
-    setRequestTypes(requestTypes.map(t => t.id === editItem.id ? editItem : t));
+    setRequestTypes(requestTypes.map(t => t.id===editItem.id ? editItem : t));
     setEditItem(null);
   }
-
-  async function del(id: string) {
-    if (!confirm("Delete this request type?")) return;
+  async function delCard(id:string) {
+    if (!confirm("Delete this request card?")) return;
     await sb.from("request_types").delete().eq("id", id);
-    setRequestTypes(requestTypes.filter(t => t.id !== id));
+    setRequestTypes(requestTypes.filter(t => t.id!==id));
   }
-
-  async function toggle(t: RequestType) {
+  async function toggleCard(t:RequestType) {
     const active = !t.active;
     await sb.from("request_types").update({ active }).eq("id", t.id);
-    setRequestTypes(requestTypes.map(x => x.id === t.id ? { ...x, active } : x));
+    setRequestTypes(requestTypes.map(x => x.id===t.id ? {...x,active} : x));
   }
 
   function CardForm({ vals, set, onSubmit, onCancel, title }: { vals: any; set: (v: any) => void; onSubmit: () => void; onCancel: () => void; title: string }) {
     return (
       <Md open title={title} onClose={onCancel}>
         <div className="flex flex-col gap-3">
-          <TI label="Card label" value={vals.name} onChange={v => set({ ...vals, name: v })} required/>
-          <TA label="Description (optional)" value={vals.description || ""} onChange={v => set({ ...vals, description: v })}/>
-          <Sel label="Icon" value={vals.icon || "help"} onChange={v => set({ ...vals, icon: v })} options={ICON_OPTIONS}/>
-          <Sel label="Type" value={vals.kind || "form"} onChange={v => set({ ...vals, kind: v })} options={KIND_OPTIONS}/>
-          {vals.kind === "calendar" && (
-            <>
-              <TI label="Calendly URL" value={vals.calendly_ella || ""} onChange={v => set({ ...vals, calendly_ella: v })} placeholder="https://calendly.com/..."/>
-            </>
+          <TI label="Card label" value={vals.name} onChange={v => set({...vals,name:v})} required/>
+          <TA label="Description (optional)" value={vals.description||""} onChange={v => set({...vals,description:v})}/>
+          <Sel label="Icon" value={vals.icon||"help"} onChange={v => set({...vals,icon:v})} options={ICON_OPTIONS}/>
+          <Sel label="Type" value={vals.kind||"form"} onChange={v => set({...vals,kind:v})} options={KIND_OPTIONS}/>
+          {vals.kind==="calendar" && (
+            <TI label="Calendly URL" value={vals.calendly_ella||""} onChange={v => set({...vals,calendly_ella:v})} placeholder="https://calendly.com/..."/>
           )}
           <div className="flex justify-end gap-2 pt-2 border-t border-stone-100">
             <Btn variant="secondary" onClick={onCancel}>Cancel</Btn>
-            <Btn onClick={onSubmit} disabled={saving || !vals.name?.trim()}>{saving ? "Saving…" : "Save"}</Btn>
+            <Btn onClick={onSubmit} disabled={saving||!vals.name?.trim()}>{saving?"Saving…":"Save"}</Btn>
           </div>
         </div>
       </Md>
     );
   }
 
+  const TABS: {id:"inbox"|"resolved"|"cards"; label:string; badge?:number}[] = [
+    {id:"inbox",    label:"Inbox",    badge:newCount||undefined},
+    {id:"resolved", label:"Resolved"},
+    {id:"cards",    label:"Request Cards"},
+  ];
+
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-4">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-stone-800">Intern Request Options</h1>
-          <p className="text-sm text-stone-400 mt-0.5">These cards appear on the intern Requests tab.</p>
+          <h1 className="text-xl font-bold text-stone-800">Requests</h1>
+          <p className="text-sm text-stone-400 mt-0.5">Inbox · {mtRequests.length} total from interns</p>
         </div>
-        <Btn onClick={() => setShowAdd(true)}><Plus size={14}/>Add Card</Btn>
+        {tab==="cards" && <Btn onClick={()=>setShowAdd(true)}><Plus size={14}/>Add Card</Btn>}
       </div>
 
-      {requestTypes.length === 0 ? (
-        <div className="bg-white border border-stone-200/60 rounded-2xl p-10 text-center">
-          <Inbox size={28} className="mx-auto text-stone-300 mb-3"/>
-          <p className="text-sm text-stone-500 mb-4">No request cards yet. Add one to get started.</p>
-          <Btn onClick={() => setShowAdd(true)}><Plus size={14}/>Add Card</Btn>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {requestTypes.map(t => {
-            const Icon = DB_REQ_ICONS[t.icon || "help"] || HelpCircle;
-            return (
-              <div key={t.id} className={`bg-white border border-stone-200/60 rounded-2xl p-4 flex items-center gap-4 ${t.active === false ? "opacity-50" : ""}`}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${t.kind === "calendar" ? "bg-violet-50" : "bg-stone-100"}`}>
-                  <Icon size={18} className={t.kind === "calendar" ? "text-violet-600" : "text-stone-500"}/>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-stone-800">{t.name}</p>
-                  {t.description && <p className="text-xs text-stone-400 mt-0.5 truncate">{t.description}</p>}
-                  <div className="flex gap-2 mt-1">
-                    <span className="text-xs bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded">{t.kind === "calendar" ? "Calendly" : "Form"}</span>
-                    {t.active === false && <span className="text-xs bg-red-50 text-red-400 px-1.5 py-0.5 rounded">Hidden</span>}
+      <div className="flex gap-1 bg-stone-100 p-1 rounded-xl w-fit">
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${tab===t.id?"bg-white text-stone-800 shadow-sm":"text-stone-500"}`}>
+            {t.label}
+            {t.badge != null && <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${tab===t.id?"bg-amber-100 text-amber-700":"bg-stone-200 text-stone-500"}`}>{t.badge}</span>}
+          </button>
+        ))}
+      </div>
+
+      {tab==="inbox" && (
+        active.length===0
+          ? <ES icon={<Inbox size={24}/>} message="No open requests"/>
+          : <div className="flex flex-col gap-3">{active.map(renderRequest)}</div>
+      )}
+
+      {tab==="resolved" && (
+        resolved.length===0
+          ? <ES message="No resolved requests yet"/>
+          : <div className="flex flex-col gap-3">{resolved.map(renderRequest)}</div>
+      )}
+
+      {tab==="cards" && (
+        <div className="flex flex-col gap-4">
+          <p className="text-xs text-stone-400">These cards appear on the intern Requests tab. Add, edit, hide, or delete them below.</p>
+          {requestTypes.length===0 ? (
+            <div className="bg-white border border-stone-200/60 rounded-2xl p-10 text-center">
+              <Inbox size={28} className="mx-auto text-stone-300 mb-3"/>
+              <p className="text-sm text-stone-500 mb-4">No request cards yet.</p>
+              <Btn onClick={()=>setShowAdd(true)}><Plus size={14}/>Add Card</Btn>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {requestTypes.map(t => {
+                const Icon = DB_REQ_ICONS[t.icon||"help"] || HelpCircle;
+                return (
+                  <div key={t.id} className={`bg-white border border-stone-200/60 rounded-2xl p-4 flex items-center gap-4 ${t.active===false?"opacity-50":""}`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${t.kind==="calendar"?"bg-violet-50":"bg-stone-100"}`}>
+                      <Icon size={18} className={t.kind==="calendar"?"text-violet-600":"text-stone-500"}/>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-stone-800">{t.name}</p>
+                      {t.description && <p className="text-xs text-stone-400 mt-0.5 truncate">{t.description}</p>}
+                      <div className="flex gap-2 mt-1">
+                        <span className="text-xs bg-stone-100 text-stone-500 px-1.5 py-0.5 rounded">{t.kind==="calendar"?"Calendly":"Form"}</span>
+                        {t.active===false && <span className="text-xs bg-red-50 text-red-400 px-1.5 py-0.5 rounded">Hidden</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={()=>setEditItem(t)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-700 transition-colors"><Pencil size={13}/></button>
+                      <button onClick={()=>toggleCard(t)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-700 transition-colors text-xs px-2">{t.active===false?"Show":"Hide"}</button>
+                      <button onClick={()=>delCard(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-stone-300 hover:text-red-500 transition-colors"><Trash2 size={13}/></button>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => setEditItem(t)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-700 transition-colors"><Pencil size={13}/></button>
-                  <button onClick={() => toggle(t)} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-700 transition-colors text-xs px-2">{t.active === false ? "Show" : "Hide"}</button>
-                  <button onClick={() => del(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-stone-300 hover:text-red-500 transition-colors"><Trash2 size={13}/></button>
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {showAdd && <CardForm vals={form} set={setForm} onSubmit={add} onCancel={() => { setShowAdd(false); setForm(blank); }} title="Add Request Card"/>}
-      {editItem && <CardForm vals={editItem} set={setEditItem} onSubmit={save} onCancel={() => setEditItem(null)} title="Edit Request Card"/>}
+      {showAdd && <CardForm vals={cardForm} set={setCardForm} onSubmit={addCard} onCancel={()=>{setShowAdd(false);setCardForm(blank);}} title="Add Request Card"/>}
+      {editItem && <CardForm vals={editItem} set={setEditItem} onSubmit={saveCard} onCancel={()=>setEditItem(null)} title="Edit Request Card"/>}
     </div>
   );
 }
@@ -10431,6 +10543,7 @@ export default function DashboardPage() {
       items: [
         { id: "company_calendar",      icon: <CalendarDays size={16}/>, label: "Company Calendar" },
         { id: "sprints",               icon: <CheckSquare size={16}/>, label: "Sprints" },
+        { id: "team_leads",            icon: <UserCog size={16}/>,     label: "Team Leads" },
         { id: "mt_intern_mgmt",        icon: <Users size={16}/>,       label: "Intern Management" },
         { id: "intern_roster",         icon: <FileText size={16}/>,    label: "Intern Master List" },
         { id: "intern_request_types",  icon: <Inbox size={16}/>,       label: "Request Options" },
@@ -10663,8 +10776,9 @@ export default function DashboardPage() {
       case "contracts":      return isAdmin ? <ContractsPanel profile={p} sb={supabase}/> : null;
       case "mt_intern_mgmt": { const activeInterns = interns.filter(i => i.active !== false); return isAdmin ? <AdminMTInternMgmt interns={activeInterns as any[]} setInterns={setInterns as (p:any[])=>void} tasks={tasks} setTasks={setTasks} allTeamRoles={allTeamRoles} setAllTeamRoles={setAllTeamRoles} teams={mtTeams} setTeams={setMtTeams} subteams={mtSubteams} setSubteams={setMtSubteams} profileId={p.id} sb={supabase}/> : null; }
       case "intern_roster":         return isAdmin ? <AdminInternMasterList roster={internRoster} setRoster={setInternRoster} teams={mtTeams} subteams={mtSubteams} sb={supabase}/> : null;
-      case "intern_request_types":  return isAdmin ? <AdminInternRequestTypes requestTypes={requestTypes} setRequestTypes={setRequestTypes} sb={supabase}/> : null;
-      case "company_calendar": return <CompanyCalendar isAdmin={isAdmin} profile={{ id: p.id, full_name: p.full_name }} teams={mtTeams} sb={supabase}/>;
+      case "intern_request_types":  return isAdmin ? <AdminInternRequestTypes requestTypes={requestTypes} setRequestTypes={setRequestTypes} requests={requests} setRequests={setRequests} interns={interns} settings={settings} sb={supabase}/> : null;
+      case "company_calendar": return <CompanyCalendar isAdmin={isAdmin || isTeamExec} profile={{ id: p.id, full_name: p.full_name }} teams={mtTeams} sb={supabase}/>;
+      case "team_leads": return isAdmin ? <AdminTeamLeadsTab allTeamRoles={allTeamRoles} setAllTeamRoles={setAllTeamRoles} teams={mtTeams} profiles={mtProfiles} sb={supabase}/> : null;
       case "storms":
         if (isAdmin) return <AdminStormsView storms={storms} profiles={[...interns.map(i => ({ id: i.id, full_name: i.full_name, email: i.email })), ...mtProfiles.map(p => ({ id: p.id, full_name: p.full_name, email: p.email||"" }))].filter((p,i,a) => a.findIndex(x=>x.id===p.id)===i)}/>;
         if (isMTIntern) return <InternStormsView profile={{ id: p.id, full_name: p.full_name, email: p.email }} storms={storms} setStorms={setStorms} calendlyElla={settings.calendly_ella} sb={supabase}/>;

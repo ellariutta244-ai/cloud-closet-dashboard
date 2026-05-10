@@ -2625,3 +2625,160 @@ export function AdminSchoolsTab({interns,setInterns,tasks,allTeamRoles,setAllTea
     </div>
   );
 }
+
+// ── Admin Team Leads Tab ───────────────────────────────────────────────────────
+export function AdminTeamLeadsTab({allTeamRoles,setAllTeamRoles,teams,profiles,sb}:{
+  allTeamRoles:MTTeamRole[]; setAllTeamRoles:(r:MTTeamRole[])=>void;
+  teams:MTTeam[];
+  profiles:{id:string;full_name:string;email?:string;avatar_url?:string}[];
+  sb:any;
+}) {
+  const [showAdd,setShowAdd] = useState(false);
+  const [addUserId,setAddUserId] = useState("");
+  const [addTeamId,setAddTeamId] = useState("");
+  const [saving,setSaving] = useState(false);
+  const [search,setSearch] = useState("");
+
+  const teamLeadRoles = allTeamRoles.filter(r=>r.role==="team_exec");
+
+  function profileFor(userId:string) {
+    return profiles.find(p=>p.id===userId);
+  }
+  function internCount(teamId:string) {
+    return allTeamRoles.filter(r=>r.team_id===teamId&&r.role==="intern").length;
+  }
+
+  async function addLead() {
+    if (!addUserId||!addTeamId) return;
+    setSaving(true);
+    const {data} = await sb.from("user_team_roles")
+      .insert({user_id:addUserId,team_id:addTeamId,role:"team_exec",subteam_id:null})
+      .select().single();
+    setSaving(false);
+    if (data) {
+      setAllTeamRoles([...allTeamRoles,data as MTTeamRole]);
+      setShowAdd(false);
+      setAddUserId(""); setAddTeamId(""); setSearch("");
+    }
+  }
+
+  async function removeLead(roleId:string) {
+    if (!confirm("Remove this person as team lead?")) return;
+    await sb.from("user_team_roles").delete().eq("id",roleId);
+    setAllTeamRoles(allTeamRoles.filter(r=>r.id!==roleId));
+  }
+
+  const byTeam = teams.map(team=>({
+    team,
+    leads:teamLeadRoles
+      .filter(r=>r.team_id===team.id)
+      .map(r=>({role:r,profile:profileFor(r.user_id)}))
+      .filter(x=>x.profile),
+  }));
+  const teamsWithLeads = byTeam.filter(g=>g.leads.length>0);
+  const teamsWithoutLeads = byTeam.filter(g=>g.leads.length===0);
+
+  const filteredProfiles = search
+    ? profiles.filter(p=>p.full_name.toLowerCase().includes(search.toLowerCase())||(p.email&&p.email.toLowerCase().includes(search.toLowerCase())))
+    : profiles;
+
+  function closeModal() {
+    setShowAdd(false); setSearch(""); setAddUserId(""); setAddTeamId("");
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-stone-800">Team Leads</h1>
+          <p className="text-xs text-stone-400 mt-0.5">{teamLeadRoles.length} lead{teamLeadRoles.length!==1?"s":""} across {teamsWithLeads.length} team{teamsWithLeads.length!==1?"s":""}</p>
+        </div>
+        <button onClick={()=>setShowAdd(true)} className="flex items-center gap-2 px-4 py-2.5 bg-stone-800 text-white text-sm font-semibold rounded-xl hover:bg-stone-700 transition-colors flex-shrink-0">
+          <UserPlus size={14}/>Assign Lead
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <StatCard label="Total Leads" value={teamLeadRoles.length}/>
+        <StatCard label="Teams Covered" value={teamsWithLeads.length}/>
+        <StatCard label="Teams Without Lead" value={teamsWithoutLeads.length}/>
+      </div>
+
+      {teamsWithLeads.length===0 ? (
+        <ES message="No team leads assigned yet. Use 'Assign Lead' to get started."/>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {teamsWithLeads.map(({team,leads})=>(
+            <div key={team.id} className="bg-white border border-stone-200/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-3.5 border-b border-stone-100" style={{borderLeft:`4px solid ${team.color}`}}>
+                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{background:team.color}}/>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-stone-800">{team.name}</p>
+                  <p className="text-xs text-stone-400">{internCount(team.id)} intern{internCount(team.id)!==1?"s":""}</p>
+                </div>
+              </div>
+              <div className="divide-y divide-stone-50">
+                {leads.map(({role,profile:lp})=>lp&&(
+                  <div key={role.id} className="flex items-center gap-3 px-5 py-3.5">
+                    <Av name={lp.full_name} size={36} img={lp.avatar_url}/>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-stone-800">{lp.full_name}</p>
+                      {lp.email&&<p className="text-xs text-stone-400 truncate">{lp.email}</p>}
+                    </div>
+                    <span className="text-xs px-2 py-0.5 bg-stone-100 text-stone-500 rounded-full whitespace-nowrap">Team Lead</span>
+                    <button onClick={()=>removeLead(role.id)} className="p-1.5 text-stone-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={14}/></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {teamsWithoutLeads.length>0&&(
+        <div>
+          <SectionTitle>Teams Without a Lead</SectionTitle>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {teamsWithoutLeads.map(({team})=>(
+              <div key={team.id} className="flex items-center gap-2 px-3 py-1.5 bg-stone-50 border border-stone-200 rounded-xl text-sm text-stone-500">
+                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{background:team.color}}/>
+                {team.name}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Modal open={showAdd} onClose={closeModal} title="Assign Team Lead">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-stone-500 uppercase tracking-wider">Team</label>
+            <select value={addTeamId} onChange={e=>setAddTeamId(e.target.value)} className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-800 focus:outline-none focus:border-stone-400">
+              <option value="">Select a team…</option>
+              {teams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-stone-500 uppercase tracking-wider">Person</label>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name or email…" className="px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-sm text-stone-800 focus:outline-none focus:border-stone-400"/>
+            <div className="max-h-52 overflow-y-auto flex flex-col gap-0.5 mt-1 border border-stone-100 rounded-xl p-1">
+              {filteredProfiles.slice(0,30).map(p=>(
+                <button key={p.id} onClick={()=>setAddUserId(p.id)} className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all ${addUserId===p.id?"bg-stone-800 text-white":"hover:bg-stone-50 text-stone-700"}`}>
+                  <Av name={p.full_name} size={28} img={p.avatar_url}/>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{p.full_name}</p>
+                    {p.email&&<p className={`text-xs truncate ${addUserId===p.id?"text-stone-300":"text-stone-400"}`}>{p.email}</p>}
+                  </div>
+                </button>
+              ))}
+              {filteredProfiles.length===0&&<p className="text-xs text-stone-400 py-4 text-center">No matches</p>}
+            </div>
+          </div>
+          <button onClick={addLead} disabled={saving||!addUserId||!addTeamId} className="w-full py-3 bg-stone-800 text-white text-sm font-semibold rounded-xl hover:bg-stone-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+            {saving?<><Loader2 size={14} className="animate-spin"/>Saving…</>:<><UserPlus size={14}/>Assign as Team Lead</>}
+          </button>
+        </div>
+      </Modal>
+    </div>
+  );
+}
